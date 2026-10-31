@@ -3709,14 +3709,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             text = data.decode("utf-8")
         except UnicodeDecodeError:
             return self._json(400, {"error": "body was not valid UTF-8"})
-        base = None
+        base = board = None
         if as_json:
             try:
                 sent = json.loads(text)
-                text, base = sent["text"], sent.get("base")
+                text, base, board = sent["text"], sent.get("base"), sent.get("board")
             except (ValueError, KeyError, TypeError):
                 return self._json(400, {"error": "body was not {text, base}"})
-            if not isinstance(text, str) or not (base is None or isinstance(base, str)):
+            if not isinstance(text, str) or not (base is None or isinstance(base, str)) \
+                    or not (board is None or isinstance(board, str)):
                 return self._json(400, {"error": "body was not {text, base}"})
             if len(text.encode("utf-8")) > MAX_BYTES:
                 return self._json(413, {"error": "file too large"})
@@ -3727,11 +3728,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # reads the file, works, and writes, and a second save landing in
         # between would be written over unseen.
         with _save_lock:
-            return self._write_list(text, base, len(data))
+            return self._write_list(text, base, len(data), board)
 
-    def _write_list(self, text, base, size):
+    def _write_list(self, text, base, size, board=None):
         ds = current_dataset()
         path = todo_path(ds)
+
+        # The list the tab read, named by the tab (`board`, the X-Bench-Board
+        # its GET carried). A tab is on whatever list it loaded, and the
+        # server's current one can move under it: another tab's dropdown, or a
+        # banner link. Merged against the wrong file, a save writes one list's
+        # tasks into another, so a save naming another list is refused whole
+        # and the tab reloads onto the one now current. A save naming none
+        # (pa_save.py, which pins its board with X-Offdesk-Board, or a script)
+        # goes to the current list as before.
+        if board is not None and board != ds:
+            return self._json(409, {"error": "this tab holds %s, but the board is now on %s, "
+                                             "so nothing was written" % (board or "no list", ds or "no list"),
+                                    "wrongBoard": True, "board": ds})
 
         # A migration is working on this list directly, with the board shut. A
         # tab left open from before it started holds the pre-migration document

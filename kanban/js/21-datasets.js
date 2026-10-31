@@ -796,6 +796,13 @@ async function saveFile(auto, forceBackup){
   if (state.locked || !state.doc || !state.dirty) return;
   // A folder opened on the hosted page: written by the page itself.
   if (listFolder) return saveToFolder(auto);
+  // The server has moved to another list since this one was read. Saving would
+  // only be refused again; asked once, and again on a save the owner asks for.
+  if (state.boardMoved) {
+    if (!auto) boardMoved(state.boardMoved, true);
+    else autoStatus('not saved — the board is on another list now');
+    return;
+  }
   const text = serializeDoc(state.doc);
   /* The version this document was built on, sent whole. A save arriving after
      somebody else's is merged with theirs on the server (do_PUT), and the
@@ -810,7 +817,9 @@ async function saveFile(auto, forceBackup){
     if (state.diskStamp) headers['If-Unmodified-Since'] = state.diskStamp;
     if (state.diskHash) headers['If-Match'] = state.diskHash;
     const res = await fetch(FILE_URL + (forceBackup ? '?backup=force' : ''), {
-      method: 'PUT', headers, body: JSON.stringify({ text, base })
+      method: 'PUT', headers,
+      /* The list this was read from, so it cannot land on another one. */
+      body: JSON.stringify(state.docBoard ? { text, base, board: state.docBoard } : { text, base })
     });
     const info = await res.json().catch(() => ({}));
     /* 409 is the same thing changed here and in the file, a migration holding
@@ -819,6 +828,12 @@ async function saveFile(auto, forceBackup){
        would come straight back in four seconds and get the same answer,
        forever. */
     if (res.status === 409) {
+      if (info.wrongBoard) {
+        /* Still dirty: nothing was written. Not markDirty(), which would
+           count the load's own tidy-ups as the owner's changes. */
+        boardMoved(info.board || '', true);
+        return;
+      }
       if (info.conflicts && typeof info.current === 'string') {
         markDirty();
         autoStatus('not saved yet — the same thing was changed in two places');
@@ -890,6 +905,37 @@ async function saveFile(auto, forceBackup){
             '\n\nNothing was written. Use “Download copy” if you need the changes out of the browser.');
     }
   }
+}
+
+/* The server is on another list than the one this tab read: switched from
+   another tab's dropdown, or by a banner link. Nothing here can be saved to
+   it, so the tab goes over to that list. With nothing of the owner's unsaved
+   that is a plain reload; with changes it asks first, and offers to put the
+   board back on this tab's list so they can be saved where they belong. */
+function boardMoved(now, ask){
+  if (state.switching) return;
+  state.boardMoved = now || '?';
+  if (!hasOwnChanges()) {
+    state.dirty = false;
+    reloadPage();
+    return;
+  }
+  autoStatus('not saved — the board is on another list now');
+  if (!ask || modalEl) return;
+  const mine = state.docBoard;
+  const sub = 'This tab holds <strong>' + esc(prettyDataset(mine)) + '</strong>, but the board was switched to <strong>' +
+    esc(prettyDataset(now)) + '</strong> elsewhere, so your changes were not saved.';
+  showModal('This list is no longer the one on screen', sub, '', [
+    { label:'Switch back and save', primary:true, run: async () => {
+      try {
+        await postJSON('/dataset/select', { name: mine });
+        state.boardMoved = '';
+        await saveFile(false);
+      } catch (err) { alert('Could not switch back.\n\n' + (err.message || err)); }
+    } },
+    { label:'Download my copy', run: () => downloadText(serializeDoc(state.doc), state.fileName) },
+    { label:'Discard mine, open ' + prettyDataset(now), danger:true, run: () => { state.dirty = false; reloadPage(); } },
+  ]);
 }
 
 /* After a save the server wrote other than as sent: merged with somebody

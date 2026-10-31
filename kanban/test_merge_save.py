@@ -20,6 +20,8 @@ What it holds to:
   * two saves sent at the same moment are taken one at a time, so neither
     is written over unseen;
   * the reply says which version it wrote, matching a read straight after;
+  * a save naming the list it was read from writes, and one naming another
+    list is a 409 naming the list the board is on, with nothing written;
   * a bare document (a script, a tab from before this) is still refused when
     the file moved under it, and still needs If-Unmodified-Since.
 """
@@ -88,6 +90,10 @@ def checks(srv, path, who, label):
 
     def save(text, base):
         code, body, _ = srv.ask("PUT", "/data/todo.md", board, {"text": text, "base": base})
+        return code, as_json(body) or {}
+
+    def save_on(text, base, name):
+        code, body, _ = srv.ask("PUT", "/data/todo.md", board, {"text": text, "base": base, "board": name})
         return code, as_json(body) or {}
 
     def disk():
@@ -172,6 +178,19 @@ def checks(srv, path, who, label):
         t.join()
     ok("%s: two saves at once both land" % label, codes == [200, 200] and disk() == both,
        "%r\n%s" % (codes, disk()))
+
+    # --- the list the save names -------------------------------------------------
+    name = os.path.basename(os.path.dirname(path))
+    reset()
+    mine = edit(LIST, ("**Order badges**", "**Order name badges**"))
+    code, got = save_on(mine, LIST, name)
+    ok("%s: a save naming this list writes" % label, code == 200 and disk() == mine, "%d %r" % (code, got))
+    reset()
+    code, got = save_on(mine, LIST, "another-list")
+    ok("%s: a save naming another list is refused" % label, code == 409 and got.get("wrongBoard") is True,
+       "%d %r" % (code, got))
+    ok("%s: naming the list the board is on" % label, got.get("board") == name, repr(got))
+    ok("%s: and nothing is written" % label, disk() == LIST)
 
     # --- the old contract, for a bare document --------------------------------
     reset()

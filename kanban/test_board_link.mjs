@@ -6,8 +6,9 @@
  * Written 26 Oct 2026. Two lists, a link into the one that is not showing: the
  * board switches (through the list menu's own route), opens the card, and takes
  * the board segment off the address. A link naming a list that does not exist,
- * or the one already up, opens the card where it is. It makes a second list, so
- * it runs only against the throwaway server.
+ * or the one already up, opens the card where it is. A tab whose list was
+ * switched away from elsewhere saves nothing into the new one. It makes a
+ * second list, so it runs only against the throwaway server.
  */
 import { spawn } from 'node:child_process'
 import { CHROME_BIN } from './test_browser.mjs'
@@ -168,6 +169,40 @@ try {
     window.fetch = real;
     return puts === 1;
   })()`))
+
+  /* Two tabs on two lists: the server is moved to another list from
+     somewhere else (another tab's menu, here a POST), and this tab still
+     holds the one it read. Its save names that list, so it is refused rather
+     than merged into the other one. */
+  await go(link(''))
+  await until(() => evalJS(`state.docBoard === '_test' && !state.dirty`))
+  check('a tab knows which list it read', await evalJS(`state.docBoard`) === '_test')
+  await evalJS(`window.reloadPage = () => { window.reloadedForMove = true; }`)
+  await post('/dataset/select', { name: 'elsewhere' })
+  const otherBefore = await (await fetch(`${BASE}/data/todo.md`, { cache: 'no-store' })).text()
+  await evalJS(`(() => {
+    const t = state.doc.buckets.flatMap(b => b.tiers).flatMap(t => t.tasks)[0];
+    t.title = t.title + ' edited here';
+    t.dirty = true;
+    markDirty();
+  })()`)
+  await evalJS(`saveFile(true)`)
+  const otherAfter = await (await fetch(`${BASE}/data/todo.md`, { cache: 'no-store' })).text()
+  check('a save after the list moved elsewhere writes nothing into the other list', otherAfter === otherBefore && !otherAfter.includes('edited here'))
+  check('the tab says the board moved and keeps its changes',
+    await evalJS(`state.boardMoved === 'elsewhere' && state.dirty && !!modalEl && !window.reloadedForMove`),
+    await evalJS(`JSON.stringify({ moved: state.boardMoved, dirty: state.dirty, modal: !!modalEl })`))
+  await evalJS(`[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Switch back and save').click()`)
+  check('switching back saves the changes on the list they were made on',
+    await until(async () => (await (await fetch(`${BASE}/data/todo.md`, { cache: 'no-store' })).text()).includes('edited here')) &&
+      (await (await fetch(`${BASE}/datasets.json`)).json()).current === '_test' && await evalJS(`!state.dirty && !state.boardMoved`),
+    await evalJS(`JSON.stringify({ moved: state.boardMoved, dirty: state.dirty, status: $('#status').textContent })`))
+  /* With nothing unsaved, the tab simply goes over to the list now on. */
+  await post('/dataset/select', { name: 'elsewhere' })
+  await evalJS(`watchOnce()`)
+  check('a tab with nothing unsaved reloads onto the list the board moved to',
+    await until(() => evalJS(`window.reloadedForMove === true`)) && await evalJS(`!modalEl`))
+  await post('/dataset/select', { name: '_test' })
 
   /* Typing before the board list has answered: the changes may be the person's,
      so the link asks instead of switching. The answer is held back to make the

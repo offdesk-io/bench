@@ -65,8 +65,9 @@ async function diskVersion(){
     const res = await fetchList('HEAD');
     if (!res.ok) return { stamp:null, hash:null };
     return { stamp: res.headers.get('Last-Modified') || null,
-             hash:  res.headers.get('X-Todo-Hash') || null };
-  } catch (err) { return { stamp:null, hash:null }; }
+             hash:  res.headers.get('X-Todo-Hash') || null,
+             board: res.headers.get('X-Bench-Board') || '' };
+  } catch (err) { return { stamp:null, hash:null, board:'' }; }
 }
 async function diskStamp(){ return (await diskVersion()).stamp; }
 async function rememberStamp(){
@@ -115,8 +116,11 @@ async function watchTick(){
 async function watchOnce(){
   const named = paFinished;                        // only the first tick after pa finished
   paFinished = null;
-  const { stamp, hash } = await diskVersion();
+  const { stamp, hash, board } = await diskVersion();
   if (!stamp) return;                              // helper stopped; saveFile reports that
+  /* The server is on another list now. Its file is not a newer version of
+     this one, so it is neither merged nor reloaded in place. */
+  if (board && state.docBoard && board !== state.docBoard) { boardMoved(board, !state.boardMoved); return; }
   if (!state.diskStamp) { state.diskStamp = stamp; state.diskHash = hash; return; }
   /* The hash is the better question where both sides have one — it answers
      "did the bytes change" rather than "did the second change" — and the stamp
