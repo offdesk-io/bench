@@ -9,7 +9,9 @@ import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.normpath(os.path.join(HERE, "..", "..", "..", "PACKAGES", "agents-engine", "python")))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(HERE)), "core"))
+import bench_root  # noqa: E402
+sys.path.insert(0, os.path.join(bench_root.packages(), "agents-engine", "python"))
 sys.path.insert(0, HERE)
 
 import hooks  # noqa: E402
