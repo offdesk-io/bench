@@ -160,9 +160,15 @@ try {
   check('and in the tab', await until(() => evalJS(`!!${task('Audit which projects have no owner')}`)))
 
   // --- Reload with unsaved changes merges first -----------------------------------
+  // The watcher is held (watchBusy) so only reload() can bring the other change in.
+  await evalJS(`watchBusy = true`)
   await elsewhere('**Rewrite the career framework**', '**Rewrite the career framework again**')
   await evalJS(`(() => { const t = ${task('Chase the 360 responses today')}; t.due = '2026-12-02'; t.dirty = true; markDirty(); })()`)
+  check('the tab has not seen the other change before Reload',
+    await evalJS(`!${task('Rewrite the career framework again')}`))
+  await evalJS(`window.__merges = 0; const realMerge = mergeSaves; mergeSaves = (...a) => { window.__merges++; return realMerge(...a); }`)
   await evalJS(`reload()`)
+  check('Reload ran the merge itself', await evalJS(`window.__merges === 1`))
   check('Reload with different tasks changed merges without a box',
     await evalJS(`!modalEl && !!${task('Rewrite the career framework again')} && ${task('Chase the 360 responses today')}.due === '2026-12-02'`))
   check('keeps my change waiting to be saved', await evalJS(`state.dirty`))
@@ -171,6 +177,7 @@ try {
   await evalJS(`saveFile(false)`)
   check('and that save reaches the file', await until(async () => (await disk()).includes('[due:: 2026-12-02]')))
 
+  await evalJS(`watchBusy = true`)
   await elsewhere('[due:: 2026-12-02]', '[due:: 2026-12-03]')
   await evalJS(`(() => { const t = ${task('Chase the 360 responses today')}; t.due = '2026-12-04'; t.dirty = true; markDirty(); })()`)
   await evalJS(`reload()`)
@@ -178,6 +185,7 @@ try {
     await until(() => evalJS(`!!modalEl && /Changed in two places/.test(modalEl.textContent)`)))
   await evalJS(`Array.from(modalEl.querySelectorAll('button')).find(b => b.textContent.trim() === 'Use theirs').click()`)
   check('Use theirs settles it', await until(async () => (await disk()).includes('[due:: 2026-12-03]')))
+  await evalJS(`watchBusy = false`)
 } catch (err) {
   check('the suite ran to the end', false, String(err.message || err))
 } finally {
