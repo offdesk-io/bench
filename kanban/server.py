@@ -995,6 +995,28 @@ def project_entries(path):
     return out
 
 
+def project_subfolder(real, sub):
+    """A folder inside a project, for the drawer's in-place folder rows.
+
+    `sub` is a slash path below the project folder. Returns (path, None), or
+    (None, (status, message)) for anything that is not a plain folder below it:
+    an absolute path, a hop, a hidden name, a backslash, a missing folder, or a
+    symlink that leads out. The same bar project_folders.resolve() sets for the
+    project itself, since this is a second way to read inside it.
+    """
+    parts = sub.split("/")
+    if os.path.isabs(sub) or "\\" in sub or "\0" in sub or any(
+            p in ("", ".", "..") or p.startswith(".") for p in parts):
+        return None, (400, "bad folder path")
+    top = os.path.realpath(real)
+    full = os.path.realpath(os.path.join(top, *parts))
+    if full == top or not full.startswith(top + os.sep):
+        return None, (403, "outside the project folder")
+    if not os.path.isdir(full):
+        return None, (404, "no such folder")
+    return full, None
+
+
 def project_listing():
     """Every project folder on disk, alphabetically — live or not.
 
@@ -3059,6 +3081,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             real, err = project_folders.resolve(name, dataset_dir(current_dataset()))
             if err:
                 return self._json(err[0], {"error": err[1]})
+            sub = (q.get("sub") or [""])[0]
+            if sub:
+                full, serr = project_subfolder(real, sub)
+                if serr:
+                    return self._json(serr[0], {"error": serr[1]})
+                return self._json(200, {"sub": sub, "entries": project_entries(full)})
             meta = project_meta(real, name)
             if not meta:
                 return self._json(404, {"error": "no such project"})

@@ -446,14 +446,30 @@
   }
   .projfiles .help{padding:4px 6px}
   .projfiles .projfile{
-    display:flex; align-items:center; justify-content:space-between; gap:10px;
-    padding:5px 8px; border-radius:var(--tenon-radius-default);
-    color:var(--tenon-text-default); text-decoration:none; font-size: var(--tenon-typography-size-sm);
+    display:flex; align-items:center; gap:8px; width:100%; box-sizing:border-box;
+    padding:5px 8px; border-radius:var(--tenon-radius-default); border:0; background:none;
+    color:var(--tenon-text-default); text-decoration:none; text-align:left; cursor:pointer;
+    font:inherit; font-size: var(--tenon-typography-size-sm);
   }
+  .projfiles div.projfile{cursor:default}
   .projfiles .projfile:hover{background:var(--tenon-background-raised); color:var(--tenon-text-accent)}
-  .projfile .pf{overflow-wrap:anywhere}
-  .projfile.isdir .pf{font-weight:600}
-  .projfile .pfm{font-size: var(--tenon-typography-size-sm); color:var(--tenon-text-faint); white-space:nowrap}
+  /* One line a row: the name gives way to an ellipsis (the whole of it is in
+     the row's title), the date and size keep their width and sit on the right. */
+  .projfile .pf{flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+  .projfile.isdir .pf, .projfile.pfgroup .pf{font-weight:600}
+  .projfile .pficon{flex:none; color:var(--tenon-text-faint)}
+  .projfile .pfd, .projfile .pfm{flex:none; font-size: var(--tenon-typography-size-sm); color:var(--tenon-text-faint); white-space:nowrap; text-align:right}
+  .projfile .pfd{min-width:44px}
+  .projfile .pfm{min-width:52px}
+  /* The open/shut mark on a row that opens: a small triangle, turned down once open. */
+  .pfchev{flex:none; width:0; height:0; border-left:5px solid var(--tenon-text-faint);
+    border-top:4px solid transparent; border-bottom:4px solid transparent; transition:transform .12s}
+  .pfchev.none{border-left-color:transparent}
+  .pftoggle[aria-expanded="true"] > .pfchev{transform:rotate(90deg)}
+  .pfkids{display:flex; flex-direction:column; gap:1px; margin-left:12px; padding-left:4px;
+    border-left:1px solid var(--tenon-stroke-default)}
+  .pfkids[hidden]{display:none}
+  .pfkids .help{padding:4px 6px}
   /* What the project is, above everything else in the panel — read out of the
      folder's CLAUDE.md rather than typed anywhere. */
   .projabout:not(:empty){margin-bottom:16px}

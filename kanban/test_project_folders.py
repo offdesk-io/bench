@@ -127,6 +127,28 @@ def main():
         code, _ = get_project(base, os.path.join(ds, "projects", "escape"))
         ok("and by path", code == 403, "got %d" % code)
 
+        # --- one folder inside a project (the drawer's in-place folder rows) ----
+        alpha = os.path.join(ds, "projects", "alpha")
+        os.makedirs(os.path.join(alpha, "sources", "deep"))
+        with open(os.path.join(alpha, "sources", "2026-11-05-0900-note.md"), "w") as fh:
+            fh.write("x")
+        os.symlink(outside, os.path.join(alpha, "leak"))
+        code, body = request(base, "GET", "/project.json?name=alpha&sub=sources")
+        got = json.loads(body) if code == 200 else {}
+        ok("a sub-folder lists its own entries", code == 200 and
+           [e["name"] for e in got.get("entries", [])] == ["deep", "2026-11-05-0900-note.md"], body[:200])
+        code, body = request(base, "GET", "/project.json?name=alpha&sub=sources%2Fdeep")
+        ok("one level at a time, and a nested one works", code == 200 and json.loads(body)["entries"] == [], body[:200])
+        for bad in ("../", "..", "sources/../..", "sources/../../..", "/etc", ".hidden", "sources//deep", "a\\b"):
+            code, _ = request(base, "GET", "/project.json?name=alpha&sub=" + urllib.parse.quote(bad, safe=""))
+            ok("a sub-folder path outside the project is refused: %r" % bad, code == 400, "got %d" % code)
+        code, _ = request(base, "GET", "/project.json?name=alpha&sub=leak")
+        ok("a symlink out of the project is refused as a sub-folder", code == 403, "got %d" % code)
+        code, _ = request(base, "GET", "/project.json?name=alpha&sub=missing")
+        ok("a missing sub-folder is 404", code == 404, "got %d" % code)
+        code, _ = request(base, "GET", "/project.json?name=alpha&sub=sources%2F2026-11-05-0900-note.md")
+        ok("a file is not a sub-folder", code == 404, "got %d" % code)
+
         # --- unapproved absolute path -----------------------------------------
         code, _ = get_project(base, outside)
         ok("an unapproved absolute path is refused", code == 403, "got %d" % code)
