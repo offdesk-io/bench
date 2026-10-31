@@ -24,7 +24,10 @@ import os
 import sys
 
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_CORE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "core")
+sys.path.insert(0, _CORE)
+import bench_root  # noqa: E402
+ROOT = bench_root.root()
 sys.path.insert(0, os.path.join(ROOT, "core"))
 import dataset as _dataset  # noqa: E402
 # The folder the datasets sit in. $TODOS_DATA_ROOT moves it, the same variable

@@ -51,9 +51,13 @@ import copy
 import json
 import os
 import re
+import sys
 import tempfile
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import bench_root  # noqa: E402
+
+ROOT = bench_root.root()
 
 # Claude Code CLI aliases, the fixed list onboarding offers.
 MODELS = ("opus", "sonnet", "haiku")

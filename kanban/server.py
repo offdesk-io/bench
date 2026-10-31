@@ -37,8 +37,12 @@ import uuid
 import webbrowser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# Everything is served from the project root, one level up from this file.
-ROOT = os.path.dirname(HERE)
+# Everything is served from the project root, one level up from this file, unless
+# $BENCH_ROOT says otherwise (core/bench_root.py).
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "core"))
+import bench_root  # noqa: E402
+ROOT = bench_root.root()
+PACKAGES_DIR = bench_root.packages()
 
 # The two shared modules in core/, imported the same conditional way ai_chat is:
 # a checkout without them serves the board and answers 404 on the routes that
@@ -2252,7 +2256,7 @@ def backup_listing():
 # has never seen this machine. AI_CHAT_DIR below is where the module that
 # fixes that lives; STATIC_PREFIX is where its own JS and CSS are served from.
 
-AI_CHAT_DIR = os.path.normpath(os.path.join(ROOT, "..", "PACKAGES", "ai_chat_engine"))
+AI_CHAT_DIR = os.path.join(PACKAGES_DIR, "ai_chat_engine")
 STATIC_PREFIX = "/ai-chat/"
 
 # The work-item model every stream in here shares. Same wiring as AI_CHAT_DIR
@@ -2260,7 +2264,7 @@ STATIC_PREFIX = "/ai-chat/"
 # /streams.json and /work-streams/* and serves the board exactly as it did
 # before either existed. Nothing the board needs in order to start may come
 # from here, because on the static deployment this path does not exist at all.
-WORK_STREAMS_DIR = os.path.normpath(os.path.join(ROOT, "..", "PACKAGES", "work-streams"))
+WORK_STREAMS_DIR = os.path.join(PACKAGES_DIR, "work-streams")
 WS_PREFIX = "/work-streams/"
 
 if os.path.isdir(WORK_STREAMS_DIR):
@@ -2282,7 +2286,7 @@ except ImportError:
 # show and the board is otherwise unchanged. The engine never opens an agent's
 # files; it runs the agent's own commands, so this adds no second writer for
 # any schedule.
-AGENTS_ENGINE_DIR = os.path.normpath(os.path.join(ROOT, "..", "PACKAGES", "agents-engine", "python"))
+AGENTS_ENGINE_DIR = os.path.join(PACKAGES_DIR, "agents-engine", "python")
 AGENTS_ROOT = os.path.join(ROOT, "agents")
 AGENTS_PREFIX = "/agents-api"
 # Runs started from the Agents tab count towards the same daily ceiling, and
