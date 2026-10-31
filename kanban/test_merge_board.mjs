@@ -158,6 +158,26 @@ try {
   check('Use theirs keeps the edited task on disk',
     await until(async () => (await disk()).includes('**Audit which projects have no owner**')))
   check('and in the tab', await until(() => evalJS(`!!${task('Audit which projects have no owner')}`)))
+
+  // --- Reload with unsaved changes merges first -----------------------------------
+  await elsewhere('**Rewrite the career framework**', '**Rewrite the career framework again**')
+  await evalJS(`(() => { const t = ${task('Chase the 360 responses today')}; t.due = '2026-12-02'; t.dirty = true; markDirty(); })()`)
+  await evalJS(`reload()`)
+  check('Reload with different tasks changed merges without a box',
+    await evalJS(`!modalEl && !!${task('Rewrite the career framework again')} && ${task('Chase the 360 responses today')}.due === '2026-12-02'`))
+  check('keeps my change waiting to be saved', await evalJS(`state.dirty`))
+  check('and says it reloaded on the status line', await evalJS(`/^reloaded/.test($('#status').textContent)`),
+    await evalJS(`$('#status').textContent`))
+  await evalJS(`saveFile(false)`)
+  check('and that save reaches the file', await until(async () => (await disk()).includes('[due:: 2026-12-02]')))
+
+  await elsewhere('[due:: 2026-12-02]', '[due:: 2026-12-03]')
+  await evalJS(`(() => { const t = ${task('Chase the 360 responses today')}; t.due = '2026-12-04'; t.dirty = true; markDirty(); })()`)
+  await evalJS(`reload()`)
+  check('Reload with the same field changed in both places opens the merge box',
+    await until(() => evalJS(`!!modalEl && /Changed in two places/.test(modalEl.textContent)`)))
+  await evalJS(`Array.from(modalEl.querySelectorAll('button')).find(b => b.textContent.trim() === 'Use theirs').click()`)
+  check('Use theirs settles it', await until(async () => (await disk()).includes('[due:: 2026-12-03]')))
 } catch (err) {
   check('the suite ran to the end', false, String(err.message || err))
 } finally {
