@@ -9,7 +9,15 @@
    step 1 when the checkout has no list yet, and on its own when the profile is
    set but no list exists.
 
-   Name, Country and Region live in data/profile.md, behind /profile-basics.json.
+   Name, Country and Region live in data/profile.md, behind /profile-basics.json,
+   and so does the rest of the profile Settings offers (not the welcome): How to
+   address you and the facts file as fields, then Setup, Writing, Meeting
+   recorder and Working habits as one text box each, a box left as the template
+   has it reading empty with the template as its hint. Signed in (state.who),
+   the profile is the person's own, data/users/<hash>.profile.md, and the form
+   is that profile alone, less the two parts that name a path on the server;
+   the server's settings are not theirs to change, and the list's sharing is a
+   button beside it.
    The model per job, when each agent starts, the memory folder and each list's
    projects folder live in data/settings.json, behind /settings.json. The
    folders are offered in Settings only, not the welcome, the projects folder
@@ -52,6 +60,19 @@ const ONBOARD_BUCKETS = [
   { name: 'Learning', about: 'Courses, reading and experiments. Ends in notes, or a skill tried on real work.' },
 ];
 
+/* The profile's About lines beyond Name, Country and Region. */
+const SETTINGS_ABOUT = [
+  ['addressing', 'How to address you', 'How a message to you opens, e.g. “Hey Sam”. Empty means none.'],
+  ['facts_file', 'Facts file', 'A file about you that agents read when it is set. Empty means none.'],
+];
+/* The profile's other sections, one text box each, in the template's order. */
+const SETTINGS_SECTIONS = [
+  ['setup', 'Setup', 'Where this repo is, and the folders the agents may read beyond it.'],
+  ['writing', 'Writing', 'Your spelling, how a message to a person opens, and your writing rules or a path to them.'],
+  ['recorder', 'Meeting recorder', 'The recorder the PA reads action items from, and the name it uses for you.'],
+  ['habits', 'Working habits', 'How you work, so the PA can weigh tasks against it. One bullet each.'],
+];
+
 const settingsCap = m => m.charAt(0).toUpperCase() + m.slice(1);
 
 function settingsRegionOptions(draft){
@@ -88,6 +109,25 @@ function settingsCountryOptions(draft, first){
   return none + draft.countries.map(c => '<option value="' + escAttr(c.code) + '"' + (draft.country === c.code ? ' selected' : '') + '>' + esc(c.name) + '</option>').join('');
 }
 
+function settingsAboutField(draft, key){
+  const f = SETTINGS_ABOUT.find(a => a[0] === key);
+  if (!f || !(key in draft.about)) return '';
+  return '<label class="field"><span>' + esc(f[1]) + '</span><input type="text" data-about="' + key + '" value="' + escAttr(draft.about[key]) + '" placeholder="Not set">' +
+    '<span class="help">' + esc(f[2]) + '</span><span class="help fielderr" data-err="about-' + key + '" hidden></span></label>';
+}
+
+/* The sections the server sent, as text boxes. Open signed in, where they are
+   most of the form. */
+function settingsSectionsHTML(draft){
+  const boxes = SETTINGS_SECTIONS.filter(([k]) => k in draft.sections).map(([k, name, help]) =>
+    '<label class="field"><span>' + esc(name) + '</span>' +
+    '<textarea rows="4" data-section="' + k + '" placeholder="' + escAttr(draft.hints[k] || '') + '">' + esc(draft.sections[k]) + '</textarea>' +
+    '<span class="help">' + esc(help) + '</span><span class="help fielderr" data-err="section-' + k + '" hidden></span></label>').join('');
+  if (!boxes) return '';
+  return '<details class="agentopts" data-profile-sections' + (draft.signedIn ? ' open' : '') + '><summary>Your profile for the PA</summary>' +
+    '<div class="agentopts__body">' + boxes + '</div></details>';
+}
+
 function settingsFormHTML(draft, choices, first){
   const agents = SETTINGS_AGENTS.map(([key, name, help]) =>
     '<div class="agentopts__group"><h4>' + agentAvatarHTML(name, 18) + esc(name) + '</h4>' +
@@ -101,14 +141,18 @@ function settingsFormHTML(draft, choices, first){
   const other = SETTINGS_OTHER.map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('');
   return '<div class="setupform">' +
     '<label class="field"><span>Name</span><input type="text" data-name value="' + escAttr(draft.name) + '" placeholder="First name">' +
-    '<span class="help">Who the review sub-tasks are assigned to.</span>' +
+    '<span class="help">' + (draft.signedIn ? 'What the PA calls you.' : 'Who the review sub-tasks are assigned to.') + '</span>' +
     '<span class="help fielderr" data-err="name" hidden></span></label>' +
+    (first ? '' : settingsAboutField(draft, 'addressing')) +
     '<label class="field"><span>Country</span><select data-country>' + settingsCountryOptions(draft, first) + '</select>' +
     '<span class="help">Its public holidays count as days off.</span>' +
     '<span class="help" data-nolist hidden>No public holiday list available for this country, so only weekends count as days off.</span>' +
     '<span class="help fielderr" data-err="country" hidden></span></label>' +
     '<label class="field" data-region-field' + (draft.regions.length ? '' : ' hidden') + '><span>Region</span>' +
     '<select data-region>' + settingsRegionOptions(draft) + '</select></label>' +
+    (first ? '' : settingsAboutField(draft, 'facts_file')) +
+    (first ? '' : settingsSectionsHTML(draft)) +
+    (draft.signedIn ? (draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '') + '</div>' :
     (first ? '' : '<label class="field"><span>Memory folder</span><input type="text" data-memory value="' + escAttr(draft.memoryRoot) + '" placeholder="Not set">' +
       '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each list’s people are read from there first, and Bench lists its boards in boards.md inside it. Empty means none.</span></label>') +
     (first || !draft.list ? '' : '<label class="field"><span>Projects folder for ' + esc(draft.list) + '</span><input type="text" data-projects value="' + escAttr(draft.projectsRoot) + '" placeholder="Not set">' +
@@ -132,13 +176,15 @@ function settingsFormHTML(draft, choices, first){
     '</div></details>' +
     '<p class="help agentopts__note">Set each agent’s hours later in the board’s Agents tab.</p>'
     : '<p class="help agentopts__note">Agents are off on this machine. The Agents tab says why.</p>') +
-    '</div>';
+    '</div>');
 }
 
 async function loadSettingsDraft(first){
+  const signedIn = !!state.who;
   const [prof, set, places] = await Promise.all([
     fetch('/profile-basics.json').then(r => r.json()),
-    fetch('/settings.json').then(r => r.json()),
+    /* Signed in, the server's settings are not the visitor's to change. */
+    signedIn ? Promise.resolve({}) : fetch('/settings.json').then(r => r.json()),
     fetch('/holiday-countries.json').then(r => r.json()),
   ]);
   const models = Object.assign({ default: null, plan: null, implement: null, chat: null, brief: null }, set.models);
@@ -158,7 +204,8 @@ async function loadSettingsDraft(first){
   const list = state.dataset || '';
   const projectsRoot = (set.projects_roots || {})[list] || '';
   return { setup: prof.needs_setup, set, draft: {
-    name: prof.name || '', country, region, legacy, memoryRoot, list, projectsRoot,
+    name: prof.name || '', country, region, legacy, memoryRoot, list, projectsRoot, signedIn,
+    about: Object.assign({}, prof.about), sections: Object.assign({}, prof.sections), hints: prof.hints || {},
     was: { country, region, memoryRoot, projectsRoot },
     touched: {},
     countries: places.countries || [], regions: legacy.length ? [] : ((places.regions || {})[prof.country] || []),
@@ -170,6 +217,8 @@ function settingsErrors(draft, first){
   const err = {};
   if (!draft.name.trim()) err.name = 'Add your name.';
   if (first && !draft.country) err.country = 'Choose a country.';
+  for (const k in draft.about) if (/[<>`]/.test(draft.about[k])) err['about-' + k] = 'Leave out < > and backticks.';
+  for (const k in draft.sections) if (/^##?(\s|$)/m.test(draft.sections[k])) err['section-' + k] = 'A # or ## heading would split the profile. Use ### or none.';
   const badDollars = v => v.trim() && !(Number(v) >= 0);
   if (badDollars(draft.budget)) err.budget = 'Enter an amount in dollars, or leave it empty.';
   for (const k in draft.agentBudgets) if (badDollars(draft.agentBudgets[k])) err['budget-' + k] = 'Enter an amount in dollars, or leave it empty.';
@@ -216,6 +265,14 @@ function trackSettingsForm(draft, first){
   const sync = e => {
     const n = modalEl.querySelector('[data-name]');
     if (n) draft.name = n.value;
+    modalEl.querySelectorAll('[data-about]').forEach(i => {
+      draft.about[i.dataset.about] = i.value;
+      if (e && e.target === i) draft.touched['about-' + i.dataset.about] = true;
+    });
+    modalEl.querySelectorAll('[data-section]').forEach(t => {
+      draft.sections[t.dataset.section] = t.value;
+      if (e && e.target === t) draft.touched['section-' + t.dataset.section] = true;
+    });
     const c = modalEl.querySelector('[data-country]');
     const r = modalEl.querySelector('[data-region]');
     if (c) draft.country = c.value;
@@ -244,6 +301,7 @@ function trackSettingsForm(draft, first){
   modalEl.addEventListener('change', sync);
   /* A switch is a button, so it reports a click rather than a change. */
   modalEl.addEventListener('click', e => {
+    if (e.target.closest('[data-sharing]')) { openSharing(); return; }
     const sw = e.target.closest('[data-chime]');
     if (!sw) return;
     const on = sw.getAttribute('aria-checked') !== 'true';
@@ -276,9 +334,12 @@ function trackSettingsForm(draft, first){
   paintSetupErrors(draft, first);
 }
 
-async function saveSettingsDraft(draft){
+async function saveSettingsDraft(draft, first){
   const put = (url, body) => sendJSON('PUT', url, body);
   const basics = { name: draft.name };
+  /* Every field and box the server sent, so the welcome, which shows none,
+     sends none. */
+  if (!first) { basics.about = draft.about; basics.sections = draft.sections; }
   /* Holidays are sent only when the owner changed them: saving a name alone must not
      rewrite a profile that still has the old Holidays: line. */
   if (draft.country && (draft.country !== draft.was.country || draft.region !== draft.was.region)) {
@@ -286,6 +347,7 @@ async function saveSettingsDraft(draft){
     basics.region = draft.region;
   }
   await put('/profile-basics.json', basics);
+  if (draft.signedIn) return;
   const dollars = v => v.trim() === '' ? null : Number(v);
   const agentBudgets = {};
   for (const k in draft.agentBudgets) agentBudgets[SETTINGS_BUDGET_IDS[k]] = dollars(draft.agentBudgets[k]);
@@ -306,9 +368,11 @@ async function openSettings(first, needsList){
   const choices = (set.choices && set.choices.models) || [];
   const save = { label: 'Save', primary: true, run: async () => {
     if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return; }
-    try { await saveSettingsDraft(draft); }
+    try { await saveSettingsDraft(draft, first); }
     catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
     if (first && needsList) { openFirstList(); return; }
+    /* Signed in, the name on the page is the sign-in's, so nothing to reload. */
+    if (draft.signedIn) { closeModal(); showToast('Saved.', 'good'); return; }
     /* The owner's name is read once, from /owner.js, as the page loads. */
     location.reload();
   } };
@@ -316,7 +380,7 @@ async function openSettings(first, needsList){
   const note = first
     ? '<p class="help" style="margin-top:14px">Next, run <code>scripts/install.sh</code> to link the skills and set up the hourly wake.</p>'
     : '';
-  showModal(first ? 'Welcome to Bench' : 'Settings',
+  showModal(first ? 'Welcome to Bench' : (draft.signedIn ? 'Your profile' : 'Settings'),
     first ? (needsList ? 'Step 1 of 2: about you. You can change these later under Data, Settings.'
                        : 'Two things to set up. You can change them later under Data, Settings.') : '',
     settingsFormHTML(draft, choices, first) + note, buttons,
@@ -453,9 +517,8 @@ async function maybeOnboard(){
   } catch (err) { /* no server, no setup */ }
 }
 
-/* On the shared board the settings are the server's, so Settings is the one
-   thing a visitor can change there: who sees the list on screen, and only
-   the owner can change it. */
+/* Who sees the list on screen, from the button in a signed-in person's
+   Settings. Only the owner can change it. */
 async function openSharing(){
   let acc;
   try { acc = await getJSON('/dataset/access.json'); }
@@ -485,7 +548,7 @@ async function openSharing(){
   trackSharing(sh);
 }
 
-$('#settingsBtn').onclick = () => state.who ? openSharing() : openSettings(false);
+$('#settingsBtn').onclick = () => openSettings(false);
 
 /* ---- Starting an agent straight away ------------------------------------
    Settings > Agent options says, per agent, whether a task handed to it waits

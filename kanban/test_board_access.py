@@ -21,6 +21,9 @@ What it holds to:
   * which board is on screen is per person, and data/.current is left alone;
   * a new board is personal or shared, and only its owner changes that;
   * scripts/set-board-access.py opens a board made before sign-in;
+  * each person's profile is their own, data/users/<hash>.profile.md, read
+    from the shared data/profile.md until they save one, and never anybody
+    else's, with the parts naming a server path left out;
   * BENCH_AUTH unset is the Mac board exactly as before, access.json or not,
     and an unknown value refuses to start.
 """
@@ -34,6 +37,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -187,9 +191,8 @@ def signed_in_checks(root):
             code, _, _ = srv.ask(method, path, dict(TIAGO, **BOARD),
                                  body={} if method == "POST" else None)
             ok("signed in: %s %s is refused" % (method, path), code == 404, "got %d" % code)
-        for path in ("/settings.json", "/profile-basics.json"):
-            code, _, _ = srv.ask("PUT", path, dict(TIAGO, **BOARD), body={"name": "x"})
-            ok("signed in: PUT %s is refused" % path, code == 403, "got %d" % code)
+        code, _, _ = srv.ask("PUT", "/settings.json", dict(TIAGO, **BOARD), body={"name": "x"})
+        ok("signed in: PUT /settings.json is refused", code == 403, "got %d" % code)
 
         # A form on another site can POST with the cookie but not with X-Board.
         code, _, _ = srv.ask("POST", "/archive", dict(TIAGO, **{"Content-Type": "text/plain"}),
@@ -515,6 +518,96 @@ def mac_checks(root):
         srv.stop()
 
 
+def profile_checks(root):
+    data = os.path.join(root, "profiles")
+    seed(data, "offdesk")
+    access(data, "offdesk", "tiagopedras+claude@gmail.com", teams=["offdesk"])
+    shared = os.path.join(data, "profile.md")
+    write(shared, "# PA profile\n\n## About\n\n- Name: Tiago/Jerome\n- Country: GB\n\n"
+                  "## Writing\n\n- Spelling: British English\n")
+    shared_before = open(shared, encoding="utf-8").read()
+    jerome_file = board_access.profile_path(data, JEROME["X-Offdesk-Email"])
+    tiago_file = board_access.profile_path(data, TIAGO["X-Offdesk-Email"])
+    srv = Server(data, "header")
+    ok("profile server starts", srv.wait())
+    try:
+        code, body, _ = srv.ask("GET", "/profile-basics.json", JEROME)
+        got = as_json(body) or {}
+        ok("profile: before saving, the name is the sign-in's", code == 200 and got.get("name") == "Jérôme", body)
+        ok("profile: before saving, the rest is the shared profile", got.get("country") == "GB"
+           and got.get("sections", {}).get("writing") == "- Spelling: British English", body)
+        ok("profile: signed in, no path is offered", "facts_file" not in got.get("about", {"facts_file": 1})
+           and "setup" not in got.get("sections", {"setup": 1}) and "setup" not in got.get("hints", {"setup": 1}), body)
+        ok("profile: signed in, nothing to set up", got.get("needs_setup") is False, body)
+
+        code, body, _ = srv.ask("PUT", "/profile-basics.json", dict(JEROME, **BOARD), body={
+            "name": "Jerome", "country": "PT", "region": "",
+            "about": {"addressing": "Salut Jerome"},
+            "sections": {"writing": "- Spelling: French", "habits": "- Deferring: builds straight away"}})
+        got = as_json(body) or {}
+        ok("profile: a person saves their own", code == 200 and got.get("name") == "Jerome"
+           and got.get("country") == "PT", "%d %s" % (code, body))
+        ok("profile: it lands beside their user record", os.path.isfile(jerome_file))
+        text = open(jerome_file, encoding="utf-8").read() if os.path.isfile(jerome_file) else ""
+        ok("profile: in the - Key: value format", "- Name: Jerome" in text and "- Country: PT" in text
+           and "- How to address them: Salut Jerome" in text and "- Spelling: French" in text, text)
+        ok("profile: the shared profile is untouched",
+           open(shared, encoding="utf-8").read() == shared_before)
+
+        code, body, _ = srv.ask("GET", "/profile-basics.json", JEROME)
+        got = as_json(body) or {}
+        ok("profile: reading it back gives their own", got.get("name") == "Jerome"
+           and got.get("about", {}).get("addressing") == "Salut Jerome"
+           and got.get("sections", {}).get("habits") == "- Deferring: builds straight away", body)
+        code, body, _ = srv.ask("GET", "/holiday-countries.json", JEROME)
+        ok("profile: the regions offered follow their own country", "PT" in (as_json(body) or {}).get("regions", {"PT": 1})
+           or (as_json(body) or {}).get("regions") == {}, body)
+
+        code, body, _ = srv.ask("GET", "/profile-basics.json", TIAGO)
+        got = as_json(body) or {}
+        ok("profile: somebody else never sees it", got.get("name") == urllib.parse.unquote(TIAGO["X-Offdesk-Name"])
+           and got.get("country") == "GB" and got.get("sections", {}).get("writing") == "- Spelling: British English", body)
+        ok("profile: and has no file of their own yet", not os.path.exists(tiago_file))
+
+        for bad in ({"about": {"facts_file": "/etc/passwd"}}, {"sections": {"setup": "- Bench repo: /"}}):
+            code, body, _ = srv.ask("PUT", "/profile-basics.json", dict(TIAGO, **BOARD), body=dict(bad, name="Tiago"))
+            ok("profile: signed in, a path is refused: %s" % list(bad.values())[0], code == 400, "got %d" % code)
+        code, _, _ = srv.ask("PUT", "/profile-basics.json", dict(TIAGO, **BOARD),
+                             body={"name": "Tiago", "sections": {"writing": "## About\n- Name: X"}})
+        ok("profile: a heading that would split the file is refused", code == 400, "got %d" % code)
+        code, _, _ = srv.ask("PUT", "/profile-basics.json", dict(TIAGO, **{"Content-Type": "application/json"}),
+                             body={"name": "Tiago"})
+        ok("profile: a PUT without X-Board is refused", code == 403, "got %d" % code)
+        ok("profile: the refused saves wrote nothing", not os.path.exists(tiago_file))
+
+        pa = {"X-Offdesk-Email": "pa-tiago@offdesk.invalid", "X-Offdesk-Name": "PA", "X-Offdesk-Board": "offdesk"}
+        for method in ("GET", "PUT"):
+            code, _, _ = srv.ask(method, "/profile-basics.json", dict(pa, **BOARD),
+                                 body={"name": "x"} if method == "PUT" else None)
+            ok("profile: a request held to one board cannot %s a profile" % method, code == 403, "got %d" % code)
+    finally:
+        srv.stop()
+
+    # The Mac: nobody signed in, and the profile is data/profile.md as ever.
+    srv = Server(data, None)
+    ok("profile: Mac server starts", srv.wait())
+    try:
+        code, body, _ = srv.ask("GET", "/profile-basics.json")
+        got = as_json(body) or {}
+        ok("profile: Mac reads the shared profile, paths and all", got.get("name") == "Tiago/Jerome"
+           and "facts_file" in got.get("about", {}) and "setup" in got.get("sections", {}), body)
+        code, body, _ = srv.ask("PUT", "/profile-basics.json", BOARD, body={
+            "name": "Tiago", "about": {"facts_file": "~/facts.md"}, "sections": {"setup": "- Bench repo: ~/bench"}})
+        ok("profile: Mac saves the shared profile", code == 200, "%d %s" % (code, body))
+        text = open(shared, encoding="utf-8").read()
+        ok("profile: Mac wrote data/profile.md", "- Name: Tiago" in text and "- Facts file: ~/facts.md" in text
+           and "- Bench repo: ~/bench" in text, text)
+        ok("profile: Mac left the person's file alone",
+           "- Name: Jerome" in open(jerome_file, encoding="utf-8").read())
+    finally:
+        srv.stop()
+
+
 def translate_checks(root):
     """The data/ guard itself, in-process, where the data root is the served
     tree's own data/ as it is on a real install. Over a scratch root the
@@ -554,6 +647,7 @@ def main():
         signed_in_checks(root)
         access_checks(root)
         mac_checks(root)
+        profile_checks(root)
         translate_checks(root)
         refusal_checks(root)
     finally:

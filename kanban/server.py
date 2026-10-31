@@ -2453,8 +2453,9 @@ def shared_refusal(method, path):
     is what the board already copes with from a host that has none of them.
     The chat routes need no entry here: ai_chat_for() answers None.
 
-    The settings and the profile are the server's, not any one visitor's, and
-    a folder named in them is a path on the server, so they are read-only.
+    The settings are the server's, not any one visitor's, and a folder named
+    in them is a path on the server, so they are read-only. The profile is
+    each person's own (_put_profile_basics()), less its paths.
     """
     gone = (404, {"error": "not on the shared board"})
     if path.startswith(AGENTS_PREFIX + "/"):
@@ -2463,7 +2464,7 @@ def shared_refusal(method, path):
         return gone
     if method in ("GET", "HEAD") and path in ("/schedule.json", "/usage.json"):
         return gone
-    if method == "PUT" and path in ("/settings.json", "/profile-basics.json"):
+    if method == "PUT" and path == "/settings.json":
         return (403, {"error": "the shared board's settings are changed on the server"})
     return None
 
@@ -2496,17 +2497,49 @@ def needs_board(method, path):
     return path not in BOARDLESS_POST
 
 
-def _holiday_place_json():
+def _holiday_place_json(address=None):
     """The profile's holiday country and region, "" for neither."""
     import owner_profile
-    country, region = owner_profile.holiday_place(DATA_ROOT)
-    prof = owner_profile.read(DATA_ROOT)
+    country, region = owner_profile.holiday_place(DATA_ROOT, address)
+    prof = owner_profile.read(DATA_ROOT, address)
     # An old `Holidays:` line with no `Country:` beside it: the calendars it
     # names, so Settings can offer to keep them rather than rewrite them.
     legacy = []
     if "holidays" in prof and not re.fullmatch(r"[A-Za-z]{2}", prof.get("country", "")):
-        legacy = list(owner_profile.holiday_regions(DATA_ROOT))
+        legacy = list(owner_profile.holiday_regions(DATA_ROOT, address))
     return {"country": country or "", "region": region, "legacy_holidays": legacy}
+
+
+# Parts of the profile that name a path, which on the shared board would be a
+# path on the server, so a signed-in person neither sees nor sets them.
+SHARED_HIDES = {"about": ("facts_file",), "sections": ("setup",)}
+
+
+def profile_reply():
+    """The profile as Settings shows it: on the Mac the owner's, signed in the
+    person's own, read from the shared profile until they save one. Signed
+    in there is nothing to set up, and until they save, the shared profile's
+    Name is not theirs, so the name is the one they signed in with."""
+    import owner_profile
+    who = requester()
+    address = who["email"] if who else None
+    about = owner_profile.about_fields(DATA_ROOT, address)
+    texts = owner_profile.section_texts(DATA_ROOT, address)
+    hints = owner_profile.section_hints()
+    if who:
+        own = os.path.isfile(owner_profile.own_profile_path(address, DATA_ROOT))
+        name = (owner_profile.read(DATA_ROOT, address).get("name") if own else None) or who["name"]
+        for key in SHARED_HIDES["about"]:
+            about.pop(key, None)
+        for key in SHARED_HIDES["sections"]:
+            texts.pop(key, None)
+            hints.pop(key, None)
+        setup = False
+    else:
+        setup = owner_profile.needs_setup(DATA_ROOT)
+        name = "" if setup else owner_profile.owner_name(DATA_ROOT)
+    return {"name": name, **_holiday_place_json(address), "about": about,
+            "sections": texts, "hints": hints, "needs_setup": setup}
 
 
 def url_segments(path):
@@ -2816,20 +2849,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             got = board_access.read(dataset_dir(ds)) or {"owner": "", "people": [], "teams": []}
             return self._json(200, dict(got, board=ds, mine=got["owner"] == requester()["email"]))
         if path == "/profile-basics.json":
-            import owner_profile
-            if AUTH:
-                # The profile is the server's. The name is the visitor's own,
-                # and there is nothing for them to set up.
-                return self._json(200, {"name": requester()["name"], "country": "", "region": "",
-                                        "legacy_holidays": [], "needs_setup": False})
-            return self._json(200, {
-                "name": owner_profile.owner_name(DATA_ROOT) if not owner_profile.needs_setup(DATA_ROOT) else "",
-                **_holiday_place_json(),
-                "needs_setup": owner_profile.needs_setup(DATA_ROOT)})
+            return self._json(200, profile_reply())
         if path == "/holiday-countries.json":
             import holidays as nager
             import owner_profile
-            country = owner_profile.holiday_place(DATA_ROOT)[0]
+            who = requester()
+            country = owner_profile.holiday_place(DATA_ROOT, who["email"] if who else None)[0]
             return self._json(200, {
                 "countries": _all_countries(),
                 "regions": {country: nager.regions(country, DATA_ROOT)} if country and _nager_has(country) else {}})
@@ -3658,6 +3683,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._json(400, {"error": "body was not valid JSON"})
         if not isinstance(body, dict):
             return self._json(400, {"error": "body must be an object"})
+        about, sections = body.get("about") or {}, body.get("sections") or {}
+        if not isinstance(about, dict) or not isinstance(sections, dict):
+            return self._json(400, {"error": "about and sections must be objects"})
+        who = requester()
+        if who and (set(about) & set(SHARED_HIDES["about"]) or set(sections) & set(SHARED_HIDES["sections"])):
+            return self._json(400, {"error": "a path on the shared board is not yours to set"})
         country, region = body.get("country"), body.get("region")
         if country in (None, ""):
             country = None      # Not set: the holiday lines stay as they are
@@ -3669,12 +3700,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(400, {"error": "unknown country"})
             if region and (not _nager_has(country) or region not in {r["code"] for r in nager.regions(country, DATA_ROOT)}):
                 return self._json(400, {"error": "unknown region for %s" % country})
-        err = owner_profile.write_basics(DATA_ROOT, body.get("name"), country=country, region=region)
+        # Signed in, the person's own file and nobody else's: who they are is
+        # nginx's header, never anything in the body.
+        err = owner_profile.write_basics(DATA_ROOT, body.get("name"), country=country, region=region,
+                                         about=about, sections=sections,
+                                         address=who["email"] if who else None)
         if err:
             return self._json(400, {"error": err})
-        return self._json(200, {"name": owner_profile.owner_name(DATA_ROOT),
-                                **_holiday_place_json(),
-                                "needs_setup": owner_profile.needs_setup(DATA_ROOT)})
+        return self._json(200, profile_reply())
 
     def do_PUT(self):
         # Answered before the guard below, which is written to refuse

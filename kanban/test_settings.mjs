@@ -236,6 +236,35 @@ check('onboarding has no Skip button', !(await evalJS(`modalEl.textContent.inclu
   await wait(800)
   check('and reopens showing it', await evalJS(`modalEl.querySelector('[data-projects]').value`) === projects)
 
+  // The rest of the profile: About fields, then one box per section, collapsed.
+  check('Settings offers every section of the profile', await evalJS(
+    `['setup', 'writing', 'recorder', 'habits'].every(k => !!modalEl.querySelector('[data-section="' + k + '"]'))` +
+    ` && !!modalEl.querySelector('[data-about="addressing"]') && !!modalEl.querySelector('[data-about="facts_file"]')`))
+  check('the profile sections start collapsed, and the boxes empty', await evalJS(
+    `!modalEl.querySelector('[data-profile-sections]').open && [...modalEl.querySelectorAll('[data-section]')].every(t => t.value === '')`))
+  const setField = (sel, v) => evalJS(`(() => { const el = modalEl.querySelector(${JSON.stringify(sel)}); el.value = ${JSON.stringify(v)}; el.dispatchEvent(new Event('input', { bubbles: true })) })()`)
+  await setField('[data-section="writing"]', '## Writing\n- Spelling: British English')
+  check('a ## heading in a box blocks Save', await saveDisabled())
+  await setField('[data-section="writing"]', '- Spelling: British English\n- Message opening: Hey <name>')
+  await setField('[data-about="addressing"]', 'Hey <Alex>')
+  check('< > in a field blocks Save', await saveDisabled())
+  await setField('[data-about="addressing"]', 'Hey Alex')
+  await setField('[data-section="habits"]', '- Deferring: logs ideas first')
+  await press('Save')
+  await wait(3000)
+  const p4 = readFileSync(join(data, 'profile.md'), 'utf8')
+  check('Settings writes the About field', /^- How to address them: Hey Alex$/m.test(p4), p4)
+  check('and each box into its section', /## Writing\n\n- Spelling: British English\n- Message opening: Hey <name>\n/.test(p4)
+    && /## Working habits\n\n- Deferring: logs ideas first\n/.test(p4), p4)
+  check('a box left empty keeps the template', /## Meeting recorder\n\n- Recorder: </.test(p4), p4)
+  check('and the rest of the profile stays', /^- Name: Alex$/m.test(p4) && /^- Country: GB$/m.test(p4))
+  check('nobody signed in, nothing goes to data/users', !existsSync(join(data, 'users')))
+  await evalJS(`$('#settingsBtn').click()`)
+  await wait(800)
+  check('and it reads back as written', await evalJS(`modalEl.querySelector('[data-section="habits"]').value === '- Deferring: logs ideas first'
+    && modalEl.querySelector('[data-section="writing"]').value === '- Spelling: British English\\n- Message opening: Hey <name>'
+    && modalEl.querySelector('[data-about="addressing"]').value === 'Hey Alex'`))
+
   // The reply chime is a switch: a click turns it off, and Save writes it.
   check('the reply chime starts on, as a switch', await evalJS(`(() => { const s = modalEl.querySelector('[data-chime]');
     return s.getAttribute('role') === 'switch' && s.getAttribute('aria-checked') === 'true' && s.classList.contains('tenon-switch--on') })()`))

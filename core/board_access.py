@@ -28,7 +28,8 @@ off the file is not read at all.
 
 Which board each person has on screen is theirs alone, in `data/users/`, one
 file per person named from a hash of their address, so one person switching
-boards does not switch anybody else's. The same file remembers the name they
+boards does not switch anybody else's. Their PA profile sits beside it as
+`<hash>.profile.md` (profile_path(), read through core/owner_profile.py). The same file remembers the name they
 first signed in with and the teams they last signed in with, which is how a
 board's people are known: its owner and named people from access.json, and
 everyone who has signed in as a member of one of its teams (board_people()).
@@ -202,6 +203,13 @@ def user_path(data_root, address):
     The address itself is kept inside the file."""
     digest = hashlib.sha256(address.lower().encode("utf-8")).hexdigest()[:16]
     return os.path.join(data_root, USERS, digest + ".json")
+
+
+def profile_path(data_root, address):
+    """data/users/<hash>.profile.md, this person's own PA profile, beside
+    their record and named from the same hash. In owner_profile's
+    `- Key: value` format, read and written through core/owner_profile.py."""
+    return user_path(data_root, address)[:-len(".json")] + ".profile.md"
 
 
 def read_user(data_root, address):
