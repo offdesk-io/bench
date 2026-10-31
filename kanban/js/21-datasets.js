@@ -63,6 +63,7 @@ async function loadDatasets(){
     setDataMenuLabel(listFolder ? listFolder.name : '');
     $('#datasetMenu').classList.add('hidden');
   }
+  renderPhoneChrome();
   resolvePendingBoard();
 }
 
@@ -164,6 +165,7 @@ async function loadWhoami(){
   $('#whoName').title = who.email;
   $('#whoami').classList.remove('hidden');
   if (state.doc) renderView();
+  renderPhoneChrome();
   loadBoardPeople();
 }
 

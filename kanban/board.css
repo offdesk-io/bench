@@ -208,6 +208,100 @@
     .status{white-space:normal}
   }
 
+  /* ---- The phone's chrome (HeaderBars.tsx PhoneChrome, js/30-phone-chrome.js) ----
+     Below 640px the header and the bucket bar are put away and these stand in:
+     a one-row top bar, one sticky filter row, a bottom tab bar, and the sheets
+     they open. The put-away controls stay in the page, because the phone's
+     buttons answer by clicking them. Above 640px none of it is drawn. Every
+     target is at least 44px, nothing waits on hover, and the bars pad for the
+     notch and the home bar (viewport-fit=cover in index.html). */
+  .phtop, .phfilters, .phtabs{display:none}
+  @media (max-width:640px){
+    #hdr, #bucketBar{display:none !important}
+    body{padding-bottom:calc(60px + env(safe-area-inset-bottom))}
+    .phtop{
+      display:flex; align-items:center; justify-content:space-between; gap:8px;
+      padding:calc(6px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) 6px calc(12px + env(safe-area-inset-left));
+      background:var(--tenon-background-default);
+    }
+    .phbrand{font-weight:700}
+    .phboard, .phavatar, .phiconbtn, .phbucket, .phfilterbtn, .phcancel, .phrow, .phdone, .phtab{
+      font:inherit; color:var(--tenon-text-default); cursor:pointer; min-height:44px;
+      border:1px solid transparent; background:none;
+    }
+    .phboard{
+      display:flex; align-items:center; gap:6px; min-width:0; padding:0 8px; border-radius:var(--tenon-radius-md);
+    }
+    .phboard .phname{overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-weight:600}
+    .phdot{color:var(--tenon-text-faint)}
+    .phavatar{
+      min-width:44px; border-radius:var(--tenon-radius-full); display:flex; align-items:center; justify-content:center;
+      border-color:var(--tenon-stroke-default); background:var(--tenon-background-raised);
+    }
+    .phicon{width:22px; height:22px; fill:currentColor; flex:none}
+    .phfilters{
+      display:flex; align-items:center; gap:8px; position:sticky; top:0; z-index:25;
+      padding:6px calc(12px + env(safe-area-inset-right)) 6px calc(12px + env(safe-area-inset-left));
+      background:var(--tenon-background-default); border-bottom:1px solid var(--tenon-stroke-subtle);
+    }
+    .phiconbtn, .phbucket, .phfilterbtn, .phcancel{
+      border-color:var(--tenon-stroke-default); background:var(--tenon-background-raised);
+      border-radius:var(--tenon-radius-full); padding:0 14px; display:flex; align-items:center; justify-content:center; gap:6px;
+    }
+    .phiconbtn{min-width:44px; padding:0}
+    .phiconbtn.on{border-color:var(--tenon-stroke-accent)}
+    .phbucket{flex:1 1 auto; min-width:0; justify-content:space-between; font-weight:600}
+    .phbucket span:first-child{overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .phbadge{
+      min-width:20px; height:20px; padding:0 6px; box-sizing:border-box; border-radius:var(--tenon-radius-full);
+      background:var(--tenon-background-accent); color:var(--tenon-text-on-accent, #fff);
+      font-size:var(--tenon-typography-size-sm); line-height:20px; text-align:center;
+    }
+    .phsearch{
+      flex:1 1 auto; min-width:0; min-height:44px; box-sizing:border-box; padding:0 14px; font:inherit;
+      border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-full);
+      background:var(--tenon-background-raised); color:var(--tenon-text-default);
+    }
+    .phtabs{
+      display:flex; position:fixed; left:0; right:0; bottom:0; z-index:25;
+      padding:0 env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+      background:var(--tenon-background-raised); border-top:1px solid var(--tenon-stroke-default);
+    }
+    .phtab{
+      flex:1 1 0; min-width:0; padding:6px 2px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+      font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-faint); border-radius:0;
+    }
+    .phtab span{max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .phtab.on{color:var(--tenon-text-accent); font-weight:600}
+    /* The column strip sits under the filter row now, not at the very top. */
+    .coltabs{top:57px}
+    /* The sheets: Tenon's Modal docked to the bottom edge. */
+    .tenon-modal:has(> .tenon-modal__box.phonesheet){align-items:flex-end; padding:0}
+    .tenon-modal__box.phonesheet{
+      width:100%; max-height:80vh; border-radius:var(--tenon-radius-xl) var(--tenon-radius-xl) 0 0;
+      border-bottom:0; padding-bottom:env(safe-area-inset-bottom);
+      transform:translateY(24px); animation-name:phonesheet-in;
+    }
+    @keyframes phonesheet-in{to{opacity:1; transform:none}}
+    .phonesheet .tenon-modal__body{padding:0 0 8px}
+    .phonesheet__grip{width:40px; height:4px; border-radius:2px; margin:8px auto; background:var(--tenon-stroke-default)}
+    .phrows{display:flex; flex-direction:column}
+    .phrow{
+      display:flex; align-items:center; gap:10px; width:100%; padding:0 20px; text-align:left;
+      border-radius:0; border-bottom:1px solid var(--tenon-stroke-subtle); justify-content:space-between;
+    }
+    .phrow:disabled{color:var(--tenon-text-faint); cursor:default}
+    .phrow.danger{color:var(--tenon-text-danger, var(--tenon-text-default))}
+    .phrow[aria-current], .phrow[aria-pressed="true"]{font-weight:600}
+    .phlabel{flex:1 1 auto; min-width:0}
+    .phcount{color:var(--tenon-text-faint)}
+    .phtick{width:18px; text-align:right; color:var(--tenon-text-accent)}
+    .phdotc{flex:none; width:10px; height:10px; border-radius:50%}
+    .phdotc.none{background:transparent}
+    .phdone{width:calc(100% - 40px); margin:10px 20px 4px; border-color:var(--tenon-stroke-default); border-radius:var(--tenon-radius-md); background:var(--tenon-background-default)}
+  }
+  @media (prefers-reduced-motion:reduce){ .tenon-modal__box.phonesheet{animation-duration:1ms} }
+
   /* No colour dot: All is not one of the buckets, it is all of them. */
   .taball{font-weight:640}
 

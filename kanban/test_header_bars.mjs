@@ -167,6 +167,14 @@ try {
   check('and clicking it again puts everything back', await evalJS(`
     document.querySelector('#scoreChip').getAttribute('aria-pressed') === 'false' && document.querySelectorAll('#board .tenon-card').length === 4`))
 
+  /* ---- the phone's chrome stays out of the desktop ---- */
+
+  check('the phone chrome is in the bundle but not drawn at desktop width, and no control id is doubled', await evalJS(`
+    typeof BoardUI.PhoneChrome === 'function' && !!document.querySelector('#phTabs') &&
+    getComputedStyle(document.querySelector('#phTabs')).display === 'none' &&
+    getComputedStyle(document.querySelector('#phTop')).display === 'none' &&
+    document.querySelectorAll('#scoreChip').length === 1 && document.querySelectorAll('#bucketFilters').length === 1`))
+
   /* ---- the Agents tab hides the strip ---- */
 
   await evalJS(`state.view = 'agents'; renderView()`)
