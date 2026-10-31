@@ -852,6 +852,16 @@ async function saveFile(auto, forceBackup){
       await reload();
       return;
     }
+    /* A task given by name to somebody the shared board cannot place: nobody,
+       or more than one person. Said in the status line, and in a box when
+       the owner asked to save, since the next autosave gets the same answer
+       until the name is changed. */
+    if (res.status === 422 && info.assignees) {
+      autoStatus(info.error);
+      $('#status').classList.add('dirty');
+      if (!auto) alert(info.error);
+      return;
+    }
     if (!res.ok) throw new Error(info.error || ('the server answered ' + res.status));
     lastSaveAt = Date.now();
     const note = (auto ? 'auto-saved' : 'saved ' + new Date().toLocaleTimeString()) +

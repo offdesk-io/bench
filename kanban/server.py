@@ -3864,6 +3864,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # With no file yet it is measured against an empty one, so every task
         # in a first save is the signer's, whatever the tab wrote on it.
         # A card an agent's request changed goes under the agent (take_credits).
+        # Signed in, an assignee is a board person's email, but the PA and
+        # anyone typing hand over by name: `[to:: Jerome]`. A name on a line
+        # this save adds or changes becomes the one person on the board it
+        # means; a name meaning nobody or more than one refuses the whole save,
+        # naming the line and who it could be, rather than store a name no
+        # card, Mine filter or "your move" will ever match. The Mac board has
+        # no people and keeps names as written.
+        if todo is not None and AUTH and requester():
+            people = board_access.board_people(DATA_ROOT, board_access.read(dataset_dir(ds)))
+            text, unknown = todo.resolve_assignees(current_text or "", text,
+                                                   lambda name: board_access.people_named(people, name))
+            if unknown:
+                return self._json(422, {"error": "not saved: " + "; ".join(
+                    "line %d gives a task to %s, who %s on this board" % (
+                        u["line"], u["name"],
+                        "could be %s" % " or ".join(u["candidates"]) if u["candidates"] else "is nobody")
+                    for u in unknown), "assignees": unknown})
+
         changes = []
         if todo is not None:
             who = requester()

@@ -1705,6 +1705,44 @@ def _mg_plain_step(s):
     return {"fields": f, "notes": s["notes"]}
 
 
+TO_TAG_RE = re.compile(r"\[to::\s*([^\]]*)\]", re.I)
+
+
+def resolve_assignees(old_text, new_text, people_for):
+    """`new_text` with a bare name in `[to:: ]` swapped for the one person it
+    means, on a signed-in board where an assignee is an email.
+
+    Only task and sub-task lines `new_text` adds or changes against
+    `old_text`, the file it is about to replace, so a line nobody touched
+    keeps what it says. An email, an agent's name (AGENT_NAMES) or an empty
+    tag is left alone. `people_for(name)` answers the emails the name can
+    mean (board_access.people_named()).
+
+    Returns (text, problems): problems is one entry per name that matched
+    nobody or more than one person, {"line", "text", "name", "candidates"},
+    the line counted from 1 in `new_text`. With any problem the caller
+    refuses the save, so text is only worth writing when problems is empty."""
+    before = set((old_text or "").split("\n"))
+    lines = new_text.split("\n")
+    problems = []
+    for i, line in enumerate(lines):
+        if line in before or not SUB_RE.match(line):
+            continue
+
+        def swap(m, i=i, line=line):
+            name = m.group(1).strip()
+            if not name or "@" in name or agent_of(name):
+                return m.group(0)
+            found = people_for(name)
+            if len(found) == 1:
+                return "[to:: %s]" % found[0]
+            problems.append({"line": i + 1, "text": line.strip(), "name": name, "candidates": found})
+            return m.group(0)
+
+        lines[i] = TO_TAG_RE.sub(swap, line)
+    return "\n".join(lines), problems
+
+
 def stamp_authors(old_text, new_text, who, credits=None, write_tags=None):
     """`new_text` with who wrote and who last changed each task and sub-task,
     measured against `old_text`, the file it is about to replace. A task or
