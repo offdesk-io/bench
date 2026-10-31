@@ -21,10 +21,18 @@ own that is not done:
 What has been sent lives per board in data/<board>/notify-state.json, so a
 restart does not repeat a banner. Entries older than 14 days are dropped.
 
-The queue half drains data/<board>/notify-queue.json, which companion/notify.py
-appends to, by the rules the companion used: nothing before 08:30 or after
-20:00 (the `content` board is exempt), at most three per tick, the rest left for
-the next one, and a line with no body is dropped.
+The queue half drains the agents' lines for each board, by the rules the
+companion used: nothing before 08:30 or after 20:00 (the `content` board is
+exempt), at most three per tick, the rest left for the next one, and a line
+with no body is dropped. The queue belongs to the notifier, a folder beside
+this checkout (bench_root.notify_home(), ~/Code/notify on the owner's Mac),
+whose own poster drains it whether or not the board is running; the board
+drains its boards' queues there too, so a Mac where the poster was never
+started loses nothing. Both hold the queue's lock from reading a line to
+taking it off, so a line goes out once whichever reaches it first. The old
+place, data/<board>/notify-queue.json, is drained as well: it is where lines go
+when there is no notifier folder, and where a throwaway data root (the test
+runner's) keeps its own (queue_file()).
 
 Everything that needs a clock or a calendar takes it as an argument, so the
 tests run on a fake one. Only `post` and `start` touch the machine.
@@ -45,6 +53,7 @@ try:
 except ImportError:          # no flock off a Unix
     fcntl = None
 
+import bench_root
 import todo
 
 STATE_FILE = "notify-state.json"
@@ -239,6 +248,35 @@ def _write_queue(path, items):
     os.replace(tmp, path)
 
 
+def notifier_data(data_root):
+    """The notifier's data/ folder, or None: when there is no notifier beside
+    this checkout, or when `data_root` is a throwaway one rather than the
+    checkout's own data/, whose lines stay with it unless $NOTIFY_HOME says
+    otherwise."""
+    home = bench_root.notify_home()
+    if not os.path.isfile(os.path.join(home, "notify.py")):
+        return None
+    own = os.path.join(bench_root.root(), "data")
+    if not os.environ.get("NOTIFY_HOME") and os.path.realpath(data_root) != os.path.realpath(own):
+        return None
+    return os.path.join(home, "data")
+
+
+def queue_file(data_root, board):
+    """Where a new line for `board` goes: the notifier's queue for it, else
+    data/<board>/ as before."""
+    return os.path.join(notifier_data(data_root) or data_root, board, QUEUE_FILE)
+
+
+def queue_dirs(data_root, board):
+    """Every folder the board drains for `board`: its own, then the notifier's."""
+    out = [os.path.join(data_root, board)]
+    notifier = notifier_data(data_root)
+    if notifier:
+        out.append(os.path.join(notifier, board))
+    return out
+
+
 def queue_batch(board_dir, board, now, skip=()):
     """The next lines to post, as (raw entry, (title, body, task, view)), at most
     QUEUE_BATCH of them, none of them in `skip`. Nothing comes off the file here.
@@ -266,16 +304,23 @@ def queue_remove(board_dir, entries):
     appended meanwhile is kept. Written atomically."""
     if not entries:
         return
+    with queue_lock(os.path.join(board_dir, QUEUE_FILE)):
+        _remove(board_dir, entries)
+
+
+def _remove(board_dir, entries):
+    """queue_remove() for a caller already holding the lock."""
+    if not entries:
+        return
     path = os.path.join(board_dir, QUEUE_FILE)
-    with queue_lock(path):
-        items = _read_queue(path)
-        for e in entries:
-            if e in items:
-                items.remove(e)
-        try:
-            _write_queue(path, items)
-        except OSError:
-            pass
+    items = _read_queue(path)
+    for e in entries:
+        if e in items:
+            items.remove(e)
+    try:
+        _write_queue(path, items)
+    except OSError:
+        pass
 
 
 # ---- one tick -----------------------------------------------------------------------
@@ -354,14 +399,21 @@ def run_tick(data_root, boards, now, is_working, post, read_text=read_plain, ret
         if changed:
             write_state(board_dir, fired, now.date())
         waiting = {k.split("|q|", 1)[1] for k, t in retries.items() if "|q|" in k and now - t < RETRY_AFTER}
-        batch = queue_batch(board_dir, board, now, skip=waiting)
-        done = []
-        for entry, msg in batch:
-            if msg is None:
-                done.append(entry)
-            elif attempt("%s|q|%s" % (now.date().isoformat(), json.dumps(entry, sort_keys=True)), msg + (None, board)):
-                done.append(entry)
-        queue_remove(board_dir, done)
+        for qdir in queue_dirs(data_root, board):
+            path = os.path.join(qdir, QUEUE_FILE)
+            if not os.path.isfile(path):
+                continue
+            # Held from reading to taking off, posts included, so the
+            # notifier's poster draining the same queue never posts a line
+            # this has posted, nor this one of its.
+            with queue_lock(path):
+                done = []
+                for entry, msg in queue_batch(qdir, board, now, skip=waiting):
+                    if msg is None:
+                        done.append(entry)
+                    elif attempt("%s|q|%s" % (now.date().isoformat(), json.dumps(entry, sort_keys=True)), msg + (None, board)):
+                        done.append(entry)
+                _remove(qdir, done)
     return sent
 
 

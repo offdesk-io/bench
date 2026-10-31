@@ -1222,13 +1222,27 @@ before today.
 14 days, so restarting the server repeats nothing. A banner that fails to post is
 retried every ten minutes and only its first failure is written to the log.
 
-**Agents' messages.** `companion/notify.py` is still how an agent asks for a
-banner, from Python or the command line, and its interface did not change. It
-appends to `data/<list>/notify-queue.json`, and the server posts the lines
-between 08:30 and 20:00, three a minute at most (the `content` list has no
-window, because its 11pm run is the reason it exists). A line comes off the file
-only once it has posted. An append and a drain take turns through a lock file
-beside the queue, `notify-queue.lock`, so a line appended mid-drain is not lost.
+**Agents' messages.** The queue an agent asks for a banner on belongs to the
+notifier, a folder of its own beside this checkout (`~/Code/notify` on the
+owner's Mac, `$NOTIFY_HOME` elsewhere), because agents outside Bench need it as
+much as the ones inside, and they should not have to reach into Bench's folders
+or wait for the board to be open to be heard. It keeps the layout Bench used,
+`data/<list>/notify-queue.json`, so a caller names a list the way it always
+did, and its own poster drains every queue whether or not the board is running.
+`companion/notify.py` stays as a shim with the same interface, so every caller
+that reaches it by path keeps working: it picks the list on screen when none is
+named and hands the line to the notifier's `notify.py`. A checkout with no
+notifier beside it, and a throwaway data root such as the test runner's, keep
+the queue in `data/<list>/` as before.
+
+The server drains its lists' queues in both places while it runs, so a Mac
+where the poster was never started loses nothing. It posts the lines between
+08:30 and 20:00, three a minute at most (the `content` list has no window,
+because its 11pm run is the reason it exists). With two drainers a line could
+go out twice, so each holds the queue's lock, `notify-queue.lock` beside it,
+from reading a line to taking it off, posting included: whichever reaches a
+line first posts it and the other finds it gone. A line appended mid-drain
+waits for the lock and is kept.
 
 **Pressing a banner.** Each one opens the board on the card, through a link that
 names its list, `#!board=<list>!task=<key>`. If that list is not the one showing,
@@ -1246,11 +1260,12 @@ board is written to avoid.
 start without the user's `PATH`). The Linux server never starts it, a throwaway
 data root such as the test runner's never starts it, and `BENCH_NOTIFY=0`
 switches it off anywhere. The schedule page lists it as Desktop banners and says
-why when it is off. Banners go out only while the board is running; there is no
-longer anything else to launch.
+why when it is off. Due banners go out only while the board is running; the
+agents' lines also go out through the notifier's poster, once something starts
+it at login (its README says how).
 
-**The retired app.** `companion/` stays on disk, because `notify.py` and
-`digest.py` are still called from there, but the Electron tray app is not part of
+**The retired app.** `companion/` stays on disk, because `notify.py` (now the
+shim above) and `digest.py` are still called from there, but the Electron tray app is not part of
 the setup any more: `run.command` starts only the board, nothing launches the
 tray app, and its packaged `To-Do Companion.app` can be deleted. Its suite,
 `python3 companion/test_companion.py`, still covers `notify.py` and `digest.py`.

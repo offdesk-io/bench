@@ -1327,4 +1327,6 @@ def announce(written, skipped, stopped):
     # night, and Execution when the only news is the backlog of runs — either
     # is where the thing it is announcing actually lives.
     view = "plans" if written else "execution"
-    notify.queue("Plan agent", body, view=view)
+    # The queue of the list this batch planned, which need not be the one on
+    # screen (data/.current, what notify.py would pick with nothing named).
+    notify.queue("Plan agent", body, view=view, path=paths.notify_queue_path())
