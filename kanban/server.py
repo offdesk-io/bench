@@ -31,6 +31,7 @@ import shlex
 import subprocess
 import shutil
 import sys
+import tempfile
 import threading
 import time
 import uuid
@@ -114,6 +115,8 @@ _request = threading.local()
 # A test server must never open a window: it would steal focus mid-run.
 OPEN_BROWSER = not os.environ.get("TODOS_NO_BROWSER")
 MAX_BYTES = 5 * 1024 * 1024
+# A file added to a project folder from the drawer. Not read through _body().
+MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 # One-backup-per-run applies per dataset, not to the server as a whole — the
 # rare session that visits two lists gets one grace save on each.
 backup_made = set()
@@ -3203,6 +3206,76 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return None
         return self.rfile.read(length)
 
+    def _project_upload(self):
+        if self.headers.get("X-Board") != "1":
+            return self._json(403, {"error": "not from the board"})
+        # Signed in, a board's access.json is read and write alike (the PUT
+        # save has no stricter test), so the person must be on this board's.
+        if AUTH and not board_visible(current_dataset()):
+            self.close_connection = True
+            return self._json(403, {"error": "you cannot add files to this board"})
+        from urllib.parse import parse_qs, urlparse
+        q = parse_qs(urlparse(self.path).query)
+        name = (q.get("name") or [""])[0]
+        sub = (q.get("sub") or [""])[0]
+        fname = (q.get("file") or [""])[0]
+        if (not fname or fname.startswith(".") or "/" in fname or "\\" in fname
+                or "\0" in fname or ".." in fname or fname != os.path.basename(fname)):
+            self.close_connection = True
+            return self._json(400, {"error": "that file name cannot be used"})
+        try:
+            length = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            self.close_connection = True
+            return self._json(411, {"error": "Content-Length needed"})
+        if length < 0:
+            self.close_connection = True
+            return self._json(400, {"error": "bad Content-Length"})
+        if length > MAX_UPLOAD_BYTES:
+            self.close_connection = True
+            return self._json(413, {"error": "file too large (25 MB at most)"})
+        real, err = project_folders.resolve(name, dataset_dir(current_dataset()))
+        if err:
+            self.close_connection = True
+            return self._json(err[0], {"error": err[1]})
+        if sub:
+            real, err = project_subfolder(real, sub)
+            if err:
+                self.close_connection = True
+                return self._json(err[0], {"error": err[1]})
+        fd, tmp = tempfile.mkstemp(prefix=".upload-", dir=real)
+        saved = None
+        try:
+            with os.fdopen(fd, "wb") as out:
+                left = length
+                while left > 0:
+                    chunk = self.rfile.read(min(65536, left))
+                    if not chunk:
+                        raise OSError("the upload stopped early")
+                    out.write(chunk)
+                    left -= len(chunk)
+            stem, ext = os.path.splitext(fname)
+            n = 1
+            while True:
+                saved = fname if n == 1 else "%s (%d)%s" % (stem, n, ext)
+                dest = os.path.join(real, saved)
+                try:
+                    # A hard link fails if the name exists, so two uploads of
+                    # one name cannot both take it, and nothing is overwritten.
+                    os.link(tmp, dest)
+                    break
+                except FileExistsError:
+                    n += 1
+        except OSError as exc:
+            self.close_connection = True
+            return self._json(500, {"error": "could not save it: %s" % exc})
+        finally:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+        return self._json(200, {"ok": True, "name": saved})
+
     def do_POST(self):
         path = self.path.split("?")[0]
         if path.startswith(AGENTS_PREFIX + "/"):
@@ -3327,6 +3400,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(err[0], {"error": err[1]})
             return self._json(200, {"ok": True, "name": slug,
                                     "note": "data/projects/" + slug})
+        # Add a file to a project folder (or a folder inside it), from the
+        # drawer's Files section. ?name=<project>&sub=<folder>&file=<name>, the
+        # body the raw bytes. Never overwrites: a clash is saved as "name (2).ext".
+        if path == "/project/upload":
+            return self._project_upload()
         # Reveal a project folder in Finder. Only on the machine the server
         # runs on, which is why the board leaves the button off its static copy.
         if path == "/project/open":

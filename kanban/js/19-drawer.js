@@ -756,7 +756,65 @@ async function drawProjectPicker(t){
    loadTaskProject() once the panel is up, the way History is. */
 function filesSection(){
   return sideSection('Files', 'files',
+    '<div id="f-fileadd" class="pprow hidden">' +
+      '<button type="button" class="btn outline small" id="f-fileaddbtn">Add file…</button>' +
+      '<input type="file" id="f-fileinput" multiple hidden>' +
+      '<span class="help hidden" id="f-fileerr"></span></div>' +
     '<div id="f-files">' + emptyState('No files yet.') + '</div>', undefined, true);
+}
+
+/* The Add file button and drag-and-drop on the Files section. Shown only where
+   the server routes exist and the task can be edited, the way Start a project
+   is. A task with no folder yet gets one first, through /project/start. */
+function bindFileAdd(t, ro){
+  const bar = $('#f-fileadd');
+  if (!bar || state.demo || listFolder || ro) return;
+  bar.classList.remove('hidden');
+  const input = $('#f-fileinput'), err = $('#f-fileerr'), zone = bar.parentElement;
+  const say = msg => { err.textContent = msg || ''; err.classList.toggle('hidden', !msg); };
+  const add = async files => {
+    files = Array.from(files || []);
+    if (!files.length) return;
+    say('');
+    let proj = taskProject(t), created = false;
+    try {
+      if (!proj) {
+        const name = prompt('Name the folder for this project. It is made in the projects folder.', t.title);
+        if (name == null) return;
+        const got = await postJSON('/project/start', { name, title: t.title });
+        if (!setTaskProject(t, got.name)) throw new Error('could not link the folder to the task');
+        proj = got.name;
+        created = true;
+      }
+    } catch (e) { say('Could not start the project: ' + (e.message || e)); return; }
+    const failed = [];
+    for (const f of files) {
+      try {
+        const res = await fetch('/project/upload?name=' + encodeURIComponent(proj) +
+                                '&file=' + encodeURIComponent(f.name),
+                                { method: 'POST', headers: { 'X-Board': '1' }, body: f });
+        const info = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(info.error || ('the server answered ' + res.status));
+      } catch (e) { failed.push(f.name + ': ' + (e.message || e)); }
+    }
+    const msg = failed.length ? 'Not added. ' + failed.join(' · ') : '';
+    if (state.openTask !== t.id) { if (msg) showToast(msg, 'bad'); return; }
+    if (created) {
+      // The card itself changes once the task has a folder, so redraw it all.
+      refreshView(); openDrawer(t.id);
+      if (msg) showToast(msg, 'bad');
+    } else {
+      say(msg);
+      loadTaskProject(proj, t.id);
+    }
+  };
+  $('#f-fileaddbtn').onclick = () => input.click();
+  input.onchange = () => { add(input.files); input.value = ''; };
+  zone.addEventListener('dragover', ev => ev.preventDefault());
+  zone.addEventListener('drop', ev => {
+    ev.preventDefault();
+    add(ev.dataTransfer && ev.dataTransfer.files);
+  });
 }
 
 async function loadTaskHistory(t){
@@ -1305,6 +1363,7 @@ function openDrawer(id, focusTitle){
   const pickBtn = $('#f-projpick');
   if (pickBtn) pickBtn.onclick = () => drawProjectPicker(t);
   if (proj) loadTaskProject(proj, t.id);
+  bindFileAdd(t, ro);
   loadTaskHistory(t);
   bindDependencySection(t);
   mountSubRows(t, id, subs, ro);
