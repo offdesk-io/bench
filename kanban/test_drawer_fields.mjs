@@ -122,8 +122,19 @@ try {
     return !!e && e.tagName === 'DIV' && !e.querySelector('summary') && e.querySelector('.empty').textContent === 'None yet.' &&
       e.querySelector(':scope > span').textContent === 'Message suggestions' && !e.closest('details:not([open])');
   })()`))
+  // The text's left edge, whatever the heading is: the summary's text node or the plain heading's.
+  const textLeft = sel => evalJS(`(() => {
+    const h = document.querySelector('${sel}'); const n = [...(h.matches('summary') ? h : h.querySelector(':scope > span')).childNodes].find(c => c.nodeType === 3 && c.textContent.trim());
+    const r = document.createRange(); r.selectNodeContents(n); return Math.round(r.getBoundingClientRect().left * 10) / 10;
+  })()`)
+  const emptyLeft = await textLeft('.dcol-side [data-collapse="sugg:Message suggestions"]')
+  const titleLeft = await textLeft('.dcol-main > div.field.sugg.heading')
+  const detailsLeft = await textLeft('.dcol-main > details[data-collapse="details"] > summary')
+  check('Title starts where the folding top-level headings do', titleLeft === detailsLeft, titleLeft + ' vs ' + detailsLeft)
   await evalJS(`__t().body.push('  - Suggested message: "Hello"'); openDrawer(__t().id)`)
   await wait(300)
+  const fullLeft = await textLeft('.dcol-side [data-collapse="sugg:Message suggestions"] > summary')
+  check('an empty subsection\'s heading starts where a folding one\'s does', emptyLeft === fullLeft, emptyLeft + ' vs ' + fullLeft)
   check('once it has content it is a section with a caret again', await evalJS(`(() => {
     const e = document.querySelector('.dcol-side [data-collapse="sugg:Message suggestions"]');
     return !!e && e.tagName === 'DETAILS' && !!e.querySelector(':scope > summary');

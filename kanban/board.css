@@ -2674,6 +2674,9 @@
   /* Title, and a subsection with only its empty state: a heading with no fold. */
   div.sugg{gap:var(--tenon-dimension-100)}
   .sugg.subsec > span{color:var(--tenon-text-faint)}
+  /* Room where the caret would be, so these headings start where the folding
+     ones do. Same glyph, size and gap as details.sugg > summary::before. */
+  div.sugg > span::before{content:'▸'; visibility:hidden; font-size: var(--tenon-typography-size-sm); display:inline-block; margin-right:5px}
   details.sugg::details-content{display:flex; flex-direction:column; gap:var(--tenon-dimension-100)}
   details.sugg > summary ~ .sugg.subsec{margin-top:calc(var(--tenon-dimension-150) - var(--tenon-dimension-100))}
   details.sugg > summary + .sugg.subsec{margin-top:0}
