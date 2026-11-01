@@ -106,9 +106,6 @@ export type { BoardModalProps, BoardModalButton } from './BoardModal'
 /* The task drawer's frame, drawn by React since 21 Oct 2026. */
 export { DrawerHeadLead, DrawerBody } from './DrawerPanel'
 export type { DrawerHeadLeadProps, DrawerBodyProps } from './DrawerPanel'
-/* The drawer's Project field, on React since 26 Sep 2026. */
-export { DrawerProjectSection } from './DrawerProjectSection'
-export type { DrawerProjectSectionProps, DrawerProjectSectionMeta } from './DrawerProjectSection'
 export { RefCards } from './RefCards'
 export type {
   RefCardsProps, Usage, UsageState, ScheduleJob, ScheduleState, RunResults,

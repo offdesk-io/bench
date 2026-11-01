@@ -72,6 +72,8 @@ function HTMLBox({ as: Tag = 'div', html, ...rest }: { as?: any; html: string; [
    plain), and `sub` marks a subsection with no rule above it. */
 function SideSection(p: {
   label: string; id: string; count?: number; sub?: boolean
+  /** A subsection holding only its empty state: no fold, no caret, always shown. */
+  empty?: boolean
   /** Overrides the 'sugg:<id>' collapse key, for a section whose stored state predates it. */
   collapseKey?: string
   /** Extra class on the <details>. */
@@ -83,6 +85,14 @@ function SideSection(p: {
 }) {
   const key = p.collapseKey || 'sugg:' + p.id
   const ref = useHTML(p.html)
+  if (p.sub && p.empty) {
+    return (
+      <div className="field sugg subsec nocollapse" data-collapse={key}>
+        <span>{p.label}</span>
+        {p.children}
+      </div>
+    )
+  }
   return (
     <>
       {p.sub ? null : <hr className="dsep" />}
@@ -137,9 +147,10 @@ export function DrawerBody(p: DrawerBodyProps) {
   return (
     <div className="dcols">
       <div className="dcol dcol-main">
-        <SideSection label="Title" id="title" open={p.open}>
+        <div className="field sugg heading">
+          <span>Title</span>
           <input type="text" id="f-title" defaultValue={p.title} disabled={ro} />
-        </SideSection>
+        </div>
         <SideSection label="Details" id="details" collapseKey="details" className="dgroup" open={p.open}>
           <div className="field"><span>Bucket</span><div data-pick-host="f-bucket" /></div>
           {p.themeHTML != null ? <HTMLBox className="field" html={'<span>Theme</span>' + p.themeHTML} /> : null}

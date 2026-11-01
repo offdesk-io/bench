@@ -613,10 +613,22 @@ function emptyState(text){
 /* sub marks a subsection inside another side section (Outputs): no rule above
    it, and its title takes Description's grey rather than the white heading. */
 /* Side-column sections switched off until they come back. The code stays. */
-const DRAWER_HIDDEN = { deps: true, chats: true, prompts: true, jira: true };
+const DRAWER_HIDDEN = { deps: true, chats: true, prompts: true, jira: true, chatwith: true };
+/* The same for the sub-task panel: its Flags are off. */
+const SUBPANEL_HIDDEN = { flags: true };
 
+/* A section that is only its title: Title, which is a heading with no fold. */
+function plainSection(label, body){
+  return '<div class="field sugg heading"><span>' + esc(label) + '</span>' + body + '</div>';
+}
 function sideSection(label, key, body, count, sub, action){
   const k = 'sugg:' + key;
+  /* A subsection with nothing in it but "None yet." has nothing to fold: no
+     caret, always shown, the same heading. It gets its caret and its stored
+     state back as soon as it has content (the panel is redrawn on every edit). */
+  if (sub && /^<p class="empty">[^]*<\/p>$/.test(body) && !/<p/.test(body.slice(1))) {
+    return '<div class="field sugg subsec nocollapse" data-collapse="' + esc(k) + '"><span>' + esc(label) + '</span>' + body + '</div>';
+  }
   return (sub ? '' : '<hr class="dsep">') +
     '<details class="field sugg' + (sub ? ' subsec' : '') + '" data-collapse="' + esc(k) + '"' +
     (sectionCollapsed(k) ? '' : ' open') + '>' +
@@ -632,57 +644,6 @@ function sideSection(label, key, body, count, sub, action){
 document.addEventListener('click', ev => {
   if (ev.target.closest('summary .sumaction')) ev.preventDefault();
 });
-
-/* The folder this task's work lives in, as a way into it rather than as a
-   field of the task: the note that names it stays where it was written, in
-   Description, and this is the same line shown properly. It sat ninth in the
-   left-hand column, under eight things it has nothing to do with and below the
-   fold on a real task; it belongs beside the conversations and the
-   dependencies, which are the other things about the task rather than of it.
-
-   The card is filled in by loadTaskProject() once the panel is up — what the
-   project is and when it was last touched are read off disk, and neither is
-   worth holding the drawer open for. */
-/* The mount point for DrawerProjectSection (kanban/ui/DrawerProjectSection.tsx).
-   renderProjectSection(), below, draws into it. */
-function projectSection(t){
-  return sideSection('Project', 'project', '<div id="f-project-mount"></div>');
-}
-
-/* The React root behind #f-project-mount, and the task/read-only pair its
-   later, async render (loadTaskProject's fetch) needs to redraw against —
-   openDrawer() may have moved to another task by the time that resolves,
-   the same race loadTaskProject already guarded against by id. */
-let projectMountEl = null;
-let projectDrawTask = null;
-let projectDrawRO = false;
-
-/* Renders DrawerProjectSection for the task openDrawer() currently has open.
-   Called once with no meta when the panel goes up, then again once
-   loadTaskProject's read comes back — the same two-pass draw the old
-   innerHTML/textContent pokes did. */
-function renderProjectSection(meta){
-  if (!projectMountEl) return;
-  const t = projectDrawTask;
-  const proj = taskProject(t);
-  // state.demo is the static copy (Vercel, or the board before its helper is
-  // up): no server to make a folder or open one, so no buttons that would
-  // fail. A backup preview can still open a folder, but not change the task.
-  // A folder opened on the hosted page has no server either. See 21-datasets.js.
-  const live = !state.demo && !listFolder;
-  const canEdit = live && !projectDrawRO;
-  BoardUI.mountFlushed(projectMountEl, BoardUI.h(BoardUI.DrawerProjectSection, {
-    project: proj || '',
-    title: proj ? (isProjectPath(proj) ? proj.split('/').pop() : proj) : '',
-    where: proj ? (isProjectPath(proj) ? proj + '/' : 'data/projects/' + proj + '/') : '',
-    live, canEdit,
-    meta: meta || undefined,
-    emptyHTML: emptyState('No folder yet. Name one in Description as `data/projects/<folder>`, or a path of your own.'),
-    onStartProject: () => startProject(t),
-    onPickFolder: () => drawProjectPicker(t),
-    onOpenFolder: () => openProjectFolder(proj),
-  }));
-}
 
 /* Start a project and Use an existing folder both end the same way: the
    server has the folder, and setTaskProject() writes the note in memory for
@@ -1385,7 +1346,7 @@ function openDrawer(id, focusTitle){
       (agentsSetUp() || agentOf(t.to)
         ? '<span class="help">The Plan agent plans it and stops. The Implement agent carries it out.</span>'
         : '') +
-      (chat.available() && !ro
+      (!DRAWER_HIDDEN.chatwith && chat.available() && !ro
         ? '<button type="button" class="btn outline small" id="f-chatwith">New chat with this task</button>'
         : ''),
     /* Read-only — the `repeat:` tag is set by the pa skill, never typed into
@@ -1772,7 +1733,7 @@ function openSubtaskDrawer(found){
     '</div>';
 
   $('#sbody').innerHTML = '<div class="dcols"><div class="dcol dcol-main">' +
-    sideSection('Title', 'subtitle', '<input type="text" id="s-title" value="' + esc(f.title) + '"' + dis + '>') +
+    plainSection('Title', '<input type="text" id="s-title" value="' + esc(f.title) + '"' + dis + '>') +
     reviewHTML +
     '<div class="field"><span>State</span>' + stepPickerHTML('s-substate', SUB_STATES, now, ro, 'State') + '</div>' +
     '<div class="field"><span>Assigned to</span>' + delegateSelectHTML(f.to, dis, 's-to') + '</div>' +
@@ -1781,11 +1742,11 @@ function openSubtaskDrawer(found){
       '<div class="field"><span>Effort</span>' + stepSliderHTML('s-effort', EFFORT_STOPS, f.effort, ro, 'Effort') + '</div>' +
     '</div>' +
     '<div id="s-dates"></div>' +
-    '<div class="field' + (took('urgent') || took('week') ? ' inherited' : '') + '"><span>Flags</span>' +
+    (SUBPANEL_HIDDEN.flags ? '' : '<div class="field' + (took('urgent') || took('week') ? ' inherited' : '') + '"><span>Flags</span>' +
       '<label class="toggle"><input type="checkbox" id="s-urgent"' + (inh.urgent ? ' checked' : '') + dis + '> urgent</label>' +
       '<label class="toggle"><input type="checkbox" id="s-week"' + (inh.week ? ' checked' : '') + dis + '> this week</label>' +
       (took('urgent') || took('week') ? '<span class="help">Any that is ticked and faded is the task\'s.</span>' : '') +
-    '</div>' +
+    '</div>') +
     (waitingOn ? '<div class="field"><span>Waiting on</span>' + waitingOn + '</div>' : '') +
     sideSection('Note', 'subnote', '<div id="s-note-mount"></div>') +
     '<div class="field inherited"><span>Task</span><span class="dpbtn" style="cursor:default">' + mdInline(t.title) + '</span></div>' +
@@ -1895,8 +1856,8 @@ function openSubtaskDrawer(found){
     };
     pickSubDate = (k, v) => { dates[k] = v; openDrawer(state.openTask); };
     pickSubTime = v => { edit(cur => { cur.time = v; }); };
-    $('#s-urgent').onchange = e => { edit(cur => { cur.urgent = e.target.checked; }); again(); };
-    $('#s-week').onchange = e => { edit(cur => { cur.week = e.target.checked; }); again(); };
+    if ($('#s-urgent')) $('#s-urgent').onchange = e => { edit(cur => { cur.urgent = e.target.checked; }); again(); };
+    if ($('#s-week')) $('#s-week').onchange = e => { edit(cur => { cur.week = e.target.checked; }); again(); };
     const note = $('#s-note');
     const saved = note.value;
     note.onblur = () => { if (note.value !== saved) { setStepNoteText(t, line, note.value); refreshView(); } };

@@ -108,9 +108,28 @@ try {
     const same = (a, b) => getComputedStyle(a.querySelector('summary')).fontSize === getComputedStyle(b.querySelector('summary')).fontSize &&
       getComputedStyle(a.querySelector('summary')).color === getComputedStyle(b.querySelector('summary')).color &&
       getComputedStyle(a.querySelector('summary')).fontWeight === getComputedStyle(b.querySelector('summary')).fontWeight;
-    return ['sugg:title', 'details', 'sugg:subtasks'].every(k => top(k) && same(top(k), out)) &&
-      !!top('sugg:title').querySelector('#f-title') && !!top('sugg:subtasks').querySelector('#f-subs-host');
+    return ['details', 'sugg:subtasks'].every(k => top(k) && same(top(k), out)) &&
+      !!top('sugg:subtasks').querySelector('#f-subs-host');
   })()`))
+  check('Title is the one heading that does not fold: white, same type as Outputs, no caret, no <details>', await evalJS(`(() => {
+    const t = document.querySelector('.dcol-main > div.field.sugg.heading'), o = document.querySelector('.dcol-side > details[data-collapse="sugg:outputs"] > summary');
+    if (!t || t.closest('details') || t.querySelector('summary') || !t.querySelector('#f-title')) return false;
+    const a = getComputedStyle(t.querySelector(':scope > span')), b = getComputedStyle(o);
+    return a.fontSize === b.fontSize && a.fontWeight === b.fontWeight && a.color === b.color && a.textTransform === b.textTransform;
+  })()`))
+  check('an empty subsection (None yet.) has no caret and no fold, and stays open', await evalJS(`(() => {
+    const e = document.querySelector('.dcol-side [data-collapse="sugg:Message suggestions"]');
+    return !!e && e.tagName === 'DIV' && !e.querySelector('summary') && e.querySelector('.empty').textContent === 'None yet.' &&
+      e.querySelector(':scope > span').textContent === 'Message suggestions' && !e.closest('details:not([open])');
+  })()`))
+  await evalJS(`__t().body.push('  - Suggested message: "Hello"'); openDrawer(__t().id)`)
+  await wait(300)
+  check('once it has content it is a section with a caret again', await evalJS(`(() => {
+    const e = document.querySelector('.dcol-side [data-collapse="sugg:Message suggestions"]');
+    return !!e && e.tagName === 'DETAILS' && !!e.querySelector(':scope > summary');
+  })()`))
+  await evalJS(`__t().body.pop(); openDrawer(__t().id)`)
+  await wait(300)
   check('Add sub-task sits in the Subtasks title bar, and a click in that bar does not toggle the section', await evalJS(`(() => {
     const sec = document.querySelector('details[data-collapse="sugg:subtasks"]'), b = sec.querySelector('summary .sumaction #f-addsub');
     if (!b || b.textContent !== 'Add sub-task…') return false;

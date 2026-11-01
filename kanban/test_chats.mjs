@@ -726,8 +726,7 @@ const drawerChat = await evalJS(`
     };
   })()
 `)
-check('the drawer offers New chat with this task', drawerChat.shown && drawerChat.text === 'New chat with this task', JSON.stringify(drawerChat))
-check('  it opens a chat on the task with the task attached', drawerChat.called && drawerChat.attached && drawerChat.owner)
+check('the drawer no longer offers New chat with this task (DRAWER_HIDDEN.chatwith)', !drawerChat.shown, JSON.stringify(drawerChat))
 
 const errs = await evalJS(`window.__errs || 0`)
 console.log(`\n${checks.filter(Boolean).length}/${checks.length} passed`)

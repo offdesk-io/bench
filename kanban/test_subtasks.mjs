@@ -165,7 +165,7 @@ try {
   check('the panel says it is a sub-task', await evalJS(`document.querySelector('#subTitle').textContent`) === 'View sub-task (read-only)')
   check('what it takes from its task is faded, and what it has of its own is not', await evalJS(`
     [...document.querySelectorAll('#sbody .field')].filter(f => f.classList.contains('inherited'))
-      .map(f => f.querySelector('span').textContent).join('|')`) === 'Impact|Due|Flags|Task|Bucket')
+      .map(f => f.querySelector('span').textContent).join('|')`) === 'Impact|Due|Task|Bucket')
   check('the assignee and the state are its own', await evalJS(`
     document.querySelector('#s-to').value === 'Morgan' || document.querySelector('#s-to').selectedOptions[0].textContent === 'Morgan'`))
   check('the step\'s note is in the panel', await evalJS(`!!document.querySelector('#sbody #s-note')`))

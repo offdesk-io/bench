@@ -491,34 +491,14 @@
 
   /* ---------- projects ----------
      A project is a folder, not a task, so it gets a chip rather than a card. */
-  /* The chip is Tenon's outlined `Pill`, and so is the theme chip beside it
-     (cardModel(), kanban/js/09-columns.js). This adds only what makes it a way
-     in rather than a label: the pointer, the accent on hover and the icon. */
-  .tenon-pill.proj{cursor:pointer}
-  .tenon-pill.proj:hover{border-color:var(--tenon-stroke-accent); color:var(--tenon-text-accent)}
-  .tenon-pill.proj::before{content:'▣'; opacity:.6}
-  /* The project the task's work lives in, in the drawer's second column. Built
-     on the same shell as a conversation card next to it — see the shared rule
-     down in the conversation-cards section — because they are the same kind of thing in
-     that column: a card that is a way into something else. */
-  .pcbody{
-    display:block; width:100%; text-align:left; border:0; background:none;
-    padding:9px 11px 11px; cursor:pointer; font:inherit; color:inherit;
-  }
-  .pcbody:hover{background:var(--tenon-background-neutral)}
-  .pctitle{display:block; font-size: var(--tenon-typography-size-sm); font-weight:600; line-height:1.3}
   .pcpath{display:block; font-size: var(--tenon-typography-size-sm); font-family:var(--mono, monospace); color:var(--tenon-text-faint); margin-top:2px}
-  .pcblurb{display:block; font-size: var(--tenon-typography-size-sm); line-height:1.45; color:var(--tenon-text-subtle); margin-top:3px}
-  .pcblurb:empty{display:none}
-  /* Start a project, Use an existing folder, Open folder: see projectSection(). */
-  .pactions{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
   .ppick{display:flex; flex-direction:column; gap:var(--tenon-dimension-100)}
   .ppick.hidden{display:none}
+  /* Start a project, Use an existing folder, Open folder in the project panel. */
+  .pactions{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
   .pprow{display:flex; gap:6px; align-items:center}
   .pprow select, .pprow input{flex:1; min-width:0; font:inherit; font-size: var(--tenon-typography-size-sm)}
   .pprow input{font-family:var(--mono, monospace)}
-  .pcmeta{display:block; font-size: var(--tenon-typography-size-sm); color:var(--tenon-text-faint); margin-top:5px}
-  .pcmeta:empty{display:none}
   /* The path is a caption for the card under it, not a field of its own —
      it had a box, the file list did not, and the border was drawn around
      the one thing on screen with nothing inside it. */
@@ -2691,9 +2671,12 @@
      same flex column or the gaps never reach the items. */
   details.sugg{gap:var(--tenon-dimension-100)}
   details.sugg:not([open]){gap:0}
+  /* Title, and a subsection with only its empty state: a heading with no fold. */
+  div.sugg{gap:var(--tenon-dimension-100)}
+  .sugg.subsec > span{color:var(--tenon-text-faint)}
   details.sugg::details-content{display:flex; flex-direction:column; gap:var(--tenon-dimension-100)}
-  details.sugg > summary ~ details.subsec{margin-top:calc(var(--tenon-dimension-150) - var(--tenon-dimension-100))}
-  details.sugg > summary + details.subsec{margin-top:0}
+  details.sugg > summary ~ .sugg.subsec{margin-top:calc(var(--tenon-dimension-150) - var(--tenon-dimension-100))}
+  details.sugg > summary + .sugg.subsec{margin-top:0}
   /* The action in a section's title bar (Subtasks' Add sub-task…, Files' Add
      file…, AI processes' New chat…) or in a field label's (Tags). Pushed to the
      right of the title and out of its uppercase. */
@@ -2701,7 +2684,7 @@
   /* Details holds whole fields and a subsection, spaced at the subsection
      distance. Its Description is a subsection like the others. */
   details.sugg.dgroup::details-content{gap:var(--tenon-dimension-150)}
-  details.sugg.dgroup > details.subsec{margin-top:0}
+  details.sugg.dgroup > .sugg.subsec{margin-top:0}
   /* A file is being dragged over the Files section. */
   details.sugg.dropping{outline:2px dashed var(--tenon-stroke-accent); outline-offset:2px; background:var(--tenon-background-accent)}
   /* Start a project and Use an existing folder, side by side in Files. */
@@ -3008,14 +2991,10 @@
      until 12 Sep 2026; what is left is the stack.
      --------------------------------------------------------------------- */
   .cvstack{display:flex; flex-direction:column; gap:8px; margin:0 0 8px}
-  /* One rule for both cards in that column, so the project card and the
-     conversation cards under it cannot drift apart. What differs is what is
-     printed inside them. */
-  .cvstack .cvcard, .pcard{
+  .cvstack .cvcard{
     position:relative; width:auto; box-shadow:none; overflow:hidden;
     background:var(--tenon-background-raised); border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-md);
   }
-  .pcard{margin-bottom:8px}
 
   /* The picker for "Attach a session…" — a session Claude Code has on disk
      that this board has never filed. Small and modal on purpose: it is a
@@ -3223,7 +3202,6 @@
    buttons that only work on the owner's Mac. The server refuses all of them;
    these keep the page from offering them. See loadWhoami() in 21-datasets.js. */
 .whoami form{display:contents}
-body.signed-in #f-projopen,
 body.signed-in #projOpenFolder,
 body.signed-in #refCardsBtn,
 body.signed-in #runAgentBtn{display:none !important}
