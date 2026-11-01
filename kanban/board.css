@@ -273,8 +273,6 @@
     }
     .phtab span{max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
     .phtab.on{color:var(--tenon-text-accent); font-weight:600}
-    /* The column strip sits under the filter row now, not at the very top. */
-    .coltabs{top:57px}
     /* The sheets: Tenon's Modal docked to the bottom edge. */
     .tenon-modal:has(> .tenon-modal__box.phonesheet){align-items:flex-end; padding:0}
     .tenon-modal__box.phonesheet{
@@ -1040,7 +1038,8 @@
     .coltabs{
       display:flex; gap:6px; overflow-x:auto; scrollbar-width:none;
       padding:0 16px 8px; background:var(--tenon-background-default);
-      position:sticky; top:0; z-index:3;
+      /* Under the phone's sticky filter row (.phfilters: 44px target, 6px above and below, 1px rule). */
+      position:sticky; top:57px; z-index:3;
     }
     .coltabs::-webkit-scrollbar{display:none}
     .coltabs.hidden{display:none}

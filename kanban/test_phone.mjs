@@ -212,6 +212,19 @@ async function run (label, width, height) {
     await evalJS(`document.querySelector('#phTabs [data-view="board"]').click()`)
     await new Promise(r => setTimeout(r, 300))
 
+    check(at('the column strip sticks directly under the filter row, not behind it'), await evalJS(`(() => {
+      const f = document.querySelector('#phFilters').getBoundingClientRect();
+      const c = document.querySelector('#colTabs').getBoundingClientRect();
+      return Math.abs(c.top - f.bottom) <= 1 && parseFloat(getComputedStyle(document.querySelector('#colTabs')).top) >= f.height - 1;
+    })()`), await evalJS(`JSON.stringify([document.querySelector('#phFilters').getBoundingClientRect().bottom, document.querySelector('#colTabs').getBoundingClientRect().top, getComputedStyle(document.querySelector('#colTabs')).top])`))
+    await evalJS(`window.scrollTo(0, 300)`)
+    await new Promise(r => setTimeout(r, 200))
+    check(at('and stays there once the page has scrolled'), await evalJS(`(() => {
+      const f = document.querySelector('#phFilters').getBoundingClientRect();
+      const c = document.querySelector('#colTabs').getBoundingClientRect();
+      return Math.abs(c.top - f.bottom) <= 1;
+    })()`))
+    await evalJS(`window.scrollTo(0, 0)`)
     check(at('every target is at least 44px tall'), await evalJS(`
       [...document.querySelectorAll('#phTop button, #phFilters button, #phTabs button')].every(b => b.getBoundingClientRect().height >= 44)`))
     check(at('the bars pad for the notch and the home bar'), await evalJS(`

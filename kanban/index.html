@@ -88,6 +88,13 @@
   </span>
 </header>
 
+<!-- Phone only (board.css hides it above 640px): the top bar, the sticky filter
+     row and the tab bar, drawn by React (HeaderBars.tsx) out of what the desktop
+     header and bucket bar already hold. display:contents so its three children
+     sit in the page as if they were its own, which is what lets the filter row
+     stick to the page's top. See js/30-phone-chrome.js. -->
+<div id="phoneChrome" style="display:contents"></div>
+
 <!-- Which bucket the board is showing, and the two editors for the headings the
      board is built out of. Out of the header and down here because it is a
      choice about the columns underneath it rather than one more control in the
@@ -137,13 +144,6 @@
      anything inside it would scroll away with the columns. Built by
      renderColTabs() in 18-timeline.js. -->
 <div class="coltabs hidden" id="colTabs"></div>
-
-<!-- Phone only (board.css hides it above 640px): the top bar, the sticky filter
-     row and the tab bar, drawn by React (HeaderBars.tsx) out of what the desktop
-     header and bucket bar already hold. display:contents so its three children
-     sit in the page as if they were its own, which is what lets the filter row
-     stick to the page's top. See js/30-phone-chrome.js. -->
-<div id="phoneChrome" style="display:contents"></div>
 
 <main id="main">
   <div class="headline hidden" id="headline"></div>
