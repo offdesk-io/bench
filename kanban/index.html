@@ -2,7 +2,7 @@
 <html lang="en"><!-- data-theme="1984">-->
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bench</title>
 <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB5PSIuOWVtIiBmb250LXNpemU9IjkwIj7inIU8L3RleHQ+PC9zdmc+">
 <!-- Tenon, the design system. Copied out of the installed package into
@@ -87,6 +87,13 @@
     </div>
   </span>
 </header>
+
+<!-- Phone only (board.css hides it above 640px): the top bar, the sticky filter
+     row and the tab bar, drawn by React (HeaderBars.tsx) out of what the desktop
+     header and bucket bar already hold. display:contents so its three children
+     sit in the page as if they were its own, which is what lets the filter row
+     stick to the page's top. See js/30-phone-chrome.js. -->
+<div id="phoneChrome" style="display:contents"></div>
 
 <!-- Which bucket the board is showing, and the two editors for the headings the
      board is built out of. Out of the header and down here because it is a
@@ -249,6 +256,7 @@
 <script src="js/27-agents.js"></script>
 <script src="js/28-agent-runs.js"></script>
 <script src="js/29-settings.js"></script>
+<script src="js/30-phone-chrome.js"></script>
 <!-- The React half, built from kanban/ui/ by vite into kanban/dist/. An IIFE
      hanging one global, BoardUI, loaded as an ordinary classic script so it
      joins the source order above rather than being deferred past it the way a

@@ -267,6 +267,61 @@ check("url: what a tick builds for a task with an id", notify_due.board_url(BASE
       "http://127.0.0.1:8765/kanban/index.html#!board=personal!task=b7k2qw")
 check("url: neither", notify_due.board_url("http://h/k"), "http://h/k")
 
+# The notifier's queues, beside the checkout (bench_root.notify_home()).
+import subprocess  # noqa: E402
+import time  # noqa: E402
+saved_home = os.environ.pop("NOTIFY_HOME", None)
+with tempfile.TemporaryDirectory() as root:
+    data, home = os.path.join(root, "data"), os.path.join(root, "notify")
+    old_q = os.path.join(data, "work", notify_due.QUEUE_FILE)
+    new_q = os.path.join(home, "data", "work", notify_due.QUEUE_FILE)
+    os.makedirs(os.path.join(data, "work"))
+    os.environ["NOTIFY_HOME"] = home
+    check("notifier: none there, a line goes to data/<board>/ as before", notify_due.queue_file(data, "work"), old_q)
+    check("notifier: none there, the board drains its own folder only", notify_due.queue_dirs(data, "work"),
+          [os.path.join(data, "work")])
+    os.makedirs(home)
+    open(os.path.join(home, "notify.py"), "w").close()
+    check("notifier: there, a line goes to its queue", notify_due.queue_file(data, "work"), new_q)
+    check("notifier: there, the board drains both", notify_due.queue_dirs(data, "work"),
+          [os.path.join(data, "work"), os.path.join(home, "data", "work")])
+    os.environ.pop("NOTIFY_HOME")
+    check("notifier: a throwaway data root keeps its own lines", notify_due.queue_file(data, "work"), old_q)
+    os.environ["NOTIFY_HOME"] = home
+
+    notify_due._write_queue(old_q, [{"title": "Old place", "body": "o"}])
+    os.makedirs(os.path.dirname(new_q))
+    notify_due._write_queue(new_q, [{"title": "New place", "body": "n", "view": "plans"}])
+    got = []
+    notify_due.run_tick(data, ["work"], at(TUE, "10:00"), working, lambda *a: got.append(a) or (True, ""))
+    check("notifier: a tick posts from both places, naming the board",
+          [(a[0], a[3], a[5]) for a in got], [("Old place", None, "work"), ("New place", "plans", "work")])
+    check("notifier: and empties both", (json.load(open(old_q)), json.load(open(new_q))), ([], []))
+
+    # The poster, holding the lock while it posts a line and takes it off:
+    # the board waits for it and finds the line gone, so it is posted once.
+    notify_due._write_queue(new_q, [{"title": "Once", "body": "only"}])
+    ready = os.path.join(root, "ready")
+    holder = subprocess.Popen([sys.executable, "-c", (
+        "import fcntl, json, os, time\n"
+        "fh = open(%r, 'a'); fcntl.flock(fh, fcntl.LOCK_EX)\n"
+        "open(%r, 'w').close(); time.sleep(0.6)\n"
+        "json.dump([], open(%r, 'w')); fcntl.flock(fh, fcntl.LOCK_UN)\n"
+    ) % (os.path.splitext(new_q)[0] + ".lock", ready, new_q)])
+    for _ in range(100):
+        if os.path.exists(ready):
+            break
+        time.sleep(0.05)
+    got = []
+    started = time.time()
+    notify_due.run_tick(data, ["work"], at(TUE, "10:05"), working, lambda *a: got.append(a[0]) or (True, ""))
+    holder.wait(10)
+    check("notifier: a line another drainer holds is not posted twice", got, [])
+    check("notifier: the board waited for its lock", time.time() - started > 0.3, True)
+os.environ.pop("NOTIFY_HOME", None)
+if saved_home is not None:
+    os.environ["NOTIFY_HOME"] = saved_home
+
 os.environ["BENCH_NOTIFY"] = "0"
 check("BENCH_NOTIFY=0 keeps it off", notify_due.start("/x", list, tuple, "u"), None)
 

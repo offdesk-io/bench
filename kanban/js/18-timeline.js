@@ -800,6 +800,7 @@ function renderViewTabs(defs){
        nothing. */
     onPick: id => { state.view = id; syncHash(true); renderView(); },
   }));
+  renderPhoneChrome();
 }
 
 /* Which view the last renderView() drew, so arriving somewhere can be told
@@ -955,6 +956,7 @@ function renderFilterBar(){
     $('#themeBar').classList.add('hidden');
     $('#editBuckets').classList.add('hidden');
   }
+  renderPhoneChrome();
 }
 
 /* The strip of column names above the board, phone only — which one is on

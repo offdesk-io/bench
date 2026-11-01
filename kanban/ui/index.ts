@@ -85,8 +85,11 @@ export { ViewTabs } from './ViewTabs'
 export type { ViewTabsProps, ViewTabDef } from './ViewTabs'
 /* The headline, bucket and theme strips, filter chips and the phone's column
    strip, drawn by React since 1 Oct 2026. */
-export { HeadlineBar, FilterTabs, FilterChips, ColTabs } from './HeaderBars'
-export type { HeadlineModel, HeadlineChip, FilterTab, FilterChip } from './HeaderBars'
+export { HeadlineBar, FilterTabs, FilterChips, ColTabs, PhoneChrome } from './HeaderBars'
+export type {
+  HeadlineModel, HeadlineChip, FilterTab, FilterChip,
+  PhoneChromeProps, PhoneAction, PhoneBoard, PhoneView, PhoneBucket, PhoneToggle,
+} from './HeaderBars'
 /* The task panel's Impact, Effort and Column sliders and its tag chips, on
    Tenon's StepSlider and TagChip. */
 export { StepField, TagsField, DateFields, PickField, SubRows } from './DrawerFields'

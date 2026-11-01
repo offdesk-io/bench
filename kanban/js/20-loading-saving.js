@@ -122,6 +122,8 @@ async function loadFile(){
     load(await res.text(), 'todo.md');
     state.diskStamp = res.headers.get('Last-Modified') || null;
     state.diskHash = res.headers.get('X-Todo-Hash') || null;
+    state.docBoard = res.headers.get('X-Bench-Board') || '';
+    state.boardMoved = '';
     /* A real list always wins: whatever was standing in for it stops here. */
     state.demo = false;
     state.locked = false;

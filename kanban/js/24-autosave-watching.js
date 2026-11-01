@@ -49,6 +49,14 @@ function reloadInPlace(text, disk, named, quiet){
   return changes;
 }
 
+/* The status line for a reload that brought the file in: the watcher's, and
+   Reload's when it merged. */
+function reloadNote(changes){
+  const n = changes ? changes.length : 0;
+  return 'reloaded — the file changed on disk' +
+    (n ? ' (' + n + ' task' + (n > 1 ? 's' : '') + ')' : '');
+}
+
 /* One HEAD, both answers: the timestamp and the content hash the server sends
    with every read of todo.md. Returns nulls rather than throwing when the
    helper is down, which is the shape every caller here already copes with. */
@@ -57,8 +65,9 @@ async function diskVersion(){
     const res = await fetchList('HEAD');
     if (!res.ok) return { stamp:null, hash:null };
     return { stamp: res.headers.get('Last-Modified') || null,
-             hash:  res.headers.get('X-Todo-Hash') || null };
-  } catch (err) { return { stamp:null, hash:null }; }
+             hash:  res.headers.get('X-Todo-Hash') || null,
+             board: res.headers.get('X-Bench-Board') || '' };
+  } catch (err) { return { stamp:null, hash:null, board:'' }; }
 }
 async function diskStamp(){ return (await diskVersion()).stamp; }
 async function rememberStamp(){
@@ -107,8 +116,11 @@ async function watchTick(){
 async function watchOnce(){
   const named = paFinished;                        // only the first tick after pa finished
   paFinished = null;
-  const { stamp, hash } = await diskVersion();
+  const { stamp, hash, board } = await diskVersion();
   if (!stamp) return;                              // helper stopped; saveFile reports that
+  /* The server is on another list now. Its file is not a newer version of
+     this one, so it is neither merged nor reloaded in place. */
+  if (board && state.docBoard && board !== state.docBoard) { boardMoved(board, !state.boardMoved); return; }
   if (!state.diskStamp) { state.diskStamp = stamp; state.diskHash = hash; return; }
   /* The hash is the better question where both sides have one — it answers
      "did the bytes change" rather than "did the second change" — and the stamp
@@ -131,9 +143,7 @@ async function watchOnce(){
     const changes = reloadInPlace(text, text, named);
     state.diskStamp = stamp;
     state.diskHash = hash;
-    const n = changes ? changes.length : 0;
-    const note = 'reloaded — the file changed on disk' +
-      (n ? ' (' + n + ' task' + (n > 1 ? 's' : '') + ')' : '');
+    const note = reloadNote(changes);
     // The fresh parse may have re-run the load-time tidy-up, which is a real
     // pending save. Say what happened without clearing it.
     if (state.migratedOnly) autoStatus(note); else markClean(note, true);

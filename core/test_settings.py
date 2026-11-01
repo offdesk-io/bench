@@ -403,5 +403,134 @@ class SettingsTest(unittest.TestCase):
         self.assertNotIn("projects_roots", settings.for_boards(saved, []))
         self.assertIn("secret", saved["projects_roots"])
 
+
+class ProfileTest(unittest.TestCase):
+    """A signed-in person's own profile, beside their user record, and the
+    shared data/profile.md as everybody's fallback."""
+
+    TIAGO, JEROME = "tiago@example.com", "Jerome@Example.com"
+
+    def setUp(self):
+        import board_access
+        import owner_profile
+        self.ba, self.op = board_access, owner_profile
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = self.tmp.name
+        self._env = {k: os.environ.pop(k) for k in list(os.environ) if k.startswith("BENCH_")}
+        self.shared = os.path.join(self.root, "profile.md")
+        with open(self.shared, "w", encoding="utf-8") as fh:
+            fh.write("# PA profile\n\n## About\n\n- Name: Tiago/Jerome\n- Country: GB\n- Region: GB-SCT\n\n"
+                     "## Writing\n\n- Spelling: British English\n")
+
+    def tearDown(self):
+        for k in [k for k in os.environ if k.startswith("BENCH_")]:
+            del os.environ[k]
+        os.environ.update(self._env)
+        self.tmp.cleanup()
+
+    def text(self, path):
+        with open(path, encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_own_file_sits_beside_the_user_record(self):
+        own = self.op.own_profile_path(self.JEROME, self.root)
+        record = self.ba.user_path(self.root, self.JEROME)
+        self.assertEqual(os.path.dirname(own), os.path.dirname(record))
+        self.assertEqual(os.path.basename(own), os.path.basename(record)[:-5] + ".profile.md")
+        self.assertEqual(own, self.op.own_profile_path("jerome@example.com", self.root))
+
+    def test_nobody_saved_reads_the_shared_profile(self):
+        self.assertEqual(self.op.profile_path(self.root, self.JEROME), self.shared)
+        self.assertEqual(self.op.owner_name(self.root, self.JEROME), "Tiago/Jerome")
+        self.assertEqual(self.op.holiday_place(self.root, self.JEROME), ("GB", "GB-SCT"))
+
+    def test_a_write_lands_in_the_persons_file_only(self):
+        before = self.text(self.shared)
+        self.assertIsNone(self.op.write_basics(self.root, "Jerome", country="PT", region="",
+                                               address=self.JEROME))
+        own = self.op.own_profile_path(self.JEROME, self.root)
+        self.assertEqual(self.text(self.shared), before)
+        self.assertTrue(os.path.isfile(own))
+        self.assertEqual(self.op.profile_path(self.root, self.JEROME), own)
+        self.assertEqual(self.op.owner_name(self.root, self.JEROME), "Jerome")
+        self.assertEqual(self.op.holiday_regions(self.root, self.JEROME), ("PT:",))
+        # Anybody else, and the Mac with no address, still read the shared one.
+        self.assertEqual(self.op.owner_name(self.root, self.TIAGO), "Tiago/Jerome")
+        self.assertEqual(self.op.owner_name(self.root), "Tiago/Jerome")
+        self.assertEqual(self.op.holiday_place(self.root), ("GB", "GB-SCT"))
+
+    def test_a_first_write_keeps_what_the_person_was_reading(self):
+        self.op.write_basics(self.root, "Jerome", address=self.JEROME)
+        self.assertEqual(self.op.holiday_place(self.root, self.JEROME), ("GB", "GB-SCT"))
+        self.assertIn("- Spelling: British English", self.text(self.op.own_profile_path(self.JEROME, self.root)))
+
+    def test_a_person_with_no_shared_profile_starts_from_the_template(self):
+        os.remove(self.shared)
+        self.op.write_basics(self.root, "Jerome", address=self.JEROME)
+        text = self.text(self.op.own_profile_path(self.JEROME, self.root))
+        self.assertIn("## Working habits", text)
+        self.assertFalse(os.path.exists(self.shared))
+
+    def test_own_profile_is_not_a_board_person(self):
+        self.op.write_basics(self.root, "Jerome", address=self.JEROME)
+        access = {"owner": "tiago@example.com", "people": [], "teams": ["offdesk"]}
+        self.assertEqual([p["email"] for p in self.ba.board_people(self.root, access)], ["tiago@example.com"])
+
+    def test_about_and_sections_round_trip(self):
+        err = self.op.write_basics(self.root, about={"addressing": "Hey Jerome", "facts_file": ""},
+                                   sections={"writing": "- Spelling: French\n- Rules: short",
+                                             "habits": "- Deferring: logs ideas first"},
+                                   address=self.JEROME)
+        self.assertIsNone(err)
+        self.assertEqual(self.op.about_fields(self.root, self.JEROME),
+                         {"addressing": "Hey Jerome", "facts_file": ""})
+        got = self.op.section_texts(self.root, self.JEROME)
+        self.assertEqual(got["writing"], "- Spelling: French\n- Rules: short")
+        self.assertEqual(got["habits"], "- Deferring: logs ideas first")
+        self.assertEqual(got["recorder"], "")
+        prof = self.op.read(self.root, self.JEROME)
+        self.assertEqual(prof["spelling"], "French")
+        self.assertEqual(prof["how to address them"], "Hey Jerome")
+        self.assertEqual(prof["name"], "Tiago/Jerome")
+        # The shared file is as it was.
+        self.assertEqual(self.op.section_texts(self.root)["writing"], "- Spelling: British English")
+
+    def test_an_empty_section_puts_the_template_back(self):
+        self.op.write_basics(self.root, sections={"writing": ""}, address=self.JEROME)
+        own = self.text(self.op.own_profile_path(self.JEROME, self.root))
+        self.assertIn("- Spelling: <e.g. British English>", own)
+        self.assertEqual(self.op.section_texts(self.root, self.JEROME)["writing"], "")
+        self.assertNotIn("spelling", self.op.read(self.root, self.JEROME))
+        self.assertTrue(own.endswith("\n"))
+
+    def test_the_template_reads_as_empty_boxes(self):
+        os.remove(self.shared)
+        self.assertEqual(self.op.section_texts(self.root),
+                         {"setup": "", "writing": "", "recorder": "", "habits": ""})
+        self.assertIn("<e.g. British English>", self.op.section_hints()["writing"])
+
+    def test_bad_fields_are_refused_and_nothing_is_written(self):
+        for about, sections in (({"addressing": "two\nlines"}, {}), ({"addressing": "<x>"}, {}),
+                                ({"nope": "x"}, {}), ({}, {"writing": "## About\n- Name: X"}),
+                                ({}, {"nope": "x"}), ({}, {"habits": "x" * 4001})):
+            self.assertIsNotNone(self.op.write_basics(self.root, about=about, sections=sections,
+                                                      address=self.JEROME), (about, sections))
+        self.assertFalse(os.path.exists(self.op.own_profile_path(self.JEROME, self.root)))
+
+    def test_a_shared_boards_calendar_is_its_owners(self):
+        board = os.path.join(self.root, "offdesk")
+        os.makedirs(board)
+        self.ba.write(board, {"owner": "jerome@example.com", "people": [], "teams": []})
+        self.op.write_basics(self.root, country="PT", region="", address=self.JEROME)
+        # Off, there is nobody signed in and the shared profile decides.
+        self.assertEqual(self.op.board_holiday_regions(board, self.root), ("GB:GB-SCT",))
+        os.environ["BENCH_AUTH"] = "header"
+        self.assertEqual(self.op.calendar_address(board), "jerome@example.com")
+        self.assertEqual(self.op.board_holiday_regions(board, self.root), ("PT:",))
+        # A board nobody owns falls back to the shared profile.
+        self.assertEqual(self.op.board_holiday_regions(os.path.join(self.root, "none"), self.root),
+                         ("GB:GB-SCT",))
+
+
 if __name__ == "__main__":
     unittest.main()

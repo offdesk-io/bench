@@ -2,8 +2,14 @@
 
 The owner's setup for the PA. This is the template; the real file lives at
 `data/profile.md`, which git ignores. The PA fills it in on first run by asking
-the questions below. Facts about who the owner is live in their own facts file,
-linked under About, and are not repeated here.
+the questions below, and the board's Settings edits every section: the About
+lines as fields, each other section as one text box. Facts about who the owner
+is live in their own facts file, linked under About, and are not repeated here.
+
+On a shared board each signed-in person has their own copy beside their user
+record, `data/users/<hash>.profile.md`, in this same shape, and `data/profile.md`
+is the fallback for anyone who has not saved one. Setup and the facts file name
+paths, which there would be paths on the server, so Settings leaves them out.
 
 ## About
 

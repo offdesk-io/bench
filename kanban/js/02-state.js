@@ -102,6 +102,13 @@ const state = {
      loadDatasets(), and what the PA panel's first message tells `pa`. Empty
      on a server with no /datasets.json. */
   dataset: '',
+  /* The list the document in this tab was read from, as the server named it
+     on the read (X-Bench-Board), and sent back with every save so a save
+     cannot land on a list switched to since (do_PUT refuses it). Empty for a
+     folder, a demo, or a server from before the header. boardMoved is the
+     list the server moved to, once a save or the watcher has found it so. */
+  docBoard: '',
+  boardMoved: '',
   /* session id -> when that card was last opened, read from and written to
      data/<dataset>/chat-viewed.json — see loadChatViewed() in 11-chat-cards.js.
      Furniture, not content: losing it costs an unread dot and nothing else. */

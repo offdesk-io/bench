@@ -70,8 +70,25 @@ async function evalJS (expr) {
   return r.result?.result?.value
 }
 
+const until = async (expr, ms = 3000) => {
+  for (let t = 0; t < ms; t += 50) { if (await evalJS(expr)) return true; await new Promise(r => setTimeout(r, 50)) }
+  return false
+}
+
 await new Promise(r => setTimeout(r, 2500))
 check('the board loaded', await evalJS(`typeof cvCardHTML === 'function'`))
+
+// Most of what follows needs the chat engine on: the ai_chat_engine bundle
+// served from PACKAGES beside the checkout, and a `claude` CLI on the server's
+// PATH. Without either, chat.available() is false and the drawer leaves its
+// Chats field out, which once showed up as five checks failing together
+// ("-1 cards", "-1 badges", no Attach, no New chat) with nothing to say why
+// (11 Oct 2026). Stop here and name the cause instead.
+const engineOn = await until(`chat.available()`, 5000)
+check('the chat engine is on', engineOn, engineOn ? '' : await evalJS(`typeof AIChat === 'undefined'
+  ? 'the ai_chat_engine bundle did not load; is PACKAGES/ai_chat_engine beside this checkout, or BENCH_PACKAGES set?'
+  : 'the server found no claude CLI on its PATH'`))
+if (!engineOn) { ws.close(); chrome.kill(); process.exit(1) }
 
 // LOCK FIRST, then fixtures. Nothing below can write anything.
 // Belt and braces. The tab is locked, AND every write is torn out of fetch, so
@@ -361,10 +378,6 @@ check('and attaches it', !!picked.attachCall)
 // its own AIChat instance. Since 13 Oct 2026 none of them docks: the PA bar
 // that sat in the bottom-right corner gave way to the focus prompt
 // (test_focus_prompt.mjs), and a task's chat opens as a window and nothing else.
-const until = async (expr, ms = 3000) => {
-  for (let t = 0; t < ms; t += 50) { if (await evalJS(expr)) return true; await new Promise(r => setTimeout(r, 50)) }
-  return false
-}
 const S1 = '11111111-1111-1111-1111-111111111111', S3 = '33333333-3333-3333-3333-333333333333'
 check('nothing is docked at the bottom of the board on load', await evalJS(`
   !document.querySelector('.aic-docked, .aic-pinned, .aic-minimised, .aic-anchored') &&
@@ -641,8 +654,10 @@ check('and still nothing was written after the debounce', await evalJS(`window._
 check('an unlocked tab does save it', await evalJS(`
   (() => { state.locked = false; saveChatViewed(); return true; })()
 `))
-await new Promise(r => setTimeout(r, 700))
-check('the save is a POST to /chat-viewed', await evalJS(`
+// Waited for rather than slept on: the save is debounced by 500 ms, and a
+// fixed 700 ms left too little room on a busy machine (one run in --all
+// failed here on 11 Oct 2026).
+check('the save is a POST to /chat-viewed', await until(`
   window.__blocked.some(b => b === 'POST /chat-viewed')
 `), await evalJS(`JSON.stringify(window.__blocked)`))
 // The recording also holds a PUT /data/todo.md that never left the page. By

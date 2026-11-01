@@ -21,6 +21,12 @@
  *   3. .sortbtn sits at 55% opacity until .tenon-column:hover, which on a phone means
  *      always, so the control reads as disabled.
  *
+ *   4. Below 640px the header and bucket bar give way to a one-row top bar, one
+ *      sticky filter row and a bottom tab bar, with sheets for the board, the
+ *      account, the buckets and the filters (HeaderBars.tsx PhoneChrome). Added
+ *      31 Oct 2026; it reverses the 15 Sep call that nothing is pinned on a
+ *      phone, for the filter row only.
+ *
  * Both widths run the same checks, so the CSS breakpoint is what is under test
  * rather than one side of it. Same two guards as every other board test: the
  * tab is locked before any fixture is loaded, and every non-GET is torn out of
@@ -164,24 +170,147 @@ async function run (label, width, height) {
     await evalJS(`!document.querySelector('#f-impact .tenon-step-slider__select') && !document.querySelector('#f-effort .tenon-step-slider__select')`))
   await evalJS(`closeDrawer()`)
 
-  /* ---- the header and the bucket strip are not pinned on a phone ----
+  /* ---- what is pinned ----
 
-     At 400px the two together stack to about half the screen, and sticky held
-     that all the way down a column. They scroll away with the cards now.
-     Asserted at both widths, since the whole point is the breakpoint: pinned
-     on a desktop, where the header is one row, and not on a phone. */
+     The 15 Sep decision was that neither the header nor the bucket strip is
+     pinned on a phone: stacked, they took half the screen. The phone now has
+     its own chrome, so that decision stands for the old bars and is reversed
+     for the filter row only: one row, 57px, sticky. Asserted at both widths,
+     since the breakpoint is what is under test. */
 
   const pinned = sel => evalJS(`getComputedStyle(document.querySelector(${JSON.stringify(sel)})).position`)
-  check(at('the header is pinned only where it costs nothing'),
+  check(at('the old header is pinned only where it costs nothing'),
     await pinned('header') === (phone ? 'static' : 'sticky'), await pinned('header'))
-  check(at('and so is the bucket strip'),
-    await pinned('.bucketbar') === (phone ? 'static' : 'sticky'), await pinned('.bucketbar'))
-  /* The strip is the one thing that stays pinned on a phone: four lines tall,
-     and it says where you are, which is the thing the header was holding half
-     the screen to answer. */
   if (phone) {
-    check(at('the column strip is what stays pinned instead'),
-      await pinned('#colTabs') === 'sticky')
+    check(at('the column strip stays pinned, and the filter row too'),
+      await pinned('#colTabs') === 'sticky' && await pinned('#phFilters') === 'sticky')
+  } else {
+    check(at('the bucket strip is pinned where it costs nothing'), await pinned('.bucketbar') === 'sticky')
+  }
+
+  /* ---- 4. the phone's chrome ---- */
+
+  const shown = sel => evalJS(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); return !!e && getComputedStyle(e).display !== 'none'; })()`)
+  if (!phone) {
+    check(at('none of the phone chrome is drawn, and the header is'),
+      !(await shown('#phTop')) && !(await shown('#phTabs')) && !(await shown('#phFilters')) && await shown('#hdr'))
+  } else {
+    check(at('the header and bucket bar give way'), !(await shown('#hdr')) && !(await shown('#bucketBar')))
+    check(at('a one-row top bar names Bench'), await shown('#phTop') &&
+      await evalJS(`document.querySelector('#phTop').getBoundingClientRect().height < 80 && /Bench/.test(document.querySelector('#phTop').textContent)`))
+    const defs = await evalJS(`viewDefs().filter(d => !d.sep).map(d => d.id).join('|')`)
+    check(at('the tab bar holds every view, with labels and icons, at the bottom'),
+      await evalJS(`[...document.querySelectorAll('#phTabs .phtab')].map(b => b.dataset.view).join('|')`) === defs &&
+      await evalJS(`[...document.querySelectorAll('#phTabs .phtab')].every(b => b.querySelector('svg') && b.textContent.trim())`) &&
+      await pinned('#phTabs') === 'fixed')
+    check(at('the current view carries aria-current'), await evalJS(`
+      [...document.querySelectorAll('#phTabs .phtab')].filter(b => b.getAttribute('aria-current') === 'page').map(b => b.dataset.view).join() === state.view`))
+    await evalJS(`document.querySelector('#phTabs [data-view="overview"]').click()`)
+    await new Promise(r => setTimeout(r, 300))
+    check(at('a tab switches the view and moves aria-current'), await evalJS(`state.view === 'overview' &&
+      document.querySelector('#phTabs [aria-current="page"]').dataset.view === 'overview'`))
+    await evalJS(`document.querySelector('#phTabs [data-view="board"]').click()`)
+    await new Promise(r => setTimeout(r, 300))
+
+    check(at('the column strip sticks directly under the filter row, not behind it'), await evalJS(`(() => {
+      const f = document.querySelector('#phFilters').getBoundingClientRect();
+      const c = document.querySelector('#colTabs').getBoundingClientRect();
+      return Math.abs(c.top - f.bottom) <= 1 && parseFloat(getComputedStyle(document.querySelector('#colTabs')).top) >= f.height - 1;
+    })()`), await evalJS(`JSON.stringify([document.querySelector('#phFilters').getBoundingClientRect().bottom, document.querySelector('#colTabs').getBoundingClientRect().top, getComputedStyle(document.querySelector('#colTabs')).top])`))
+    await evalJS(`window.scrollTo(0, 300)`)
+    await new Promise(r => setTimeout(r, 200))
+    check(at('and stays there once the page has scrolled'), await evalJS(`(() => {
+      const f = document.querySelector('#phFilters').getBoundingClientRect();
+      const c = document.querySelector('#colTabs').getBoundingClientRect();
+      return Math.abs(c.top - f.bottom) <= 1;
+    })()`))
+    await evalJS(`window.scrollTo(0, 0)`)
+    check(at('every target is at least 44px tall'), await evalJS(`
+      [...document.querySelectorAll('#phTop button, #phFilters button, #phTabs button')].every(b => b.getBoundingClientRect().height >= 44)`))
+    check(at('the bars pad for the notch and the home bar'), await evalJS(`
+      (() => { const all = []; const walk = rs => { for (const r of rs) { all.push(r.cssText || ''); if (r.cssRules) walk(r.cssRules) } };
+        [...document.styleSheets].forEach(s => { try { walk(s.cssRules) } catch {} });
+        return all.some(t => t.includes('phtabs') && t.includes('safe-area-inset-bottom')) &&
+               all.some(t => t.includes('phtop') && t.includes('safe-area-inset-top')); })()`))
+
+    const wait = ms => new Promise(r => setTimeout(r, ms))
+    const sheetOpen = () => evalJS(`!!document.querySelector('[role="dialog"].phonesheet')`)
+    const key = k => send('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code: k })
+
+    // The bucket sheet.
+    check(at('the bucket button says what is showing'), await evalJS(`document.querySelector('#phBucket').textContent.replace('▾', '').trim()`) === 'All · 2')
+    await evalJS(`document.querySelector('#phBucket').click()`)
+    await wait(300)
+    check(at('it opens a dialog that takes focus'), await sheetOpen() &&
+      await evalJS(`document.querySelector('[role="dialog"].phonesheet').contains(document.activeElement)`))
+    check(at('listing All and every bucket, with counts, All being current'), await evalJS(`
+      [...document.querySelectorAll('.phonesheet [data-bucket]')].map(b => b.dataset.bucket + ':' + b.querySelector('.phcount').textContent).join() === '__all__:2,People:2' &&
+      document.querySelector('.phonesheet [data-bucket="__all__"]').getAttribute('aria-current') === 'true' &&
+      !document.querySelector('.phonesheet [data-bucket="People"]').hasAttribute('aria-current')`))
+    await evalJS(`document.querySelector('.phonesheet [data-bucket="People"]').click()`)
+    await wait(300)
+    check(at('picking a bucket filters the board and moves aria-current'), await evalJS(`
+      state.bucketFilter.has('People') && document.querySelector('.phonesheet [data-bucket="People"]').getAttribute('aria-current') === 'true' &&
+      !document.querySelector('.phonesheet [data-bucket="__all__"]').hasAttribute('aria-current')`))
+    await key('Escape')
+    await wait(300)
+    check(at('Escape closes the sheet'), !(await sheetOpen()))
+    check(at('and the button now names the bucket'), await evalJS(`document.querySelector('#phBucket').textContent.replace('▾', '').trim()`) === 'People · 2')
+    await evalJS(`state.bucketFilter.clear(); renderTabs(); refreshView()`)
+
+    // A swipe down closes a sheet too.
+    await evalJS(`document.querySelector('#phBucket').click()`)
+    await wait(300)
+    await evalJS(`(() => {
+      const el = document.querySelector('.phonesheet__inner');
+      const t = y => new Touch({ identifier: 1, target: el, clientX: 100, clientY: y });
+      const fire = (type, y) => el.dispatchEvent(new TouchEvent(type, { bubbles: true, cancelable: true, touches: type === 'touchend' ? [] : [t(y)], changedTouches: [t(y)] }));
+      fire('touchstart', 400); fire('touchmove', 520); fire('touchend', 520);
+    })()`)
+    await wait(300)
+    check(at('a swipe down closes the sheet'), !(await sheetOpen()))
+
+    // The Filters sheet.
+    check(at('Filters has no badge while nothing is on'), await evalJS(`!document.querySelector('#phFilterBtn .phbadge')`))
+    await evalJS(`document.querySelector('#phFilterBtn').click()`)
+    await wait(300)
+    check(at('it offers need scoring, and says when nothing does'), await evalJS(`
+      !!document.querySelector('.phonesheet [data-filter="score"]')`))
+    await key('Escape')
+    await wait(200)
+    // The count, with one on: the chip is hidden at zero, so give a task no score.
+    await evalJS(`state.unscoredOnly = true; refreshView()`)
+    await wait(300)
+    check(at('Filters carries a badge counting what is on'), await evalJS(`document.querySelector('#phFilterBtn .phbadge')?.textContent === '1'`))
+    await evalJS(`state.unscoredOnly = false; refreshView()`)
+    await wait(200)
+
+    // The account sheet.
+    await evalJS(`document.querySelector('#phAvatar').click()`)
+    await wait(300)
+    check(at('the avatar opens a sheet of the header actions'), await evalJS(`
+      ['undo', 'download', 'backups', 'settings'].every(id => !!document.querySelector('.phonesheet [data-action="' + id + '"]'))`))
+    check(at('with the status line underneath'), await evalJS(`
+      document.querySelector('.phonesheet .tenon-modal__subtitle')?.textContent === document.querySelector('#status').textContent`))
+    await key('Escape')
+    await wait(300)
+    check(at('and Escape closes it'), !(await sheetOpen()))
+
+    // Search.
+    await evalJS(`document.querySelector('#phSearchBtn').click()`)
+    await wait(200)
+    check(at('the search icon widens to a full bar with Cancel'), await evalJS(`
+      !!document.querySelector('#phSearch') && !!document.querySelector('#phCancel') && !document.querySelector('#phBucket')`))
+    await evalJS(`(() => {
+      const el = document.querySelector('#phSearch');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, 'Alpha');
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`)
+    await wait(300)
+    check(at('typing searches through the desktop box'), await evalJS(`state.query === 'Alpha' && document.querySelector('#q').value === 'Alpha'`))
+    await evalJS(`document.querySelector('#phCancel').click()`)
+    await wait(300)
+    check(at('Cancel clears it and puts the row back'), await evalJS(`state.query === '' && !!document.querySelector('#phBucket')`))
   }
 
   /* ---- 3. the sort control on a touch screen ---- */

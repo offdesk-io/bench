@@ -37,7 +37,8 @@ async function readFile () {
   return {
     text: await res.text(),
     stamp: res.headers.get('Last-Modified'),
-    hash: res.headers.get('X-Todo-Hash')
+    hash: res.headers.get('X-Todo-Hash'),
+    board: res.headers.get('X-Bench-Board')
   }
 }
 
@@ -113,6 +114,29 @@ async function main () {
   ok('and hands back the hash to retry against', wrongInfo.hash === live.hash,
     `got ${wrongInfo.hash}`)
 
+  // --- the list a save names ------------------------------------------------
+
+  // A tab names the list it read (X-Bench-Board) on every save, and a save
+  // naming another one is refused before anything is read or merged: after a
+  // switch elsewhere, the file on disk belongs to a different list.
+  const board = live.board
+  ok('GET names the list it read', !!board, 'no X-Bench-Board header')
+  const elsewhere = await fetch(FILE, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: live.text, base: live.text, board: `${board}-not-this-one` })
+  })
+  ok('a save naming another list is refused', elsewhere.status === 409, `answered ${elsewhere.status}`)
+  const elsewhereInfo = await elsewhere.json().catch(() => ({}))
+  ok('and says the board moved, naming the one it is on', elsewhereInfo.wrongBoard === true && elsewhereInfo.board === board,
+    JSON.stringify(elsewhereInfo))
+  const badBoard = await fetch(FILE, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: live.text, base: live.text, board: 7 })
+  })
+  ok('a list name that is not a string is a bad request', badBoard.status === 400, `answered ${badBoard.status}`)
+
   // --- nothing above moved the file ----------------------------------------
 
   const after = await readFile()
@@ -125,7 +149,7 @@ async function main () {
     for (const f of fails) console.error(`  ✗ ${f}`)
     process.exit(1)
   }
-  console.log('the save guard refuses a stale stamp and stale content, and writes nothing\n')
+  console.log('the save guard refuses a stale stamp, stale content and another list, and writes nothing\n')
 }
 
 main().catch(err => { console.error(err); process.exit(1) })

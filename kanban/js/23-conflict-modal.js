@@ -53,14 +53,31 @@ function hasOwnChanges(){ return state.dirty && !state.migratedOnly; }
 async function reload(){
   if (state.locked) return;
   if (!hasOwnChanges()) return loadFile();
-  // Same collision as an outside edit, so it gets the same modal — the owner can see
-  // what the owner would be throwing away before the owner throws it away.
+  // Same collision as an outside edit, so it gets the same treatment: merged the
+  // way a save or the watcher merges, and the box only when the same field changed
+  // in both places or the file could not be read.
   let diskText = null;
   try {
     const res = await fetchList();
     if (res.ok) diskText = await res.text();
   } catch (err) { /* handled below by the null check */ }
-  offerReload(diskText, true);
+  if (diskText === null) return offerReload(null, true);
+  const mine = serializeDoc(state.doc);
+  let got = null;
+  try { got = mergeSaves(state.originalText, mine, diskText); }
+  catch (err) { return offerReload(diskText, true); }
+  if (!got || (got.text === null && !got.conflicts)) return offerReload(diskText, true);
+  const v = await diskVersion();
+  if (got.text === null) {
+    offerMerge({ conflicts: got.conflicts, current: diskText, disk: v.stamp, hash: v.hash },
+               state.originalText, mine);
+    return;
+  }
+  const changes = reloadInPlace(got.text, diskText);
+  state.diskStamp = v.stamp;
+  state.diskHash = v.hash;
+  const note = reloadNote(changes);
+  if (state.dirty || state.migratedOnly) autoStatus(note); else markClean(note, true);
 }
 
 /* The modal both Reload and the outside-edit watcher land in when there is

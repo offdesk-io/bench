@@ -37,8 +37,12 @@ import uuid
 import webbrowser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# Everything is served from the project root, one level up from this file.
-ROOT = os.path.dirname(HERE)
+# Everything is served from the project root, one level up from this file, unless
+# $BENCH_ROOT says otherwise (core/bench_root.py).
+sys.path.insert(0, os.path.join(os.path.dirname(HERE), "core"))
+import bench_root  # noqa: E402
+ROOT = bench_root.root()
+PACKAGES_DIR = bench_root.packages()
 
 # The two shared modules in core/, imported the same conditional way ai_chat is:
 # a checkout without them serves the board and answers 404 on the routes that
@@ -989,6 +993,28 @@ def project_entries(path):
     # manager uses, and the one that keeps sources/ from hiding under n files.
     out.sort(key=lambda e: (not e["dir"], e["name"].lower()))
     return out
+
+
+def project_subfolder(real, sub):
+    """A folder inside a project, for the drawer's in-place folder rows.
+
+    `sub` is a slash path below the project folder. Returns (path, None), or
+    (None, (status, message)) for anything that is not a plain folder below it:
+    an absolute path, a hop, a hidden name, a backslash, a missing folder, or a
+    symlink that leads out. The same bar project_folders.resolve() sets for the
+    project itself, since this is a second way to read inside it.
+    """
+    parts = sub.split("/")
+    if os.path.isabs(sub) or "\\" in sub or "\0" in sub or any(
+            p in ("", ".", "..") or p.startswith(".") for p in parts):
+        return None, (400, "bad folder path")
+    top = os.path.realpath(real)
+    full = os.path.realpath(os.path.join(top, *parts))
+    if full == top or not full.startswith(top + os.sep):
+        return None, (403, "outside the project folder")
+    if not os.path.isdir(full):
+        return None, (404, "no such folder")
+    return full, None
 
 
 def project_listing():
@@ -2252,7 +2278,7 @@ def backup_listing():
 # has never seen this machine. AI_CHAT_DIR below is where the module that
 # fixes that lives; STATIC_PREFIX is where its own JS and CSS are served from.
 
-AI_CHAT_DIR = os.path.normpath(os.path.join(ROOT, "..", "PACKAGES", "ai_chat_engine"))
+AI_CHAT_DIR = os.path.join(PACKAGES_DIR, "ai_chat_engine")
 STATIC_PREFIX = "/ai-chat/"
 
 # The work-item model every stream in here shares. Same wiring as AI_CHAT_DIR
@@ -2260,7 +2286,7 @@ STATIC_PREFIX = "/ai-chat/"
 # /streams.json and /work-streams/* and serves the board exactly as it did
 # before either existed. Nothing the board needs in order to start may come
 # from here, because on the static deployment this path does not exist at all.
-WORK_STREAMS_DIR = os.path.normpath(os.path.join(ROOT, "..", "PACKAGES", "work-streams"))
+WORK_STREAMS_DIR = os.path.join(PACKAGES_DIR, "work-streams")
 WS_PREFIX = "/work-streams/"
 
 if os.path.isdir(WORK_STREAMS_DIR):
@@ -2282,7 +2308,7 @@ except ImportError:
 # show and the board is otherwise unchanged. The engine never opens an agent's
 # files; it runs the agent's own commands, so this adds no second writer for
 # any schedule.
-AGENTS_ENGINE_DIR = os.path.normpath(os.path.join(ROOT, "..", "PACKAGES", "agents-engine", "python"))
+AGENTS_ENGINE_DIR = os.path.join(PACKAGES_DIR, "agents-engine", "python")
 AGENTS_ROOT = os.path.join(ROOT, "agents")
 AGENTS_PREFIX = "/agents-api"
 # Runs started from the Agents tab count towards the same daily ceiling, and
@@ -2449,8 +2475,9 @@ def shared_refusal(method, path):
     is what the board already copes with from a host that has none of them.
     The chat routes need no entry here: ai_chat_for() answers None.
 
-    The settings and the profile are the server's, not any one visitor's, and
-    a folder named in them is a path on the server, so they are read-only.
+    The settings are the server's, not any one visitor's, and a folder named
+    in them is a path on the server, so they are read-only. The profile is
+    each person's own (_put_profile_basics()), less its paths.
     """
     gone = (404, {"error": "not on the shared board"})
     if path.startswith(AGENTS_PREFIX + "/"):
@@ -2459,7 +2486,7 @@ def shared_refusal(method, path):
         return gone
     if method in ("GET", "HEAD") and path in ("/schedule.json", "/usage.json"):
         return gone
-    if method == "PUT" and path in ("/settings.json", "/profile-basics.json"):
+    if method == "PUT" and path == "/settings.json":
         return (403, {"error": "the shared board's settings are changed on the server"})
     return None
 
@@ -2492,17 +2519,49 @@ def needs_board(method, path):
     return path not in BOARDLESS_POST
 
 
-def _holiday_place_json():
+def _holiday_place_json(address=None):
     """The profile's holiday country and region, "" for neither."""
     import owner_profile
-    country, region = owner_profile.holiday_place(DATA_ROOT)
-    prof = owner_profile.read(DATA_ROOT)
+    country, region = owner_profile.holiday_place(DATA_ROOT, address)
+    prof = owner_profile.read(DATA_ROOT, address)
     # An old `Holidays:` line with no `Country:` beside it: the calendars it
     # names, so Settings can offer to keep them rather than rewrite them.
     legacy = []
     if "holidays" in prof and not re.fullmatch(r"[A-Za-z]{2}", prof.get("country", "")):
-        legacy = list(owner_profile.holiday_regions(DATA_ROOT))
+        legacy = list(owner_profile.holiday_regions(DATA_ROOT, address))
     return {"country": country or "", "region": region, "legacy_holidays": legacy}
+
+
+# Parts of the profile that name a path, which on the shared board would be a
+# path on the server, so a signed-in person neither sees nor sets them.
+SHARED_HIDES = {"about": ("facts_file",), "sections": ("setup",)}
+
+
+def profile_reply():
+    """The profile as Settings shows it: on the Mac the owner's, signed in the
+    person's own, read from the shared profile until they save one. Signed
+    in there is nothing to set up, and until they save, the shared profile's
+    Name is not theirs, so the name is the one they signed in with."""
+    import owner_profile
+    who = requester()
+    address = who["email"] if who else None
+    about = owner_profile.about_fields(DATA_ROOT, address)
+    texts = owner_profile.section_texts(DATA_ROOT, address)
+    hints = owner_profile.section_hints()
+    if who:
+        own = os.path.isfile(owner_profile.own_profile_path(address, DATA_ROOT))
+        name = (owner_profile.read(DATA_ROOT, address).get("name") if own else None) or who["name"]
+        for key in SHARED_HIDES["about"]:
+            about.pop(key, None)
+        for key in SHARED_HIDES["sections"]:
+            texts.pop(key, None)
+            hints.pop(key, None)
+        setup = False
+    else:
+        setup = owner_profile.needs_setup(DATA_ROOT)
+        name = "" if setup else owner_profile.owner_name(DATA_ROOT)
+    return {"name": name, **_holiday_place_json(address), "about": about,
+            "sections": texts, "hints": hints, "needs_setup": setup}
 
 
 def url_segments(path):
@@ -2812,20 +2871,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             got = board_access.read(dataset_dir(ds)) or {"owner": "", "people": [], "teams": []}
             return self._json(200, dict(got, board=ds, mine=got["owner"] == requester()["email"]))
         if path == "/profile-basics.json":
-            import owner_profile
-            if AUTH:
-                # The profile is the server's. The name is the visitor's own,
-                # and there is nothing for them to set up.
-                return self._json(200, {"name": requester()["name"], "country": "", "region": "",
-                                        "legacy_holidays": [], "needs_setup": False})
-            return self._json(200, {
-                "name": owner_profile.owner_name(DATA_ROOT) if not owner_profile.needs_setup(DATA_ROOT) else "",
-                **_holiday_place_json(),
-                "needs_setup": owner_profile.needs_setup(DATA_ROOT)})
+            return self._json(200, profile_reply())
         if path == "/holiday-countries.json":
             import holidays as nager
             import owner_profile
-            country = owner_profile.holiday_place(DATA_ROOT)[0]
+            who = requester()
+            country = owner_profile.holiday_place(DATA_ROOT, who["email"] if who else None)[0]
             return self._json(200, {
                 "countries": _all_countries(),
                 "regions": {country: nager.regions(country, DATA_ROOT)} if country and _nager_has(country) else {}})
@@ -3030,6 +3081,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             real, err = project_folders.resolve(name, dataset_dir(current_dataset()))
             if err:
                 return self._json(err[0], {"error": err[1]})
+            sub = (q.get("sub") or [""])[0]
+            if sub:
+                full, serr = project_subfolder(real, sub)
+                if serr:
+                    return self._json(serr[0], {"error": serr[1]})
+                return self._json(200, {"sub": sub, "entries": project_entries(full)})
             meta = project_meta(real, name)
             if not meta:
                 return self._json(404, {"error": "no such project"})
@@ -3654,6 +3711,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._json(400, {"error": "body was not valid JSON"})
         if not isinstance(body, dict):
             return self._json(400, {"error": "body must be an object"})
+        about, sections = body.get("about") or {}, body.get("sections") or {}
+        if not isinstance(about, dict) or not isinstance(sections, dict):
+            return self._json(400, {"error": "about and sections must be objects"})
+        who = requester()
+        if who and (set(about) & set(SHARED_HIDES["about"]) or set(sections) & set(SHARED_HIDES["sections"])):
+            return self._json(400, {"error": "a path on the shared board is not yours to set"})
         country, region = body.get("country"), body.get("region")
         if country in (None, ""):
             country = None      # Not set: the holiday lines stay as they are
@@ -3665,12 +3728,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(400, {"error": "unknown country"})
             if region and (not _nager_has(country) or region not in {r["code"] for r in nager.regions(country, DATA_ROOT)}):
                 return self._json(400, {"error": "unknown region for %s" % country})
-        err = owner_profile.write_basics(DATA_ROOT, body.get("name"), country=country, region=region)
+        # Signed in, the person's own file and nobody else's: who they are is
+        # nginx's header, never anything in the body.
+        err = owner_profile.write_basics(DATA_ROOT, body.get("name"), country=country, region=region,
+                                         about=about, sections=sections,
+                                         address=who["email"] if who else None)
         if err:
             return self._json(400, {"error": err})
-        return self._json(200, {"name": owner_profile.owner_name(DATA_ROOT),
-                                **_holiday_place_json(),
-                                "needs_setup": owner_profile.needs_setup(DATA_ROOT)})
+        return self._json(200, profile_reply())
 
     def do_PUT(self):
         # Answered before the guard below, which is written to refuse
@@ -3705,14 +3770,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             text = data.decode("utf-8")
         except UnicodeDecodeError:
             return self._json(400, {"error": "body was not valid UTF-8"})
-        base = None
+        base = board = None
         if as_json:
             try:
                 sent = json.loads(text)
-                text, base = sent["text"], sent.get("base")
+                text, base, board = sent["text"], sent.get("base"), sent.get("board")
             except (ValueError, KeyError, TypeError):
                 return self._json(400, {"error": "body was not {text, base}"})
-            if not isinstance(text, str) or not (base is None or isinstance(base, str)):
+            if not isinstance(text, str) or not (base is None or isinstance(base, str)) \
+                    or not (board is None or isinstance(board, str)):
                 return self._json(400, {"error": "body was not {text, base}"})
             if len(text.encode("utf-8")) > MAX_BYTES:
                 return self._json(413, {"error": "file too large"})
@@ -3723,11 +3789,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # reads the file, works, and writes, and a second save landing in
         # between would be written over unseen.
         with _save_lock:
-            return self._write_list(text, base, len(data))
+            return self._write_list(text, base, len(data), board)
 
-    def _write_list(self, text, base, size):
+    def _write_list(self, text, base, size, board=None):
         ds = current_dataset()
         path = todo_path(ds)
+
+        # The list the tab read, named by the tab (`board`, the X-Bench-Board
+        # its GET carried). A tab is on whatever list it loaded, and the
+        # server's current one can move under it: another tab's dropdown, or a
+        # banner link. Merged against the wrong file, a save writes one list's
+        # tasks into another, so a save naming another list is refused whole
+        # and the tab reloads onto the one now current. A save naming none
+        # (pa_save.py, which pins its board with X-Offdesk-Board, or a script)
+        # goes to the current list as before.
+        if board is not None and board != ds:
+            return self._json(409, {"error": "this tab holds %s, but the board is now on %s, "
+                                             "so nothing was written" % (board or "no list", ds or "no list"),
+                                    "wrongBoard": True, "board": ds})
 
         # A migration is working on this list directly, with the board shut. A
         # tab left open from before it started holds the pre-migration document
@@ -3846,6 +3925,24 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # With no file yet it is measured against an empty one, so every task
         # in a first save is the signer's, whatever the tab wrote on it.
         # A card an agent's request changed goes under the agent (take_credits).
+        # Signed in, an assignee is a board person's email, but the PA and
+        # anyone typing hand over by name: `[to:: Jerome]`. A name on a line
+        # this save adds or changes becomes the one person on the board it
+        # means; a name meaning nobody or more than one refuses the whole save,
+        # naming the line and who it could be, rather than store a name no
+        # card, Mine filter or "your move" will ever match. The Mac board has
+        # no people and keeps names as written.
+        if todo is not None and AUTH and requester():
+            people = board_access.board_people(DATA_ROOT, board_access.read(dataset_dir(ds)))
+            text, unknown = todo.resolve_assignees(current_text or "", text,
+                                                   lambda name: board_access.people_named(people, name))
+            if unknown:
+                return self._json(422, {"error": "not saved: " + "; ".join(
+                    "line %d gives a task to %s, who %s on this board" % (
+                        u["line"], u["name"],
+                        "could be %s" % " or ".join(u["candidates"]) if u["candidates"] else "is nobody")
+                    for u in unknown), "assignees": unknown})
+
         changes = []
         if todo is not None:
             who = requester()

@@ -24,7 +24,10 @@ import os
 import sys
 
 
-ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_CORE = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "core")
+sys.path.insert(0, _CORE)
+import bench_root  # noqa: E402
+ROOT = bench_root.root()
 sys.path.insert(0, os.path.join(ROOT, "core"))
 import dataset as _dataset  # noqa: E402
 # The folder the datasets sit in. $TODOS_DATA_ROOT moves it, the same variable
@@ -111,8 +114,11 @@ def agent_runs_path():
 
 
 def notify_queue_path():
-    """The companion's queue for this dataset, under DATA_ROOT like the rest."""
-    return os.path.join(data_dir(), "notify-queue.json")
+    """The banner queue for this dataset: the notifier's, beside this
+    checkout, when it is there, else data/<dataset>/notify-queue.json, which
+    is also where a throwaway DATA_ROOT keeps it. See core/notify_due.py."""
+    import notify_due
+    return notify_due.queue_file(DATA_ROOT, dataset())
 
 
 def buckets_dir():

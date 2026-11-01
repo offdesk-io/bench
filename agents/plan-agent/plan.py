@@ -30,6 +30,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(ROOT, "core"))
 sys.path.insert(0, HERE)
 
+import bench_root  # noqa: E402
 import history as task_history  # noqa: E402  (plan.history() below is the plan file's own)
 import paths  # noqa: E402
 import pick  # noqa: E402
@@ -851,8 +852,7 @@ def harvest_usage():
     line and nothing else — this is new and unproven, and a night should not
     fail to start because one background call failed.
     """
-    sys.path.insert(0, os.path.normpath(
-        os.path.join(HERE, "..", "..", "..", "PACKAGES", "usage_harvester")))
+    sys.path.insert(0, os.path.join(bench_root.packages(), "usage_harvester"))
     try:
         import harvest as usage_harvester  # noqa: E402
     except ImportError:
@@ -1327,4 +1327,6 @@ def announce(written, skipped, stopped):
     # night, and Execution when the only news is the backlog of runs — either
     # is where the thing it is announcing actually lives.
     view = "plans" if written else "execution"
-    notify.queue("Plan agent", body, view=view)
+    # The queue of the list this batch planned, which need not be the one on
+    # screen (data/.current, what notify.py would pick with nothing named).
+    notify.queue("Plan agent", body, view=view, path=paths.notify_queue_path())

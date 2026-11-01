@@ -93,8 +93,16 @@ await evalJS(`(() => {
     { name:'sources', dir:true, size:null, children:3, modified:'2026-09-01T10:00:00' },
     { name:'CLAUDE.md', dir:false, size:6528, children:null, modified:'2026-09-06T15:13:10' },
     { name:'redefinition brief.md', dir:false, size:1400000, children:null, modified:'2026-09-06T15:13:10' },
-    { name:'notes.txt', dir:false, size:900, children:null, modified:'2026-09-06T15:13:10' }
+    { name:'notes.txt', dir:false, size:900, children:null, modified:'2026-09-06T15:13:10' },
+    { name:'2026-10-20-1000-older-note.md', dir:false, size:2048, children:null, modified:'2026-10-20T10:00:00' },
+    { name:'2026-11-05-0900-ive-joined-the-team.md', dir:false, size:3072, children:null, modified:'2026-11-05T09:00:00' }
   ];
+  // What opening sources/ answers, and every request that asked for it.
+  window.__subEntries = [
+    { name:'raw', dir:true, size:null, children:1, modified:'2026-09-01T10:00:00' },
+    { name:'interview.md', dir:false, size:512, children:null, modified:'2026-09-01T10:00:00' }
+  ];
+  window.__subCalls = [];
   // The one the two "it broke" checks swap out. Absent means answer normally.
   window.__projectStatus = 0;
   const json = (body, status) => Promise.resolve(new Response(JSON.stringify(body),
@@ -107,6 +115,10 @@ await evalJS(`(() => {
     }
     const u = String(url);
     if (u.startsWith('/projects.json')) return json({ projects: window.__projects }, 200);
+    if (u.startsWith('/project.json') && u.includes('&sub=')) {
+      window.__subCalls.push(decodeURIComponent(u.split('&sub=')[1].split('&')[0]));
+      return json({ sub:'x', entries: window.__subEntries }, 200);
+    }
     if (u.startsWith('/project.json')) {
       if (window.__projectStatus) return json({ error: 'no' }, window.__projectStatus);
       return json(Object.assign({ entries: window.__entries },
@@ -198,26 +210,68 @@ check('both halves are titled', await evalJS(`
   [...document.querySelectorAll('#dbody .field > span:first-child')].map(s => s.textContent).join('|')
 `) === 'Files in this folder|Tasks on this project')
 
-const rows = await evalJS(`[...document.querySelectorAll('#projFiles .projfile')].map(a =>
-  a.querySelector('.pf').textContent + ' | ' + a.querySelector('.pfm').textContent +
-  ' | ' + a.getAttribute('href'))`)
-check('every entry is a row', rows.length === 4, rows.join(' / '))
-// One level deep and no further: a sub-folder is one row carrying its own
-// count, not ten rows of somebody else's filing.
+const TOP = '#projFiles > .pfnode > .projfile, #projFiles > .projfile'
+const rows = await evalJS(`[...document.querySelectorAll(${JSON.stringify(TOP)})].map(a =>
+  a.querySelector('.pf').textContent + ' | ' + a.querySelector('.pfd').textContent + ' | ' +
+  a.querySelector('.pfm').textContent + ' | ' + (a.getAttribute('href') || '') + ' | ' + a.getAttribute('title'))`)
+check('the folder reads as five rows: a folder, three files, one Project files', rows.length === 5, rows.join(' / '))
 check('a sub-folder is one row, counting what is inside it',
-      rows[0].startsWith('sources/') && rows[0].includes('3 items'))
-check('and it links one level in, where the browser lists the rest',
-      rows[0].endsWith('/data/projects/atlas2027/sources/'))
+      rows[0].startsWith('sources/') && rows[0].includes('3 items'), rows[0])
 check('folders sort above files', await evalJS(`
-  [...document.querySelectorAll('#projFiles .projfile')]
-    .findIndex(a => !a.classList.contains('isdir')) === 1
+  document.querySelector(${JSON.stringify(TOP)}).classList.contains('isdir')`))
+check('a dated Markdown name is tidied, with its day beside the size',
+      rows[1].startsWith('Ive joined the team | 5 Nov | 3 KB | /data/projects/atlas2027/2026-11-05-0900-ive-joined-the-team.md'), rows[1])
+check('newest dated first, then the undated names', rows[2].startsWith('Older note | 20 Oct') && rows[3].startsWith('redefinition brief.md |  | 1.3 MB'),
+      rows[2] + ' / ' + rows[3])
+check('the full name is the title, for the ellipsis', rows[3].endsWith('| redefinition brief.md'))
+check('a space in a name is encoded in the href', rows[3].includes('redefinition%20brief.md'))
+check('only Markdown names are tidied', await evalJS(`
+  tidyProjectName('2026-11-05-0900-a-b.json') === null && tidyProjectName('2026-13-05-a.md') === null &&
+  tidyProjectName('2026-11-05-ive-left.md').date === '5 Nov'`))
+check('each name sits on one line, cut by an ellipsis', await evalJS(`(() => {
+  const cs = getComputedStyle(document.querySelector('#projFiles .projfile .pf'));
+  return cs.textOverflow === 'ellipsis' && cs.whiteSpace === 'nowrap'; })()`))
+check('every file row has an icon', await evalJS(`
+  [...document.querySelectorAll('#projFiles .projfile')].every(a => !!a.querySelector('svg.pficon'))`))
+check('every file opens in a new tab, so the board keeps its own', await evalJS(`
+  [...document.querySelectorAll('#projFiles a.projfile')].every(a => a.target === '_blank')
 `))
-check('sizes read as sizes', rows[1].includes('6 KB') && rows[2].includes('1.3 MB') &&
-      rows[3].includes('900 B'))
-check('a space in a name is encoded in the href', rows[2].includes('redefinition%20brief.md'))
-check('every row opens in a new tab, so the board keeps its own', await evalJS(`
-  [...document.querySelectorAll('#projFiles .projfile')].every(a => a.target === '_blank')
-`))
+
+// Project files: CLAUDE.md and the non-Markdown, non-image files wait in one shut row.
+check('CLAUDE.md and notes.txt are not in the list, they are under Project files', rows.every(r => !r.startsWith('CLAUDE.md') && !r.startsWith('notes.txt')) &&
+      rows[4].startsWith('Project files |  | 2 files'), rows[4])
+check('and that row is shut', await evalJS(`(() => {
+  const b = document.querySelector('#projFiles .pfgroup');
+  return b.getAttribute('aria-expanded') === 'false' && b.nextElementSibling.hidden; })()`))
+await evalJS(`document.querySelector('#projFiles .pfgroup').click()`)
+check('opening it shows both files', await evalJS(`(() => {
+  const k = document.querySelector('#projFiles .pfgroup').nextElementSibling;
+  return !k.hidden && document.querySelector('#projFiles .pfgroup').getAttribute('aria-expanded') === 'true' &&
+    [...k.querySelectorAll('.pf')].map(e => e.textContent).join() === 'CLAUDE.md,notes.txt'; })()`))
+check('and sizes read as sizes', await evalJS(`
+  [...document.querySelector('#projFiles .pfgroup').nextElementSibling.querySelectorAll('.pfm')].map(e => e.textContent).join() === '6 KB,900 B'`))
+
+// A folder opens in place under its own toggle, one level, fetched when opened.
+check('nothing was asked of a sub-folder before it was opened', await evalJS(`window.__subCalls.length === 0`))
+check('a folder row is a toggle, shut', await evalJS(`(() => {
+  const b = document.querySelector('#projFiles .isdir');
+  return b.tagName === 'BUTTON' && b.getAttribute('aria-expanded') === 'false' && b.nextElementSibling.hidden; })()`))
+await evalJS(`document.querySelector('#projFiles .isdir').click()`)
+await new Promise(r => setTimeout(r, 300))
+check('opening it asks for that one folder', await evalJS(`JSON.stringify(window.__subCalls)`) === '["sources"]')
+check('and lists its rows under it, in place', await evalJS(`(() => {
+  const b = document.querySelector('#projFiles .isdir');
+  const k = b.nextElementSibling;
+  return b.getAttribute('aria-expanded') === 'true' && !k.hidden &&
+    [...k.querySelectorAll(':scope > .pfnode > .projfile, :scope > .projfile')].map(e => e.querySelector('.pf').textContent).join() === 'raw/,interview.md' &&
+    k.querySelector('a.projfile').getAttribute('href') === '/data/projects/atlas2027/sources/interview.md'; })()`))
+await evalJS(`document.querySelector('#projFiles .isdir').click()`)
+check('a second click shuts it again', await evalJS(`document.querySelector('#projFiles .isdir').nextElementSibling.hidden`))
+await evalJS(`document.querySelector('#projFiles .isdir').click()`)
+check('and opening it again does not ask twice', await evalJS(`window.__subCalls.length === 1`))
+await evalJS(`document.querySelector('#projFiles .isdir').nextElementSibling.querySelector('.isdir').click()`)
+await new Promise(r => setTimeout(r, 300))
+check('a folder inside one asks for its full path', await evalJS(`window.__subCalls.join()`) === 'sources,sources/raw')
 check('the task rows are still under it', await evalJS(`
   document.querySelectorAll('#dbody .projrow').length === 2
 `))
@@ -282,6 +336,10 @@ check('and the drawer offers no folder links for a task that has one', await eva
 await new Promise(r => setTimeout(r, 300))
 check('Files lists the folder, one row a file', await evalJS(`
   document.querySelectorAll('#f-files .projfile').length > 0
+`))
+check('the drawer Files box is the same list: wrapped, folders as toggles, a Project files row', await evalJS(`
+  document.querySelector('#f-files').classList.contains('projfiles') &&
+  !!document.querySelector('#f-files .pftoggle.isdir') && !!document.querySelector('#f-files .pfgroup')
 `))
 check('the header offers Open project folder', await evalJS(`
   !document.querySelector('#dheadProj').classList.contains('hidden') &&

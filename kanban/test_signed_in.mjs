@@ -7,8 +7,8 @@
  * has headless Chrome send nginx's three headers on every request, so the
  * real data/ and the shared test server are never touched. The routes
  * themselves are held by kanban/test_board_access.py; this is the page: the
- * name in the header, the Mac-only parts gone, the wizard's sharing step and
- * the owner's sharing form in Settings.
+ * name in the header, the Mac-only parts gone, the wizard's sharing step,
+ * Settings as the person's own profile, and the owner's sharing form behind it.
  */
 import { spawn, execFileSync } from 'node:child_process'
 import { mkdtempSync, mkdirSync, copyFileSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
@@ -122,14 +122,39 @@ try {
   check('and it is on screen for him', await evalJS(`state.dataset === 'team-plan'`))
   check('data/.current is left alone', !existsSync(join(data, '.current')))
 
-  // --- the owner changes it in Settings ----------------------------------------
-  await evalJS(`$('#settingsBtn').click()`); await wait(500)
-  check('Settings is the list’s sharing', await evalJS(`!!modalEl && modalEl.textContent.includes('Who sees') && modalEl.querySelector('input[value="shared"]').checked`))
+  // --- Settings is his own profile ----------------------------------------------
+  const profileFile = join(data, 'users', execFileSync('python3', ['-c',
+    'import hashlib,sys;print(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:16])', 'jerome@example.com']).toString().trim() + '.profile.md')
+  await evalJS(`$('#settingsBtn').click()`); await wait(800)
+  check('Settings is his profile', await evalJS(`!!modalEl && modalEl.textContent.includes('Your profile') && modalEl.querySelector('[data-name]').value === 'Jérôme'`))
+  check('with every section but the paths', await evalJS(
+    `['writing', 'recorder', 'habits'].every(k => !!modalEl.querySelector('[data-section="' + k + '"]')) && !!modalEl.querySelector('[data-about="addressing"]')` +
+    ` && !modalEl.querySelector('[data-section="setup"]') && !modalEl.querySelector('[data-about="facts_file"]')`))
+  check('and none of the server’s settings', await evalJS(`!modalEl.querySelector('[data-memory]') && !modalEl.querySelector('[data-chime]') && !modalEl.querySelector('[data-agent-options]')`))
+  check('the sections are open', await evalJS(`modalEl.querySelector('[data-profile-sections]').open`))
+  check('an empty box shows the template as its hint', await evalJS(`modalEl.querySelector('[data-section="habits"]').placeholder.includes('Deferring')`))
+  await evalJS(`(() => {
+    const set = (sel, v) => { const el = modalEl.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) }
+    set('[data-about="addressing"]', 'Salut Jérôme')
+    set('[data-section="habits"]', '- Deferring: builds straight away')
+  })()`)
+  await press('Save'); await wait(600)
+  const own = existsSync(profileFile) ? readFileSync(profileFile, 'utf8') : ''
+  check('saved to his own file', /^- Name: Jérôme$/m.test(own) && /^- How to address them: Salut Jérôme$/m.test(own)
+    && /^- Deferring: builds straight away$/m.test(own), own.slice(0, 200))
+  check('nothing written to the shared profile', !existsSync(join(data, 'profile.md')))
+  await evalJS(`$('#settingsBtn').click()`); await wait(800)
+  check('it reads back', await evalJS(`modalEl.querySelector('[data-section="habits"]').value === '- Deferring: builds straight away'`))
+
+  // --- the owner changes the sharing from there ----------------------------------
+  await evalJS(`modalEl.querySelector('[data-sharing]').click()`); await wait(500)
+  check('Who sees is a button in it', await evalJS(`!!modalEl && modalEl.textContent.includes('Who sees') && modalEl.querySelector('input[value="shared"]').checked`))
   await evalJS(`modalEl.querySelector('input[value="personal"]').click()`)
   await press('Save'); await wait(500)
   check('saved as personal', JSON.stringify(accessOf('team-plan')) ===
     JSON.stringify({ owner: 'jerome@example.com', people: [], teams: [] }), JSON.stringify(accessOf('team-plan')))
-  await evalJS(`$('#settingsBtn').click()`); await wait(500)
+  await evalJS(`$('#settingsBtn').click()`); await wait(800)
+  await evalJS(`modalEl.querySelector('[data-sharing]').click()`); await wait(500)
   await evalJS(`modalEl.querySelector('input[value="shared"]').click()`)
   await evalJS(`(() => { const t = modalEl.querySelector('#shPeople'); t.value = 'tiago@example.com'; t.dispatchEvent(new Event('input', { bubbles: true })) })()`)
   await press('Save'); await wait(500)

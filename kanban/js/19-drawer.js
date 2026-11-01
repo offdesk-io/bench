@@ -793,21 +793,9 @@ async function loadTaskProject(name, taskId){
   const box = $('#f-files');
   const list = meta.entries || [];
   if (!box) return;
-  // A folder outside data/ is not served: its rows are plain text rather
-  // than links that would 404.
-  const base = isProjectPath(name) ? null : projectUrl(name);
-  const row = e => {
-    const size = e.dir
-      ? (e.children === null ? 'folder' : e.children + ' item' + (e.children === 1 ? '' : 's'))
-      : fileSize(e.size);
-    const inner = '<span class="pf">' + esc(e.name + (e.dir ? '/' : '')) + '</span>' +
-      '<span class="pfm">' + esc(size) + '</span>';
-    return base
-      ? '<a class="projfile' + (e.dir ? ' isdir' : '') + '" target="_blank" rel="noopener" ' +
-          'href="' + esc(base + encodeURIComponent(e.name) + (e.dir ? '/' : '')) + '">' + inner + '</a>'
-      : '<div class="projfile' + (e.dir ? ' isdir' : '') + '">' + inner + '</div>';
-  };
-  box.innerHTML = list.length ? list.map(row).join('') : emptyState('No files yet.');
+  if (!list.length) { box.innerHTML = emptyState('No files yet.'); return; }
+  box.classList.add('projfiles');
+  paintProjectFiles(box, list, name);
 }
 
 function dependenciesSection(t){
@@ -1980,6 +1968,116 @@ function fileSize(n){
   return (n / (1024 * 1024)).toFixed(1) + ' MB';
 }
 
+/* ---- The folder's rows, shared by the task drawer's Files box and the
+   project panel ----
+   One list, Finder-style: folders first and opening in place under an
+   aria-expanded toggle; one line a file, the name cut short by an ellipsis
+   with the whole of it in the title, the size on the right. A Markdown name
+   that starts with a date (2026-11-05-0900-ive-joined-the-team.md) reads as
+   "Ive joined the team" with "5 Nov" beside the size, newest first. The files that
+   run the folder rather than fill it (CLAUDE.md, and anything that is neither
+   Markdown nor an image) wait under one shut "Project files" row.
+
+   A folder's own rows are fetched when it is opened, one level a request
+   (project_subfolder() in kanban/server.py), so a project keeping a
+   checkout in sources/ costs nothing until somebody looks. */
+const PF_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const PF_ICONS = {
+  folder: '<path d="M2 4.5A1.5 1.5 0 0 1 3.5 3h3l1.5 1.5h4.5A1.5 1.5 0 0 1 14 6v6a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12z"/>',
+  doc:    '<path d="M4 2h5l3 3v9H4z"/><path d="M9 2v3h3M6 8h4M6 10.5h4"/>',
+  config: '<circle cx="8" cy="8" r="2"/><path d="M8 2v2M8 12v2M2 8h2M12 8h2M3.8 3.8l1.4 1.4M10.8 10.8l1.4 1.4M12.2 3.8l-1.4 1.4M5.2 10.8l-1.4 1.4"/>'
+};
+function pfIcon(kind){
+  return '<svg class="pficon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + PF_ICONS[kind] + '</svg>';
+}
+function tidyProjectName(name){
+  const m = /^(\d{4})-(\d{2})-(\d{2})(?:-(\d{4}))?-(.+)\.md$/i.exec(name);
+  if (!m || +m[2] < 1 || +m[2] > 12) return null;
+  const words = m[5].replace(/[-_]+/g, ' ').trim();
+  if (!words) return null;
+  return { label: words.charAt(0).toUpperCase() + words.slice(1),
+           date: (+m[3]) + ' ' + PF_MONTHS[+m[2] - 1], key: m[1] + m[2] + m[3] + (m[4] || '0000') };
+}
+function isContentFile(e){
+  return e.name !== 'CLAUDE.md' && /\.(md|markdown|png|jpe?g|gif|webp|svg|avif)$/i.test(e.name);
+}
+/* Where a folder is served from, or null for one outside data/ that is not
+   served: its rows are plain text rather than links that would 404. */
+function projectBase(name){ return isProjectPath(name) ? null : projectUrl(name); }
+
+function projectFilesHTML(list, o){
+  const sub = o.sub || '';
+  const href = e => o.base + (sub ? sub.split('/').map(encodeURIComponent).join('/') + '/' : '') +
+                    encodeURIComponent(e.name) + (e.dir ? '/' : '');
+  const fileRow = e => {
+    const tidy = !isContentFile(e) ? null : tidyProjectName(e.name);
+    const kind = isContentFile(e) ? 'doc' : 'config';
+    const inner = '<span class="pfchev none"></span>' + pfIcon(kind) +
+      '<span class="pf">' + esc(tidy ? tidy.label : e.name) + '</span>' +
+      '<span class="pfd">' + esc(tidy ? tidy.date : '') + '</span>' +
+      '<span class="pfm">' + esc(fileSize(e.size)) + '</span>';
+    return o.base
+      ? '<a class="projfile" title="' + esc(e.name) + '" target="_blank" rel="noopener" href="' + esc(href(e)) + '">' + inner + '</a>'
+      : '<div class="projfile" title="' + esc(e.name) + '">' + inner + '</div>';
+  };
+  const toggle = (cls, kind, label, meta, data, kids, title) =>
+    '<div class="pfnode">' +
+      '<button type="button" class="projfile pftoggle' + cls + '" aria-expanded="false" ' + data +
+        ' title="' + esc(title) + '"><span class="pfchev"></span>' + pfIcon(kind) +
+        '<span class="pf">' + esc(label) + '</span><span class="pfd"></span><span class="pfm">' + esc(meta) + '</span></button>' +
+      '<div class="pfkids" hidden>' + kids + '</div></div>';
+  const dirs = list.filter(e => e.dir).map(e => toggle(' isdir', 'folder', e.name + '/',
+    e.children === null ? 'folder' : e.children + ' item' + (e.children === 1 ? '' : 's'),
+    'data-sub="' + esc((sub ? sub + '/' : '') + e.name) + '"', '', e.name));
+  const files = list.filter(e => !e.dir);
+  const content = files.filter(isContentFile).sort((a, b) => {
+    const ta = tidyProjectName(a.name), tb = tidyProjectName(b.name);
+    if (ta && tb) return ta.key < tb.key ? 1 : ta.key > tb.key ? -1 : 0;
+    if (ta || tb) return ta ? -1 : 1;
+    return a.name.toLowerCase() < b.name.toLowerCase() ? -1 : 1;
+  });
+  const running = files.filter(e => !isContentFile(e));
+  const group = running.length
+    ? toggle(' pfgroup', 'config', 'Project files', running.length + ' file' + (running.length === 1 ? '' : 's'),
+             'data-group="1"', running.map(fileRow).join(''), 'Project files')
+    : '';
+  return dirs.join('') + content.map(fileRow).join('') + group;
+}
+
+/* One click handler on the box, so the rows it redraws need no wiring of
+   their own. Opening a folder fetches its rows once and keeps them. */
+function bindProjectFiles(box, name){
+  const base = projectBase(name);
+  box.onclick = async ev => {
+    const btn = ev.target.closest('.pftoggle');
+    if (!btn || !box.contains(btn)) return;
+    const kids = btn.nextElementSibling;
+    const open = btn.getAttribute('aria-expanded') !== 'true';
+    btn.setAttribute('aria-expanded', String(open));
+    kids.hidden = !open;
+    const sub = btn.dataset.sub;
+    if (!open || !sub || kids.dataset.loaded) return;
+    kids.dataset.loaded = '1';
+    kids.innerHTML = '<span class="help">Reading the folder…</span>';
+    try {
+      const res = await fetch('/project.json?name=' + encodeURIComponent(name) +
+                              '&sub=' + encodeURIComponent(sub) + '&t=' + Date.now(), { cache:'no-store' });
+      if (!res.ok) throw new Error(res.status === 404 ? 'That folder is not on disk.' : 'Could not read that folder.');
+      const got = await res.json();
+      const rows = got.entries || [];
+      kids.innerHTML = rows.length ? projectFilesHTML(rows, { base, sub }) : '<span class="help">The folder is empty.</span>';
+    } catch (err) {
+      delete kids.dataset.loaded;
+      kids.innerHTML = '<span class="help">' + esc(String(err.message || err)) + '</span>';
+    }
+  };
+}
+function paintProjectFiles(box, list, name){
+  box.innerHTML = projectFilesHTML(list, { base: projectBase(name), sub: '' });
+  bindProjectFiles(box, name);
+}
+
 /* Whether the folder's CLAUDE.md calls the project something other than what
    the folder is called. The folder name is the identity — it is what a task's
    own note points at — so a title that only differs in capitals and hyphens
@@ -2043,22 +2141,9 @@ async function loadProjectFiles(name){
   const about = projectAboutHTML(meta, name);
   const list = meta.entries || [];
   if (!list.length) return paint('<span class="help">The folder is empty.</span>', about);
-  // A folder outside data/ is not served: its rows are plain text rather
-  // than links that would 404.
-  const base = isProjectPath(name) ? null : projectUrl(name);
-  const row = e => {
-    const meta = e.dir
-      ? (e.children === null ? 'folder'
-         : e.children + ' item' + (e.children === 1 ? '' : 's'))
-      : fileSize(e.size);
-    const inner = '<span class="pf">' + esc(e.name + (e.dir ? '/' : '')) + '</span>' +
-      '<span class="pfm">' + esc(meta) + '</span>';
-    return base
-      ? '<a class="projfile' + (e.dir ? ' isdir' : '') + '" target="_blank" rel="noopener" ' +
-          'href="' + esc(base + encodeURIComponent(e.name) + (e.dir ? '/' : '')) + '">' + inner + '</a>'
-      : '<div class="projfile' + (e.dir ? ' isdir' : '') + '">' + inner + '</div>';
-  };
-  paint(list.map(row).join(''), about);
+  paint(projectFilesHTML(list, { base: projectBase(name), sub: '' }), about);
+  const box = $('#projFiles');
+  if (box && state.openProject === name) bindProjectFiles(box, name);
 }
 
 /* Which of the drawer's own sections — Description, Chats, Message

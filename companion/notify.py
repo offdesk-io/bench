@@ -1,59 +1,41 @@
 #!/usr/bin/env python3
-"""Ask the board server to say something on screen.
+"""Ask for a desktop banner. A shim: the queue belongs to the notifier.
 
-Since 26 Oct 2026 the thing that puts a desktop banner up is the board server
-(core/notify_due.py, through terminal-notifier); the Electron companion that
-used to is retired. The planning agent has no UI at all, the board is a browser
-tab that is usually shut, and a skill is a conversation that has already ended
-by the time its result matters. So rather than each growing its own way to
-speak, they all append here and the server drains the queue on its next tick,
-a minute at most, while the board is running.
+Since 31 Oct 2026 the queue and the script that appends to it live in the
+notifier's own folder beside this checkout (bench_root.notify_home(),
+~/Code/notify on the owner's Mac), with a poster of its own that drains it
+whether or not the board is running. This file stays so that every caller
+that reaches it by path, inside Bench and out, keeps working with the same
+arguments:
 
     python3 companion/notify.py "Plan agent" "3 plans written, 2 skipped"
     python3 companion/notify.py --view plans "Plan agent" "3 plans waiting"
     python3 companion/notify.py --task ds-audit "Due today" "The audit is owed"
     python3 companion/notify.py --dataset _test "Title" "Body"
 
-Or from Python:
-
     sys.path.insert(0, ".../companion"); import notify
     notify.queue("Plan agent", "3 plans written", view="plans")
 
-`task` and `view` say where the banner goes when it is pressed. A task is a
-card's `#slug`, or its title where it has none — the two things in todo.md
-stable enough to point at. A view is one of the board's own tabs, `plans`,
-`board` and the rest. Give both and it opens the card on that view;
-give neither and it opens the board's front page. Sending someone to a banner
-they cannot follow up is most of what makes a notification annoying, so name
-one wherever there is an obvious one to name.
+What it adds is Bench's: no dataset means the board on screen
+(data/.current), and the queue for a board is the one the board drains,
+core/notify_due.queue_file(). That is the notifier's queue for the board when
+the notifier is there, and data/<board>/notify-queue.json when it is not (a
+checkout without it) or when the data root is a throwaway one ($TODOS_DATA_ROOT,
+the test runner's). The append itself is the notifier's notify.queue(), and
+without the notifier it is the copy below, which writes the same line under
+the same lock.
 
-Appending is all this does. It never posts anything itself and it takes the
-queue's lock only for the moment of the write, so it is safe to call from a
-script running at two in the morning with nobody logged in — and safe when the
-board is not running at all, since the queue simply waits. The lock is
-`notify-queue.lock` beside the queue file, taken with flock, and the server's
-drain takes the same one, so an append and a drain never overlap.
-
-What the server will not do with what you queue, however loudly you ask:
-
-  - Post outside 08:30 to 20:00. A line queued at 02:00 waits for the morning.
-  - Post more than three at once.
-
-The one exception is the `content` list: its queue is drained with no time
-window, so a notice from the 11pm run shows at once.
-
-Weekends and public holidays are *not* excluded, unlike the morning briefing.
-That briefing is a scheduled interruption about a working day, so a Saturday
-rightly gets none; a queued line answers something that has just happened,
-because something was set running. Holding a Saturday night's result until
-Monday morning helps nobody.
-
-So this is for things worth a banner, not for progress. A run that wrote three
-plans is one line at the end, not one line a plan.
+`task` and `view` say where the banner goes when it is pressed: a card's id or
+`#slug`, and one of the board's tabs. The rules for posting (08:30 to 20:00 but
+for the `content` board, three a minute, one post per line) are the drainers',
+documented in the notifier's README and in core/notify_due.py. It is for things
+worth a banner, not for progress: a run that wrote three plans is one line at
+the end, not one line a plan.
 """
 
 import contextlib
 import datetime as dt
+import importlib.util
 import json
 import os
 import sys
@@ -64,23 +46,45 @@ except ImportError:          # no flock off a Unix; appends then rely on os.repl
     fcntl = None
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "core"))
+import notify_due  # noqa: E402
+
 MAX_QUEUED = 20
+_home = {}
+
+
+def data_root():
+    return os.environ.get("TODOS_DATA_ROOT") or os.path.join(ROOT, "data")
 
 
 def queue_path(dataset=None):
     if not dataset:
-        sys.path.insert(0, os.path.join(ROOT, "core"))
         import dataset as _dataset
-        dataset = _dataset.current(os.path.join(ROOT, "data"))
-    return os.path.join(ROOT, "data", dataset, "notify-queue.json")
+        dataset = _dataset.current(data_root())
+    return notify_due.queue_file(data_root(), dataset)
+
+
+def notifier():
+    """The notifier's notify module, or None when there is no notifier folder.
+    Loaded by path under its own name, since this file is called notify too."""
+    path = os.path.join(notify_due.bench_root.notify_home(), "notify.py")
+    if path not in _home:
+        mod = None
+        if os.path.isfile(path):
+            try:
+                spec = importlib.util.spec_from_file_location("notifier_notify", path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+            except Exception:   # a broken notifier must not stop the line
+                mod = None
+        _home[path] = mod
+    return _home[path]
 
 
 @contextlib.contextmanager
 def queue_lock(path):
-    """An exclusive lock on `notify-queue.lock` beside the queue file, shared
-    with the board server's drain (core/notify_due.py), so an append and a drain
-    take turns. Never raises: a lock that cannot be had is no reason to lose the
-    line, so the append goes ahead without it."""
+    """The notifier's lock on `notify-queue.lock` beside the queue, which the
+    board's drain and the poster take too. Never raises."""
     fh = None
     if fcntl is not None:
         try:
@@ -99,21 +103,8 @@ def queue_lock(path):
             fh.close()
 
 
-def queue(title, body, dataset=None, task=None, view=None, path=None):
-    """Append one notification. Returns the path, or None if it could not be written.
-
-    `task` and `view` are where the banner goes when it is pressed, and are
-    left out of the entry entirely when empty rather than written as null — the
-    companion treats a missing key and an empty one the same way, and an entry
-    with nothing to say about where it points should not carry the keys.
-
-    `path` names the queue file outright, for a caller that already resolves
-    its dataset folder itself (core/agent_runs.py, under $TODOS_DATA_ROOT).
-
-    Never raises. A caller asking for a banner is never doing it as its main job,
-    so a failure here must not take down whatever was actually being done.
-    """
-    path = path or queue_path(dataset)
+def _append(title, body, task, view, path):
+    """The append, for a checkout with no notifier beside it."""
     with queue_lock(path):
         try:
             with open(path, encoding="utf-8") as fh:
@@ -122,22 +113,13 @@ def queue(title, body, dataset=None, task=None, view=None, path=None):
                 items = []
         except (OSError, ValueError):
             items = []
-
-        entry = {
-            "title": str(title)[:120],
-            "body": str(body)[:400],
-            "queued": dt.datetime.now().isoformat(timespec="seconds"),
-        }
+        entry = {"title": str(title)[:120], "body": str(body)[:400],
+                 "queued": dt.datetime.now().isoformat(timespec="seconds")}
         if task:
             entry["task"] = str(task)[:200]
         if view:
             entry["view"] = str(view)[:40]
-        items.append(entry)
-        # A queue nobody drains is a companion that is not running. Cap it so that
-        # comes back as the last few lines when it starts, rather than as a month of
-        # backlog fired at once.
-        items = items[-MAX_QUEUED:]
-
+        items = (items + [entry])[-MAX_QUEUED:]
         try:
             os.makedirs(os.path.dirname(path), exist_ok=True)
             tmp = path + ".tmp"
@@ -147,6 +129,22 @@ def queue(title, body, dataset=None, task=None, view=None, path=None):
         except OSError:
             return None
     return path
+
+
+def queue(title, body, dataset=None, task=None, view=None, path=None):
+    """Append one line. Returns the path, or None if it could not be written.
+
+    `path` names the queue file outright, for a caller that already resolves
+    it (paths.notify_queue_path() in the agents, under $TODOS_DATA_ROOT).
+    Never raises."""
+    try:
+        path = path or queue_path(dataset)
+    except Exception:
+        return None
+    mod = notifier()
+    if mod is not None:
+        return mod.queue(title, body, task=task, view=view, path=path)
+    return _append(title, body, task, view, path)
 
 
 def main(argv):
@@ -163,8 +161,8 @@ def main(argv):
     if not path:
         print("could not write the queue", file=sys.stderr)
         return 1
-    print("queued — the board server posts it within a minute, in the "
-          "08:30 to 20:00 window, while the board is running")
+    print("queued: posted within a minute in the 08:30 to 20:00 window, "
+          "by the notifier's poster or the board, whichever is running")
     return 0
 
 

@@ -388,8 +388,9 @@ report or a message.
 
 **The companion** does not list them — it shows messages, which are a ten-second
 job, and a plan is several minutes of reading. What it does is say they exist:
-`plan.py` puts one line on `data/<dataset>/notify-queue.json` at the end of a
-run, and the companion posts it as a desktop notification in the morning. One
+`plan.py` puts one line on the banner queue of the list it planned (the
+notifier's beside this checkout, else `data/<dataset>/notify-queue.json`) at the
+end of a run, and it is posted as a desktop notification in the morning. One
 notification for the whole night, never one per plan. Pressing it opens the
 board's Plans tab, which is where the night's output actually is — the line is
 queued with `view="plans"` and no task, since a banner counting a batch should

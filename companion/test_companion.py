@@ -15,6 +15,7 @@ import datetime as dt
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -166,6 +167,49 @@ def test_notify_queue():
               notify.queue("t", "b", dataset="x"), None)
     finally:
         notify.ROOT = real
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_notify_forwards_to_the_notifier():
+    """With the notifier's folder there, a line for a board goes to its queue
+    for that board, appended by its own notify.py; a throwaway data root
+    keeps its lines; with no notifier the shim appends itself (above)."""
+    tmp = tempfile.mkdtemp(prefix="notify-home-test-")
+    saved = {k: os.environ.pop(k, None) for k in ("NOTIFY_HOME", "TODOS_DATA_ROOT")}
+    real = notify.ROOT
+    try:
+        home = os.path.join(tmp, "notify")
+        os.makedirs(home)
+        # A stand-in notifier that says it was the one called.
+        with open(os.path.join(home, "notify.py"), "w", encoding="utf-8") as fh:
+            fh.write("import json, os\n"
+                     "def queue(title, body, dataset=None, task=None, view=None, path=None):\n"
+                     "    os.makedirs(os.path.dirname(path), exist_ok=True)\n"
+                     "    json.dump([{'title': title, 'body': body, 'task': task, 'view': view, 'by': 'notifier'}],"
+                     " open(path, 'w'))\n"
+                     "    return path\n")
+        os.environ["NOTIFY_HOME"] = home
+        want = os.path.join(home, "data", "work", "notify-queue.json")
+        check("a board's queue is the notifier's", notify.queue_path("work"), want)
+        check("and the line is appended by the notifier", notify.queue("Plan agent", "3 plans", dataset="work", view="plans"), want)
+        with open(want, encoding="utf-8") as fh:
+            check("with everything the caller gave", json.load(fh),
+                  [{"title": "Plan agent", "body": "3 plans", "task": None, "view": "plans", "by": "notifier"}])
+        # The command line, as the agents outside Bench call it.
+        out = subprocess.run([sys.executable, os.path.join(HERE, "notify.py"), "--dataset", "content", "T", "B"],
+                             env=dict(os.environ), capture_output=True, text=True)
+        check("the command line forwards too", (out.returncode, os.path.isfile(
+            os.path.join(home, "data", "content", "notify-queue.json"))), (0, True))
+        os.environ.pop("NOTIFY_HOME")
+        notify.ROOT = tmp
+        check("a throwaway data root keeps its own lines", notify.queue_path("work"),
+              os.path.join(tmp, "data", "work", "notify-queue.json"))
+    finally:
+        notify.ROOT = real
+        for k, v in saved.items():
+            os.environ.pop(k, None)
+            if v is not None:
+                os.environ[k] = v
         shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -330,6 +374,7 @@ def main():
     test_messages()
     test_digest_line()
     test_notify_queue()
+    test_notify_forwards_to_the_notifier()
     test_content_queue_ignores_window()
     test_json()
     test_timed_meetings()
