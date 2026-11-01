@@ -82,6 +82,8 @@ def main():
     ds = os.path.join(root, "up-test")
     alpha = os.path.join(ds, "projects", "alpha")
     os.makedirs(os.path.join(alpha, "sources"))
+    outside = os.path.join(tmp, "outside")
+    os.makedirs(outside)
     todo = os.path.join(ds, "todo.md")
     with open(todo, "w", encoding="utf-8") as fh:
         fh.write("# To-do\n")
@@ -120,8 +122,15 @@ def main():
         ok("a sub-folder that climbs out is refused", code == 400, "got %d" % code)
         code, _ = upload(base, "alpha", "x.txt", sub="missing")
         ok("a sub-folder that is not there is a 404", code == 404, "got %d" % code)
-        code, _ = upload(base, "nope", "x.txt")
-        ok("a project that is not there is a 404", code == 404, "got %d" % code)
+        code, got = upload(base, "nope", "x.txt")
+        ok("a project that is not there is a 404 the drawer can tell apart", code == 404 and got.get("code") == "missing",
+           "%s %s" % (code, got))
+        code, got = upload(base, os.path.join(tmp, "gone-folder"), "x.txt")
+        ok("an absolute path that is not there is also 404 missing", code == 404 and got.get("code") == "missing", "%s %s" % (code, got))
+        code, got = upload(base, outside, "x.txt")
+        ok("an absolute folder that is there but not approved is a 403 unapproved", code == 403 and got.get("code") == "unapproved",
+           "%s %s" % (code, got))
+        ok("and nothing was written into it", os.listdir(outside) == [])
         code, _ = upload(base, "../ds", "x.txt")
         ok("a project name with a hop is refused", code == 400, "got %d" % code)
 
@@ -151,6 +160,9 @@ def main():
         try:
             def as_(email):
                 return dict(BOARD, **{"X-Offdesk-Email": email})
+            code, got = upload(base, outside, "x.txt", headers=as_("owner@example.com"))
+            ok("signed in, an unapproved path is refused with no hint whether it exists", code == 403 and "code" not in got,
+               "%s %s" % (code, got))
             code, got = upload(base, "alpha", "stranger.txt", headers=as_("other@example.com"))
             ok("signed in, someone not on the board gets 403", code == 403, "%s %s" % (code, got))
             ok("and nothing is written", not os.path.exists(os.path.join(alpha, "stranger.txt")))

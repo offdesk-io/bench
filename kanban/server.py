@@ -3238,7 +3238,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         real, err = project_folders.resolve(name, dataset_dir(current_dataset()))
         if err:
             self.close_connection = True
-            return self._json(err[0], {"error": err[1]})
+            # Tells the drawer which fix to offer: a folder the task names that
+            # is not there (make one), or one that is there but not approved
+            # (ask the owner). Never on the shared board, where it would say
+            # which paths exist on the server's disk.
+            code = None
+            if err[0] == 404:
+                code = "missing"
+            elif err[0] == 403 and os.path.isabs(name) and not AUTH:
+                code = "unapproved" if os.path.isdir(os.path.realpath(name)) else "missing"
+                if code == "missing":
+                    err = (404, "no such project")
+            body = {"error": err[1]}
+            if code:
+                body["code"] = code
+            return self._json(err[0], body)
         if sub:
             real, err = project_subfolder(real, sub)
             if err:

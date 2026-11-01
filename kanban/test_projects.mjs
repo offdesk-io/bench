@@ -557,6 +557,62 @@ await new Promise(r => setTimeout(r, 300))
 check('in either panel', await evalJS(`!document.querySelector('#projOpenFolder')`))
 await evalJS(`state.demo = false`)
 
+/* ---- Add file when the task's folder is not usable ----
+   The upload route answers with a code the drawer can tell apart. A folder the
+   task names that is not there gets the default one made and the note pointed
+   at it; one that is there but not approved gets the approve confirm. Either
+   way the file goes up with no error line, and only a declined confirm shows one. */
+const uploadRun = async (body, calls, confirmAnswer) => evalJS(`(async () => {
+  window.__calls = [];
+  const was = window.fetch;
+  window.confirm = () => ${confirmAnswer};
+  let first = true;
+  window.fetch = (url, opts) => {
+    const u = String(url), m = (opts && opts.method) || 'GET';
+    if (u.startsWith('/project/upload')) {
+      window.__calls.push('UPLOAD ' + decodeURIComponent(u));
+      const code = window.__uploadFail;
+      if (first && code) { first = false;
+        return Promise.resolve(new Response(JSON.stringify({ error: 'x', code }), { status: code === 'missing' ? 404 : 403 })); }
+      first = false;
+      return Promise.resolve(new Response(JSON.stringify({ ok: true, name: 'a.txt' }), { status: 200 }));
+    }
+    if (u === '/project/start') { window.__calls.push('START ' + opts.body);
+      return Promise.resolve(new Response(JSON.stringify({ ok: true, name: 'fresh-one' }), { status: 200 })); }
+    if (u === '/project-folders' && m === 'POST') { window.__calls.push('APPROVE ' + opts.body);
+      return Promise.resolve(new Response('{"ok":true}', { status: 200 })); }
+    return was(url, opts);
+  };
+  load(${JSON.stringify(body)}.join('\\n'), 'demo.md', {});
+  state.locked = false; state.demo = false;
+  const t = state.doc.buckets[0].tiers[0].tasks[0];
+  openDrawer(t.id);
+  await new Promise(r => setTimeout(r, 300));
+  const input = document.querySelector('#f-fileinput');
+  const dt = new DataTransfer(); dt.items.add(new File(['hi'], 'a.txt'));
+  input.files = dt.files; input.onchange();
+  await new Promise(r => setTimeout(r, 700));
+  const out = { calls: window.__calls.slice(), body: t.body.slice(), err: document.querySelector('#f-fileerr')?.textContent || '',
+    errHidden: document.querySelector('#f-fileerr')?.classList.contains('hidden') };
+  window.fetch = was; state.locked = true;
+  return JSON.stringify(out);
+})()`)
+const fixture = path => ['# To-do', '', '## 1. Tasks', '', '### To do', '', '- [ ] Mend the fence [bucket:: Strategic]', '  - Project: `' + path + '`', '']
+await evalJS(`window.__uploadFail = 'missing'`)
+const a = JSON.parse(await uploadRun(fixture('/gone/for/good'), 0, 'true'))
+check('a missing folder: the default one is made from the task title, then the file goes up',
+  a.calls.length === 3 && a.calls[1].startsWith('START') && a.calls[1].includes('Mend the fence') &&
+  a.calls[2] === 'UPLOAD /project/upload?name=fresh-one&file=a.txt', JSON.stringify(a.calls))
+check('the task note is pointed at the new folder, nothing else added', a.body[0] === '  - Project: `data/projects/fresh-one`' && a.body.length === 1, JSON.stringify(a.body))
+check('and no error shows', a.errHidden === true && a.err === '', JSON.stringify(a))
+await evalJS(`window.__uploadFail = 'unapproved'`)
+const b = JSON.parse(await uploadRun(fixture('/real/but/unapproved'), 0, 'true'))
+check('an unapproved folder: the approve confirm runs, then the same file goes up',
+  b.calls.length === 3 && b.calls[1].startsWith('APPROVE') && b.calls[1].includes('/real/but/unapproved') && b.calls[2].includes('/real/but/unapproved'), JSON.stringify(b.calls))
+check('and no error shows', b.errHidden === true, JSON.stringify(b))
+const c = JSON.parse(await uploadRun(fixture('/real/but/unapproved'), 0, 'false'))
+check('declining the confirm uploads nothing and shows the error', c.calls.length === 1 && c.errHidden === false && /a\.txt/.test(c.err), JSON.stringify(c))
+
 ws.close()
 chrome.kill()
 const failed = checks.filter(c => !c).length

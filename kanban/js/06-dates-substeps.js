@@ -142,6 +142,18 @@ function setTaskProject(t, ref){
   markDirty();
   return true;
 }
+/* Point a task at a different folder than the one its note names: the note
+   line is rewritten in place. For a note whose folder is gone, when the drawer
+   has made a new one. */
+function replaceTaskProject(t, ref){
+  if (state.locked) return false;
+  const i = t.body.findIndex(l => PROJECT_RE.test(l) || PROJECT_PATH_RE.test(l));
+  if (i < 0) return setTaskProject(t, ref);
+  t.body[i] = projectNoteLine(ref);
+  t.dirty = true;
+  markDirty();
+  return true;
+}
 /* Every task pointing at one folder, in board order, Done included — a project
    is the whole of the work, and half of it being finished is the answer to
    "where is this up to" rather than something to hide. */

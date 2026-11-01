@@ -2761,7 +2761,8 @@
   }
 
   /* ---------- suggestion sections in the panel ---------- */
-  .sugg .empty{margin:0; padding:0; font-size: var(--tenon-typography-size-sm)}
+  .sugg .empty{margin:0; padding:0; font-size: var(--tenon-typography-size-sm); overflow-wrap:anywhere}
+  details.sugg::details-content{min-width:0}
   /* An empty section names the syntax that would fill it in — the same chip
      treatment the other code spans on the board already get. */
   .sugg .empty code{

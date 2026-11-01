@@ -764,9 +764,8 @@ async function drawProjectPicker(t){
 function filesSection(startLinks){
   return sideSection('Files', 'files',
     (startLinks || '') +
-    '<div id="f-fileadd" class="pprow hidden">' +
-      '<input type="file" id="f-fileinput" multiple hidden>' +
-      '<span class="help hidden" id="f-fileerr"></span></div>' +
+    '<input type="file" id="f-fileinput" multiple hidden>' +
+    '<p class="empty hidden" id="f-fileerr"></p>' +
     '<div id="f-files">' + emptyState('No files yet.') + '</div>', undefined, true,
     '<button type="button" class="btn outline small hidden" id="f-fileaddbtn">Add file…</button>');
 }
@@ -790,11 +789,10 @@ function guardDrawerFileDrops(){
    is. A task with no folder yet gets one first, through /project/start. */
 function bindFileAdd(t, ro){
   guardDrawerFileDrops();
-  const bar = $('#f-fileadd');
-  if (!bar || state.demo || listFolder || ro) return;
-  bar.classList.remove('hidden');
+  const input = $('#f-fileinput');
+  if (!input || state.demo || listFolder || ro) return;
   $('#f-fileaddbtn').classList.remove('hidden');
-  const input = $('#f-fileinput'), err = $('#f-fileerr'), zone = bar.closest('details');
+  const err = $('#f-fileerr'), zone = input.closest('details');
   const say = msg => { err.textContent = msg || ''; err.classList.toggle('hidden', !msg); };
   const add = async files => {
     files = Array.from(files || []);
@@ -812,13 +810,43 @@ function bindFileAdd(t, ro){
       }
     } catch (e) { say('Could not start the project: ' + (e.message || e)); return; }
     const failed = [];
+    const send = async f => {
+      const res = await fetch('/project/upload?name=' + encodeURIComponent(proj) +
+                              '&file=' + encodeURIComponent(f.name),
+                              { method: 'POST', headers: { 'X-Board': '1' }, body: f });
+      const info = await res.json().catch(() => ({}));
+      if (!res.ok) { const e = new Error(info.error || ('the server answered ' + res.status)); e.code = info.code; throw e; }
+    };
+    /* The folder the task names is not usable. Gone: make the default one and
+       point the task at it. There but not approved: the same confirm the folder
+       picker asks. Either way the upload carries on; only a refusal shows an
+       error. Asked once per drop. */
+    let fixed = false;
+    const fix = async code => {
+      fixed = true;
+      if (code === 'missing') {
+        let got, n = 1;
+        for (;;) {
+          try { got = await postJSON('/project/start', { name: n > 1 ? t.title + ' ' + n : t.title, title: t.title }); break; }
+          catch (e) { if (n < 9 && /already a project folder/.test(e.message || '')) { n++; continue; } throw e; }
+        }
+        if (!replaceTaskProject(t, got.name)) throw new Error('could not link the folder to the task');
+        proj = got.name;
+        created = true;
+        return true;
+      }
+      if (!confirm('Approve ' + proj + ' as a project folder for this list?\n\n' +
+                   'Tasks will be able to point at it and at any folder inside it.')) return false;
+      await postJSON('/project-folders', { path: proj });
+      return true;
+    };
     for (const f of files) {
       try {
-        const res = await fetch('/project/upload?name=' + encodeURIComponent(proj) +
-                                '&file=' + encodeURIComponent(f.name),
-                                { method: 'POST', headers: { 'X-Board': '1' }, body: f });
-        const info = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(info.error || ('the server answered ' + res.status));
+        try { await send(f); }
+        catch (e) {
+          if (fixed || (e.code !== 'missing' && e.code !== 'unapproved') || !(await fix(e.code))) throw e;
+          await send(f);
+        }
       } catch (e) { failed.push(f.name + ': ' + (e.message || e)); }
     }
     const msg = failed.length ? 'Not added. ' + failed.join(' · ') : '';
