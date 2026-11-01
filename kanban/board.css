@@ -2690,6 +2690,10 @@
      .field > summary already gives it. Only the colour needs winning back from
      .sugg > summary. */
   details.field.subsec > summary{color:var(--tenon-text-faint)}
+  /* The action sitting in a section's title bar (Files: Add file…). */
+  details.sugg > summary .sumaction{margin-left:auto}
+  /* A file is being dragged over the Files section. */
+  details.sugg.dropping{outline:2px dashed var(--tenon-stroke-accent); outline-offset:2px; background:var(--tenon-background-accent)}
   /* Start a project and Use an existing folder, as plain text links. */
   .dlinks{display:flex; flex-wrap:wrap; gap:4px 14px}
   .dlinkbtn{background:none; border:none; padding:0; cursor:pointer; font:inherit; font-size: var(--tenon-typography-size-sm); color:var(--tenon-text-accent)}

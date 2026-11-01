@@ -14,7 +14,7 @@ What it holds to:
     and in a sub-folder when `sub` names one;
   * a second file with the same name is saved as "name (2).ext", then "(3)", and
     the first is never overwritten;
-  * a name with a hop, a separator, a null or a leading dot is refused, and so
+  * a name with a hop, a separator, a null or other control character or a leading dot is refused, and so
     is a sub-folder that climbs out;
   * a request without X-Board is refused;
   * a body declared over 25 MB is a 413 and nothing is written;
@@ -126,7 +126,8 @@ def main():
         ok("a project name with a hop is refused", code == 400, "got %d" % code)
 
         # --- names ---------------------------------------------------------------
-        for bad in ("../evil.txt", "..", "a/b.txt", "a\\b.txt", ".hidden", "", "x\0y", "a..b"):
+        for bad in ("../evil.txt", "..", "a/b.txt", "a\\b.txt", ".hidden", "", "x\0y", "a..b",
+                    "tab\there", "line\nbreak", "bell\x07", "del\x7f"):
             code, _ = upload(base, "alpha", bad)
             ok("the name %r is refused" % bad, code == 400, "got %d" % code)
         ok("nothing was written outside the folder", not os.path.exists(os.path.join(ds, "evil.txt"))

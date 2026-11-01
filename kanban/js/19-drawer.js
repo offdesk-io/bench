@@ -615,13 +615,14 @@ function emptyState(text){
 /* Side-column sections switched off until they come back. The code stays. */
 const DRAWER_HIDDEN = { deps: true, chats: true, prompts: true, jira: true };
 
-function sideSection(label, key, body, count, sub){
+function sideSection(label, key, body, count, sub, action){
   const k = 'sugg:' + key;
   return (sub ? '' : '<hr class="dsep">') +
     '<details class="field sugg' + (sub ? ' subsec' : '') + '" data-collapse="' + esc(k) + '"' +
     (sectionCollapsed(k) ? '' : ' open') + '>' +
     '<summary>' + esc(label) +
-    (count > 1 ? ' <em class="sublabel">' + count + '</em>' : '') + '</summary>' +
+    (count > 1 ? ' <em class="sublabel">' + count + '</em>' : '') +
+    (action ? '<span class="sumaction">' + action + '</span>' : '') + '</summary>' +
     body +
     '</details>';
 }
@@ -757,20 +758,36 @@ async function drawProjectPicker(t){
 function filesSection(){
   return sideSection('Files', 'files',
     '<div id="f-fileadd" class="pprow hidden">' +
-      '<button type="button" class="btn outline small" id="f-fileaddbtn">Add file…</button>' +
       '<input type="file" id="f-fileinput" multiple hidden>' +
       '<span class="help hidden" id="f-fileerr"></span></div>' +
-    '<div id="f-files">' + emptyState('No files yet.') + '</div>', undefined, true);
+    '<div id="f-files">' + emptyState('No files yet.') + '</div>', undefined, true,
+    '<button type="button" class="btn outline small hidden" id="f-fileaddbtn">Add file…</button>');
+}
+
+/* A file dropped anywhere in the drawer that is not the Files section would
+   otherwise be opened by the browser, navigating away from the board. Bound
+   once; the drawer element outlives every redraw of its body. */
+let drawerDropGuarded = false;
+function guardDrawerFileDrops(){
+  if (drawerDropGuarded) return;
+  const drawer = $('#drawer');
+  if (!drawer) return;
+  drawerDropGuarded = true;
+  const files = ev => ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('Files');
+  ['dragover', 'drop'].forEach(type =>
+    drawer.addEventListener(type, ev => { if (files(ev)) ev.preventDefault(); }));
 }
 
 /* The Add file button and drag-and-drop on the Files section. Shown only where
    the server routes exist and the task can be edited, the way Start a project
    is. A task with no folder yet gets one first, through /project/start. */
 function bindFileAdd(t, ro){
+  guardDrawerFileDrops();
   const bar = $('#f-fileadd');
   if (!bar || state.demo || listFolder || ro) return;
   bar.classList.remove('hidden');
-  const input = $('#f-fileinput'), err = $('#f-fileerr'), zone = bar.parentElement;
+  $('#f-fileaddbtn').classList.remove('hidden');
+  const input = $('#f-fileinput'), err = $('#f-fileerr'), zone = bar.closest('details');
   const say = msg => { err.textContent = msg || ''; err.classList.toggle('hidden', !msg); };
   const add = async files => {
     files = Array.from(files || []);
@@ -808,11 +825,32 @@ function bindFileAdd(t, ro){
       loadTaskProject(proj, t.id);
     }
   };
-  $('#f-fileaddbtn').onclick = () => input.click();
+  $('#f-fileaddbtn').onclick = ev => { ev.preventDefault(); ev.stopPropagation(); input.click(); };
   input.onchange = () => { add(input.files); input.value = ''; };
-  zone.addEventListener('dragover', ev => ev.preventDefault());
+  // Highlight while a file is over the section. dragenter/dragleave fire for
+  // every child crossed, so a counter, not a flag, says when it really left.
+  // A shut section opens on the first dragenter so the list is in view.
+  let depth = 0;
+  const isFiles = ev => ev.dataTransfer && Array.from(ev.dataTransfer.types || []).includes('Files');
+  const clear = () => { depth = 0; zone.classList.remove('dropping'); };
+  zone.addEventListener('dragenter', ev => {
+    if (!isFiles(ev)) return;
+    ev.preventDefault();
+    if (depth++ === 0) { zone.classList.add('dropping'); zone.open = true; }
+  });
+  zone.addEventListener('dragover', ev => {
+    if (!isFiles(ev)) return;
+    ev.preventDefault();
+    zone.classList.add('dropping');
+  });
+  zone.addEventListener('dragleave', ev => {
+    if (!isFiles(ev)) return;
+    if (--depth <= 0) clear();
+  });
+  zone.addEventListener('dragend', clear);
   zone.addEventListener('drop', ev => {
     ev.preventDefault();
+    clear();
     add(ev.dataTransfer && ev.dataTransfer.files);
   });
 }

@@ -3220,7 +3220,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         sub = (q.get("sub") or [""])[0]
         fname = (q.get("file") or [""])[0]
         if (not fname or fname.startswith(".") or "/" in fname or "\\" in fname
-                or "\0" in fname or ".." in fname or fname != os.path.basename(fname)):
+                or ".." in fname or fname != os.path.basename(fname)
+                or any(ord(c) < 0x20 or ord(c) == 0x7F for c in fname)):
             self.close_connection = True
             return self._json(400, {"error": "that file name cannot be used"})
         try:
