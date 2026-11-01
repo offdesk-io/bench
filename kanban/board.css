@@ -512,7 +512,7 @@
   .pcblurb:empty{display:none}
   /* Start a project, Use an existing folder, Open folder: see projectSection(). */
   .pactions{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px}
-  .ppick{margin-top:8px; display:flex; flex-direction:column; gap:6px}
+  .ppick{display:flex; flex-direction:column; gap:var(--tenon-dimension-100)}
   .ppick.hidden{display:none}
   .pprow{display:flex; gap:6px; align-items:center}
   .pprow select, .pprow input{flex:1; min-width:0; font:inherit; font-size: var(--tenon-typography-size-sm)}
@@ -2704,14 +2704,12 @@
   details.sugg.dgroup > details.subsec{margin-top:0}
   /* A file is being dragged over the Files section. */
   details.sugg.dropping{outline:2px dashed var(--tenon-stroke-accent); outline-offset:2px; background:var(--tenon-background-accent)}
-  /* Start a project and Use an existing folder, as plain text links. */
-  .dlinks{display:flex; flex-wrap:wrap; gap:4px 14px}
-  .dlinkbtn{background:none; border:none; padding:0; cursor:pointer; font:inherit; font-size: var(--tenon-typography-size-sm); color:var(--tenon-text-accent)}
-  .dlinkbtn:hover{text-decoration:underline}
+  /* Start a project and Use an existing folder, side by side in Files. */
+  .dlinks{display:flex; flex-wrap:wrap; gap:var(--tenon-dimension-100)}
   .sublabel{font-style:normal; font-weight:550; text-transform:none; letter-spacing:0; color:var(--tenon-text-faint); opacity:.85; margin-left:6px}
   .substeps{display:flex; flex-direction:column; gap:1px; --tenon-reorder-gap: 1px}
   /* The drawer's History section: one line per specialist called in. */
-  .dhistory{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px}
+  .dhistory{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:var(--tenon-dimension-100)}
   .dhistory li{display:flex; flex-direction:column; font-size: var(--tenon-typography-size-sm); color:var(--tenon-text-default)}
   .dhistory .sublabel{margin-left:0}
   .sub{

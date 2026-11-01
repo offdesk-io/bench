@@ -973,8 +973,7 @@ function tagsSection(t){
   const head = '<span class="fieldhead">Tags' + (chips.length > 1 ? ' <em class="sublabel">' + chips.length + '</em>' : '') +
     '<span class="sumaction" id="f-tagadd"></span></span>';
   if (!chips.length && ro) return head +
-    emptyState('No tags beyond the fields above. Anything written as '
-             + '`[key:: value]` in the task line shows up here.');
+    emptyState('None yet.');
   const hasExtra = chips.some(c => c.unrecognised && c.editable);
   // The one control that writes a new tag rather than editing or clearing an
   // existing one — a plain-text key and value on click, the same way editing
@@ -1078,9 +1077,7 @@ function agendaSection(list, when, prev, sub){
   return sideSection('Meeting agenda', 'agenda',
     list.map(ag => agendaHTML(ag, when, { where: ag.where })).join('') +
     (prev ? agendaHTML(prev, '', { prev:true }) : '') +
-    '<span class="help">Copy takes the date, the word Agenda and both levels of ' +
-    'bullets, as bullets. The topics themselves are edited in Description.</span>',
-    list.length, sub);
+    '', list.length, sub);
 }
 
 /* Tickets waiting to be raised. Its own section rather than a third kind of
@@ -1092,10 +1089,7 @@ function jiraSection(list, sub){
   return sideSection('Jira tickets', 'jira',
     list.map(n => jiraHTML(n, {
       where: n.where, dismiss: state.locked ? '' : n.raw, dismissDesc: n.descRaw
-    })).join('') +
-    '<span class="help">The link fills in the summary and the description. Nothing is ' +
-    'raised until you press Create in Jira.</span>',
-    list.length, sub);
+    })).join(''), list.length, sub);
 }
 
 /* Adds a step and puts the cursor straight in it. Shared by the Add button and
@@ -1313,8 +1307,8 @@ function openDrawer(id, focusTitle){
   };
   const canStart = !proj && !ro && !state.demo && !listFolder;
   const startLinks = canStart
-    ? '<div class="dlinks"><button type="button" class="dlinkbtn" id="f-projstart">Start a project</button>' +
-      '<button type="button" class="dlinkbtn" id="f-projpick">Use an existing folder</button></div>' +
+    ? '<div class="dlinks"><button type="button" class="btn outline small" id="f-projstart">Start a project</button>' +
+      '<button type="button" class="btn outline small" id="f-projpick">Use an existing folder</button></div>' +
       '<div class="ppick hidden" id="f-projpicker"></div>'
     : '';
   /* The outputs the task produces (agenda, message and prompt suggestions, Jira
@@ -1332,9 +1326,7 @@ function openDrawer(id, focusTitle){
       { sub: true, claude:true, task:t.id, emptyText: 'None yet.' })) +
     (DRAWER_HIDDEN.jira ? '' : jiraSection(sugg.jira, true)) +
     filesSection(startLinks);
-  const historyEmpty = emptyState(t.stableId
-    ? 'No specialist has been called in on this task yet.'
-    : 'Nothing yet. An agent that brings a specialist in on this task writes it here.');
+  const historyEmpty = emptyState('None yet.');
 
   /* Mounted afresh on every open (a new key), so the panel is replaced rather
      than patched, which is what assigning #dbody's innerHTML always meant. The
