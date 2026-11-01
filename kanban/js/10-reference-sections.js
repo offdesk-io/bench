@@ -1934,19 +1934,17 @@ function chatSection(t){
   const cards = rows.map(row => cvCardHTML(row, key, t.title)).join('');
   const body =
     '<div class="cvstack">' +
-      (cards || emptyState('No conversations yet. Start one below, or attach one '
-                         + 'that began in the terminal.')) + '</div>' +
-    '<div class="aic-actions">' +
-      '<button type="button" class="aic-addsub" data-owner="' + esc(t.id) + '">+ New chat</button>' +
-      '<button type="button" class="aic-addsub aic-attach" data-owner="' + esc(t.id) +
-        '">Attach a session…</button>' +
-    '</div>';
+      (cards || emptyState('None yet.')) + '</div>';
+  const actions =
+    '<button type="button" class="btn outline small aic-addsub" data-owner="' + esc(t.id) + '">New chat…</button>' +
+    '<button type="button" class="btn outline small aic-addsub aic-attach" data-owner="' + esc(t.id) +
+      '">Attach a session…</button>';
   // The cards inside are the shared package's and stay that way; the heading
   // around them is the drawer's, drawn by sideSection() the same as every
   // other section in that column — it used to come from chat.css instead and
   // was a size down and a shade fainter than its neighbours for no reason
   // anyone had chosen.
-  return sideSection('AI processes', 'chats', body, rows.length);
+  return sideSection('AI processes', 'chats', body, rows.length, false, actions);
 }
 
 /* ---- Attaching a session that started elsewhere ----

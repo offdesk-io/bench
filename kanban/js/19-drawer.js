@@ -627,6 +627,12 @@ function sideSection(label, key, body, count, sub, action){
     '</details>';
 }
 
+/* A button in a section's title bar must not also open or shut the section.
+   One listener for all of them, so a section only has to pass `action`. */
+document.addEventListener('click', ev => {
+  if (ev.target.closest('summary .sumaction')) ev.preventDefault();
+});
+
 /* The folder this task's work lives in, as a way into it rather than as a
    field of the task: the note that names it stays where it was written, in
    Description, and this is the same line shown properly. It sat ninth in the
@@ -755,8 +761,9 @@ async function drawProjectPicker(t){
    loadTaskHistory() once the panel is up, the way the Project card is. */
 /* The files in the task's project folder, drawn empty and filled by
    loadTaskProject() once the panel is up, the way History is. */
-function filesSection(){
+function filesSection(startLinks){
   return sideSection('Files', 'files',
+    (startLinks || '') +
     '<div id="f-fileadd" class="pprow hidden">' +
       '<input type="file" id="f-fileinput" multiple hidden>' +
       '<span class="help hidden" id="f-fileerr"></span></div>' +
@@ -897,9 +904,7 @@ async function loadTaskProject(name, taskId){
 function dependenciesSection(t){
   const groups = taskDependencies(t, !state.locked);
   const empty = !groups.some(g => g.waitingOn.length || g.blocks.length || g.people.length);
-  const hint = emptyState('Nothing waiting on this, and nothing holding it up. '
-               + 'Written as `blocked-by:slug` on whichever task is waiting, '
-               + 'or as `- Waiting on: ...` in Notes where it is a person.');
+  const hint = emptyState('None yet.');
   const body = groups.map(depGroupHTML).join('') + (empty ? hint : '');
   return sideSection('Dependencies', 'deps', body);
 }
@@ -1051,7 +1056,7 @@ function suggestionSection(label, list, opts){
         where: s.where, draft: s.draft, claude: opts.claude, task: opts.task,
         dismiss: state.locked ? '' : s.raw
       })).join('')
-    : emptyState(opts.emptyText || 'Nothing here yet.');
+    : emptyState(opts.emptyText || 'None yet.');
   return sideSection(label, label, body, list.length, opts.sub);
 }
 
@@ -1067,8 +1072,7 @@ function suggestionSection(label, list, opts){
    without a Copy, because its only job is to be read while the next is written. */
 function agendaSection(list, when, prev, sub){
   if (!list.length && !prev) return sideSection('Meeting agenda', 'agenda',
-    emptyState('None yet. Written as `- Agenda:` in Notes, with the topics '
-             + 'as bullets indented under it.'), undefined, sub);
+    emptyState('None yet.'), undefined, sub);
   return sideSection('Meeting agenda', 'agenda',
     list.map(ag => agendaHTML(ag, when, { where: ag.where })).join('') +
     (prev ? agendaHTML(prev, '', { prev:true }) : '') +
@@ -1082,7 +1086,7 @@ function agendaSection(list, when, prev, sub){
    because which board it goes to is part of what the row has to say. */
 function jiraSection(list, sub){
   if (!list.length) return sideSection('Jira tickets', 'jira',
-    emptyState('None yet. Written as `- Jira (BOARD): ...` in Notes.'), undefined, sub);
+    emptyState('None yet.'), undefined, sub);
   return sideSection('Jira tickets', 'jira',
     list.map(n => jiraHTML(n, {
       where: n.where, dismiss: state.locked ? '' : n.raw, dismissDesc: n.descRaw
@@ -1321,11 +1325,11 @@ function openDrawer(id, focusTitle){
   const outputs =
     agendaSection(sugg.agenda, t.due, readPrevAgenda(bodyParts(t).notes), true) +
     suggestionSection('Message suggestions', sugg.message,
-      { sub: true, emptyText: 'None yet. Written as `- Suggested message: ...` in Notes.' }) +
+      { sub: true, emptyText: 'None yet.' }) +
     (DRAWER_HIDDEN.prompts ? '' : suggestionSection('Prompt suggestions', sugg.prompt,
-      { sub: true, claude:true, task:t.id, emptyText: 'None yet. Written as `- Prompt: ...` in Notes.' })) +
+      { sub: true, claude:true, task:t.id, emptyText: 'None yet.' })) +
     (DRAWER_HIDDEN.jira ? '' : jiraSection(sugg.jira, true)) +
-    filesSection();
+    filesSection(startLinks);
   const historyEmpty = emptyState(t.stableId
     ? 'No specialist has been called in on this task yet.'
     : 'Nothing yet. An agent that brings a specialist in on this task writes it here.');
@@ -1372,7 +1376,7 @@ function openDrawer(id, focusTitle){
     tagsHTML: tagsSection(t),
     subCount: subs.length,
     canCompleteAll: !ro && subs.some(s => !s.done),
-    startLinksHTML: startLinks,
+    startLinksHTML: '',
     outputsHTML: outputs,
     extraSideHTML: (DRAWER_HIDDEN.chats ? '' : chatSection(t)) + (DRAWER_HIDDEN.deps ? '' : dependenciesSection(t)),
     historyHTML: '<div id="f-history">' + historyEmpty + '</div>',

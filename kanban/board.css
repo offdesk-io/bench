@@ -2062,12 +2062,6 @@
      claudeActions(). So does the list of conversations on a task, which this
      file draws itself (cvCardHTML) and no longer borrows a row style for; the
      one thing it kept from that package is the button below. */
-  .aic-addsub{
-    border:1px dashed var(--tenon-stroke-default); background:none; color:var(--tenon-text-subtle);
-    border-radius:var(--tenon-radius-default); padding:4px 9px; font-size:var(--tenon-typography-size-sm);
-    font-weight:600; cursor:pointer;
-  }
-  .aic-addsub:hover{border-color:var(--tenon-text-faint); color:var(--tenon-text-default)}
 
   /* An agenda is drawn as the document it is about to become: the meeting date as
      a title, the word Agenda under it, then a real nested <ul>. Real bullets
@@ -2679,7 +2673,7 @@
      off screen. The label becomes the <summary>: clicking it is the whole
      interaction, and the browser's own show/hide does the rest, so nothing
      here has to track which section is open beyond a CSS arrow. */
-  .dsep{border:none; border-top:1px solid var(--tenon-stroke-default); margin:1px 0}
+  .dsep{border:none; border-top:1px solid var(--tenon-stroke-default); margin:0}
   details.field > summary, details.sugg > summary{
     cursor:pointer; list-style:none; display:flex; align-items:center; gap:5px;
   }
@@ -2690,8 +2684,28 @@
      .field > summary already gives it. Only the colour needs winning back from
      .sugg > summary. */
   details.field.subsec > summary{color:var(--tenon-text-faint)}
-  /* The action sitting in a section's title bar (Files: Add file…). */
-  details.sugg > summary .sumaction{margin-left:auto}
+  /* ---------- one spacing system for every drawer section ----------
+     Three distances, set once here, and nothing inside a section adds its own
+     margin on top (cards, empty text, help text and the rule all sit in the
+     flow these produce):
+       title -> first line     8px   --tenon-dimension-100
+       item  -> item           8px   --tenon-dimension-100   (cards in a list)
+       subsection -> subsection 12px --tenon-dimension-150
+       section -> section      25px  12px + the 1px .dsep rule + 12px,
+                                      --tenon-dimension-150 either side
+     Top level is larger than a subsection, and the rule sits evenly between
+     two top-level sections. A <details> is a flex column with a gap (see
+     .field) and Chrome wraps its body in ::details-content, so the body gets the
+     same flex column or the gaps never reach the items. */
+  details.sugg{gap:var(--tenon-dimension-100)}
+  details.sugg::details-content{display:flex; flex-direction:column; gap:var(--tenon-dimension-100)}
+  details.sugg > summary ~ details.subsec{margin-top:calc(var(--tenon-dimension-150) - var(--tenon-dimension-100))}
+  details.sugg > summary + details.subsec{margin-top:0}
+  .dcol-side{gap:0}
+  .dcol-side > hr.dsep{margin:var(--tenon-dimension-150) 0}
+  /* The action in a section's title bar: Files' Add file…, AI processes' New
+     chat… and Attach a session…. Pushed to the right of the title. */
+  details.sugg > summary .sumaction{margin-left:auto; display:flex; gap:var(--tenon-dimension-100)}
   /* A file is being dragged over the Files section. */
   details.sugg.dropping{outline:2px dashed var(--tenon-stroke-accent); outline-offset:2px; background:var(--tenon-background-accent)}
   /* Start a project and Use an existing folder, as plain text links. */
@@ -2755,15 +2769,14 @@
   }
 
   /* ---------- suggestion sections in the panel ---------- */
-  .sugg .empty{margin:0 0 6px; font-size: var(--tenon-typography-size-sm)}
+  .sugg .empty{margin:0; padding:0; font-size: var(--tenon-typography-size-sm)}
   /* An empty section names the syntax that would fill it in — the same chip
      treatment the other code spans on the board already get. */
   .sugg .empty code{
     background:var(--tenon-background-neutral); padding:1px 5px; border-radius:var(--tenon-radius-default); font-size: var(--tenon-typography-size-sm);
     font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
   }
-  .sugg .msg{margin:0 0 7px; padding:9px 38px 9px 11px}
-  .sugg .msg:last-of-type{margin-bottom:6px}
+  .sugg .msg{margin:0; padding:9px 38px 9px 11px}
   .sugg .msgtext{font-size: var(--tenon-typography-size-sm)}
   /* Which sub-step the message belongs to. A quiet line, not a heading: the
      message underneath is the thing being read. */
@@ -2780,8 +2793,7 @@
      "waiting on" and "blocks" answer different questions, and a slug that is
      both (A waits on B, which also waits on A) is exactly the loop worth
      seeing as two separate, contradicting lists rather than one that hides it. */
-  .depgroup{margin:0 0 12px 14px}
-  .depgroup:last-child{margin-bottom:6px}
+  .depgroup{margin:0 0 0 14px}
   .depcols{display:flex; gap:16px; flex-wrap:wrap}
   .depcol{flex:1; min-width:130px}
   /* One rung under the "Dependencies" summary, not a repeat of it — same
@@ -3011,7 +3023,6 @@
     background:var(--tenon-background-raised); border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-md);
   }
   .pcard{margin-bottom:8px}
-  .aic-actions{display:flex; gap:8px; flex-wrap:wrap}
 
   /* The picker for "Attach a session…" — a session Claude Code has on disk
      that this board has never filed. Small and modal on purpose: it is a
