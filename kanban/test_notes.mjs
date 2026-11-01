@@ -295,57 +295,41 @@ const empty = await evalJS(`
 check('an empty note says so', /Nothing written yet/.test(empty.text), empty.text)
 check('and clicking it still opens the editor', empty.opened === true && empty.caret === 0)
 
-/* ---- Height: a short default, an Expand button, and a draggable corner ----
+/* ---- Height: a short default and a draggable corner ----
    One height on both halves of the field, so nothing below it moves when the
-   note swaps between rendered and raw. The button and the drag are two ways
-   into the same stored number, which is why the label is read off the height
-   rather than off a flag of its own. */
+   note swaps between rendered and raw. The drag is the only way to change it. */
 const heights = await evalJS(`
   (() => {
     localStorage.removeItem('bench-note-height');
     window.__t.body = ${JSON.stringify(NOTE)}.split(String.fromCharCode(10));
     openDrawer(window.__t.id);
     const view = document.querySelector('#f-body-view'), ta = document.querySelector('#f-body');
-    const grow = document.querySelector('#f-body-grow');
-    const start = { view: view.offsetHeight, ta: ta.style.height, label: grow.textContent };
+    const start = { view: view.offsetHeight, ta: ta.style.height };
     // Into the editor and back: the field must not change height either way.
     view.onclick({ target: view, clientX: 0, clientY: 0, preventDefault(){} });
     const editing = ta.offsetHeight;
     ta.dispatchEvent(new KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
-    grow.onclick({ preventDefault(){}, stopPropagation(){} });
-    const big = { view: view.offsetHeight, ta: parseInt(ta.style.height, 10), label: grow.textContent,
-                  stored: +localStorage.getItem('bench-note-height') };
-    grow.onclick({ preventDefault(){}, stopPropagation(){} });
-    const back = { view: view.offsetHeight, label: grow.textContent,
-                   stored: +localStorage.getItem('bench-note-height') };
-    return { start, editing, big, back, open: document.querySelector('[data-collapse="notes"]').open };
+    return { start, editing, noButton: !document.querySelector('#f-body-grow') };
   })()
 `)
 check('the field starts at its short height', heights.start.view === 120, JSON.stringify(heights.start))
-check('and the label offers to expand it', heights.start.label === 'Expand')
+check('and has no Expand button', heights.noButton === true)
 check('clicking into the note does not change the height', heights.editing === 120, String(heights.editing))
-check('Expand grows it', heights.big.view > 200, JSON.stringify(heights.big))
-check('and grows both halves to the same height', heights.big.ta === heights.big.view, JSON.stringify(heights.big))
-check('and remembers it', heights.big.stored === heights.big.view, JSON.stringify(heights.big))
-check('and the label now offers to collapse it', heights.big.label === 'Collapse')
-check('Collapse puts it back', heights.back.view === 120 && heights.back.stored === 120, JSON.stringify(heights.back))
-check('and the button never puts the section away', heights.open === true)
 
 /* The corner is a browser control with no event of its own — dragging it is
    heard through a ResizeObserver, so this sets a height the way a drag does
    and waits a frame for the observer to catch it. */
 const dragged = await evalJS(`
   (async () => {
-    const view = document.querySelector('#f-body-view'), ta = document.querySelector('#f-body'),
-          grow = document.querySelector('#f-body-grow');
+    const view = document.querySelector('#f-body-view'), ta = document.querySelector('#f-body');
     view.style.height = '310px';
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-    return { view: view.offsetHeight, ta: parseInt(ta.style.height, 10), label: grow.textContent,
+    return { view: view.offsetHeight, ta: parseInt(ta.style.height, 10),
              stored: +localStorage.getItem('bench-note-height') };
   })()
 `)
 check('a drag on the corner is heard', dragged.stored === 310, JSON.stringify(dragged))
-check('and carries to the textarea and the button', dragged.ta === 310 && dragged.label === 'Collapse', JSON.stringify(dragged))
+check('and carries to the textarea', dragged.ta === 310, JSON.stringify(dragged))
 
 const reopened = await evalJS(`
   (() => {
@@ -356,8 +340,7 @@ const reopened = await evalJS(`
 check('and the next task opens at that height', reopened === 310, String(reopened))
 await evalJS(`localStorage.removeItem('bench-note-height')`)
 
-/* The line about subtasks moved out from under the field and up beside the
-   label, where Subtasks' own Complete all already sits. */
+/* The Description's title bar carries only its name. */
 const label = await evalJS(`
   (() => {
     const det = document.querySelector('[data-collapse="notes"]');
@@ -365,8 +348,7 @@ const label = await evalJS(`
              under: [...det.children].filter(c => c.tagName !== 'SUMMARY').map(c => c.tagName) };
   })()
 `)
-check('the note about subtasks sits beside the label',
-  /Subtasks are in the list below/.test(label.summary), label.summary)
+check('the title bar is the name and nothing else', label.summary === 'Description', label.summary)
 /* The field itself is Tenon's Textarea since 26 Sep 2026, mounted into a host
    div rather than drawn as a raw <textarea> — so what sits under the label is
    the rendered view and that host, not the field tag directly. #f-body is

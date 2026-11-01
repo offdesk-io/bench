@@ -970,7 +970,8 @@ function taskTagChips(t){
 function tagsSection(t){
   const chips = taskTagChips(t);
   const ro = state.locked;
-  const head = '<span>Tags' + (chips.length > 1 ? ' <em class="sublabel">' + chips.length + '</em>' : '') + '</span>';
+  const head = '<span class="fieldhead">Tags' + (chips.length > 1 ? ' <em class="sublabel">' + chips.length + '</em>' : '') +
+    '<span class="sumaction" id="f-tagadd"></span></span>';
   if (!chips.length && ro) return head +
     emptyState('No tags beyond the fields above. Anything written as '
              + '`[key:: value]` in the task line shows up here.');
@@ -999,6 +1000,7 @@ function wireTagChips(t){
   BoardUI.mountFlushed(wrap, BoardUI.h(BoardUI.TagsField, {
     tags: chips.map(c => ({ label: c.label, value: c.value, editable: c.editable, unrecognised: !!c.unrecognised })),
     locked: state.locked,
+    addHost: $('#f-tagadd'),
     onCommit: (i, v) => {
       const c = chips[i];
       if (c.field) {
@@ -1376,7 +1378,6 @@ function openDrawer(id, focusTitle){
     tagsHTML: tagsSection(t),
     subCount: subs.length,
     canCompleteAll: !ro && subs.some(s => !s.done),
-    startLinksHTML: '',
     outputsHTML: outputs,
     extraSideHTML: (DRAWER_HIDDEN.chats ? '' : chatSection(t)) + (DRAWER_HIDDEN.deps ? '' : dependenciesSection(t)),
     historyHTML: '<div id="f-history">' + historyEmpty + '</div>',
@@ -1526,7 +1527,7 @@ function openDrawer(id, focusTitle){
      Drawn before the wiring below so a backup preview gets the rendering too —
      reading is not editing, and a note is easier to read rendered whether or
      not this panel is allowed to change anything. */
-  const bodyTa = $('#f-body'), bodyView = $('#f-body-view'), bodyGrow = $('#f-body-grow');
+  const bodyTa = $('#f-body'), bodyView = $('#f-body-view');
   let bodySaved = bodyTa.value;
   const renderBody = () => {
     bodyView.innerHTML = mdBlocks(bodyTa.value, { srcmap:true, keepH1:true }) ||
@@ -1535,34 +1536,15 @@ function openDrawer(id, focusTitle){
   renderBody();
 
   /* One height on both halves, so the panel below the field does not move
-     when the field changes state. Expand is the only button, and it reads
-     Collapse whenever the field is standing taller than its floor — which is
-     true after a drag as much as after a press, so the two ways of resizing
-     it cannot disagree about what the button now does. */
+     when the field changes state. The owner sets it by dragging the field's
+     own corner, and it is remembered for the next task. */
   let bodyH = noteHeight();
   const showBodyHeight = h => {
     bodyH = Math.max(NOTE_H_MIN, Math.round(h));
     bodyView.style.height = bodyH + 'px';
     bodyTa.style.height = bodyH + 'px';
-    bodyGrow.textContent = bodyH > NOTE_H_MIN ? 'Collapse' : 'Expand';
-    bodyGrow.title = bodyH > NOTE_H_MIN
-      ? 'Put the note back to its short height'
-      : 'Show the whole note, as much of it as fits';
   };
   showBodyHeight(bodyH);
-
-  bodyGrow.onclick = e => {
-    // Inside a <summary>, so a plain click would put the section away as well.
-    e.preventDefault(); e.stopPropagation();
-    if (bodyH > NOTE_H_MIN) showBodyHeight(NOTE_H_MIN);
-    else {
-      // As much of the note as fits, rather than a fixed second stop: a two
-      // line note has nothing to gain from a field 400px tall.
-      const want = (bodyTa.hidden ? bodyView : bodyTa).scrollHeight + 4;
-      showBodyHeight(Math.max(260, Math.min(want, Math.round(window.innerHeight * 0.6))));
-    }
-    setNoteHeight(bodyH);
-  };
 
   /* Dragging the field's own corner is a browser control with no event of its
      own, and a ResizeObserver is the only way to hear it. A height that is
@@ -1628,7 +1610,7 @@ function openDrawer(id, focusTitle){
   if (typeof mountRunBlock === 'function') mountRunBlock(t);
   $('#drawer').classList.add('open');
   $('#scrim').classList.add('open');
-  if (focusTitle) { const el = $('#f-title'); el.focus(); el.select(); }
+  if (focusTitle) { const el = $('#f-title'); const sec = el.closest('details'); if (sec) sec.open = true; el.focus(); el.select(); }
   // Written into the URL now rather than left for the next full render —
   // opening the drawer alone doesn't otherwise touch the hash. It pushes: a
   // card is somewhere the owner went, and Back is the way out of it. See syncHash()
@@ -1770,7 +1752,7 @@ function openSubtaskDrawer(found){
     '</div>';
 
   $('#sbody').innerHTML = '<div class="dcols"><div class="dcol dcol-main">' +
-    '<label class="field"><span>Title</span><input type="text" id="s-title" value="' + esc(f.title) + '"' + dis + '></label>' +
+    sideSection('Title', 'subtitle', '<input type="text" id="s-title" value="' + esc(f.title) + '"' + dis + '>') +
     reviewHTML +
     '<div class="field"><span>State</span>' + stepPickerHTML('s-substate', SUB_STATES, now, ro, 'State') + '</div>' +
     '<div class="field"><span>Assigned to</span>' + delegateSelectHTML(f.to, dis, 's-to') + '</div>' +
@@ -1785,8 +1767,7 @@ function openSubtaskDrawer(found){
       (took('urgent') || took('week') ? '<span class="help">Any that is ticked and faded is the task\'s.</span>' : '') +
     '</div>' +
     (waitingOn ? '<div class="field"><span>Waiting on</span>' + waitingOn + '</div>' : '') +
-    '<details class="field" data-collapse="subnote" open><summary>Note</summary>' +
-      '<div id="s-note-mount"></div></details>' +
+    sideSection('Note', 'subnote', '<div id="s-note-mount"></div>') +
     '<div class="field inherited"><span>Task</span><span class="dpbtn" style="cursor:default">' + mdInline(t.title) + '</span></div>' +
     '<div class="field inherited"><span>Bucket</span><span class="dpbtn" style="cursor:default">' + esc(loc.bucket.name) + '</span></div>' +
     (proj ? '<div class="field inherited"><span>Project</span><span class="dpbtn" style="cursor:default">' + esc(proj) + '</span></div>' : '') +
@@ -2262,8 +2243,8 @@ async function loadProjectFiles(name){
 
    The default is short on purpose. Most notes are two lines, and a field
    sized for the long ones pushed Bucket, Column and the dates below the fold
-   on every task that wasn't. Expand is there for the long ones, and the
-   field's own corner drags to anything in between. */
+   on every task that wasn't. The field's own corner drags it taller for the
+   long ones. */
 const NOTE_H_KEY = 'bench-note-height';
 const NOTE_H_MIN = 120;
 function noteHeight(){

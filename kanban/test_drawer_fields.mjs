@@ -97,11 +97,31 @@ try {
     const last = [...d.children].pop();
     return last.querySelector('.tagchips') && !last.matches('details') && !d.querySelector('details:not([data-collapse=notes]), hr.dsep');
   })()`))
-  check('Bucket and Description are the first two things in Details, and Theme is not in it', await evalJS(`(() => {
+  check('Bucket, Theme and Description are the first three things in Details', await evalJS(`(() => {
     const d = ${dsel}, kids = [...d.querySelectorAll(':scope > .field')];
-    const th = document.querySelector('#f-theme-dd');
-    return !!kids[0]?.querySelector('[data-pick-host="f-bucket"]') && kids[1]?.matches('details[data-collapse=notes]') &&
-      !(th && d.contains(th));
+    return !!kids[0]?.querySelector('[data-pick-host="f-bucket"]') && !!kids[1]?.querySelector('#f-theme-dd') &&
+      kids[2]?.matches('details.subsec[data-collapse=notes]');
+  })()`))
+  check('Title, Details and Subtasks are top-level sections, the same markup as Outputs', await evalJS(`(() => {
+    const top = k => document.querySelector('.dcol-main > details.field.sugg:not(.subsec)[data-collapse="' + k + '"]');
+    const out = document.querySelector('.dcol-side > details.field.sugg:not(.subsec)[data-collapse="sugg:outputs"]');
+    const same = (a, b) => getComputedStyle(a.querySelector('summary')).fontSize === getComputedStyle(b.querySelector('summary')).fontSize &&
+      getComputedStyle(a.querySelector('summary')).color === getComputedStyle(b.querySelector('summary')).color &&
+      getComputedStyle(a.querySelector('summary')).fontWeight === getComputedStyle(b.querySelector('summary')).fontWeight;
+    return ['sugg:title', 'details', 'sugg:subtasks'].every(k => top(k) && same(top(k), out)) &&
+      !!top('sugg:title').querySelector('#f-title') && !!top('sugg:subtasks').querySelector('#f-subs-host');
+  })()`))
+  check('Add sub-task sits in the Subtasks title bar, and a click in that bar does not toggle the section', await evalJS(`(() => {
+    const sec = document.querySelector('details[data-collapse="sugg:subtasks"]'), b = sec.querySelector('summary .sumaction #f-addsub');
+    if (!b || b.textContent !== 'Add sub-task…') return false;
+    // The bar around the button, so nothing is added; a click there is held back from the summary.
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+    b.parentElement.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  })()`))
+  check('Description has no hint and no Expand button', await evalJS(`(() => {
+    const s = document.querySelector('details[data-collapse=notes] > summary');
+    return s.textContent === 'Description' && !document.querySelector('#f-body-grow');
   })()`))
   check('the pickers inside the closed section still mounted', await evalJS(`!!document.querySelector('#f-tier [role=slider]') && !!document.querySelector('#f-impact [role=slider]') && !!document.querySelector('#f-to-dd .tenon-dropdown__button') && !!document.querySelector('#f-dates .tenon-date-button') && !!document.querySelector('.tagchips .tenon-tag-chip')`))
   await evalJS(`${dsel}.open = true`)
@@ -117,10 +137,10 @@ try {
   check('Files is in Outputs and says so when the task has no folder', await evalJS(`!taskProject(__t()) && !!document.querySelector('details[data-collapse="sugg:files"] #f-files') && document.querySelector('#f-files').textContent === 'No files yet.'`))
   await evalJS(`${dsel}.open = true`)
   await wait(150)
-  check('Description and Column are 14px apart in Details', await evalJS(`(() => {
+  check('Description and Column are 12px apart in Details', await evalJS(`(() => {
     const d = ${dsel}, n = d.querySelector('details[data-collapse=notes]'), c = d.querySelector('#f-tier').closest('.field');
     return Math.round(c.getBoundingClientRect().top - n.getBoundingClientRect().bottom);
-  })()`) === 14)
+  })()`) === 12)
   await evalJS(`${dsel}.open = false`)
   await wait(150)
   check('closing Details hides its fields, and opening shows them again', await evalJS(`!document.querySelector('#f-tier').checkVisibility({ contentVisibilityAuto: true })`) &&
@@ -151,9 +171,9 @@ try {
   /* ---- tags ---- */
 
   check('a [key:: value] tag shows as an amber chip', await evalJS(`(() => {
-    const c = [...document.querySelectorAll('.tagchips .tenon-tag-chip')];
-    return c.length === 2 && c[0].textContent === 'owner: Dev K.' && c[0].classList.contains('tenon-tag-chip--warning') &&
-      c[1].textContent === '+ Add tag';
+    const c = [...document.querySelectorAll('.tagchips .tenon-tag-chip')], add = document.querySelector('#f-tagadd .tenon-tag-chip');
+    return c.length === 1 && c[0].textContent === 'owner: Dev K.' && c[0].classList.contains('tenon-tag-chip--warning') &&
+      !!add && add.textContent === '+ Add tag';
   })()`))
   await evalJS(`document.querySelector('.tagchips .tenon-tag-chip').click()`)
   await wait(100)
@@ -167,9 +187,9 @@ try {
 
   await evalJS(`openDrawer(__t().id)`)
   await wait(200)
-  await evalJS(`document.querySelector('.tagchips .tenon-tag-chip--add').click()`)
+  await evalJS(`document.querySelector('#f-tagadd .tenon-tag-chip--add').click()`)
   await wait(100)
-  await evalJS(`(() => { const i = document.querySelectorAll('.tagchips input'); i[0].value = 'due'; i[1].value = 'x'; })()`)
+  await evalJS(`(() => { const i = document.querySelectorAll('#f-tagadd input'); i[0].value = 'due'; i[1].value = 'x'; })()`)
   await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 })
   await wait(200)
   check('a key the board already reads is refused and nothing is written', await evalJS(`__t().extra.length`) === 1)
@@ -358,7 +378,7 @@ try {
   check('a locked tab disables the sliders, dates and dropdown, makes the chips read-only and drops Add', await evalJS(`
     document.querySelector('#f-impact [role=slider]').getAttribute('aria-disabled') === 'true' &&
     document.querySelector('#f-due').disabled && document.querySelector('#f-to-dd .tenon-dropdown__button').disabled && document.querySelector('#f-bucket-dd .tenon-dropdown__button').disabled &&
-    !document.querySelector('.tagchips .tenon-tag-chip--add') && document.querySelector('.tagchips .tenon-tag-chip').disabled`))
+    !document.querySelector('#f-tagadd .tenon-tag-chip--add') && document.querySelector('.tagchips .tenon-tag-chip').disabled`))
 
   check('every write was torn out before it left the page', await evalJS(`window.__blocked.every(w => /\\/data\\/todo\\.md$/.test(w))`), await evalJS(`window.__blocked.join(' | ')`))
 } finally {

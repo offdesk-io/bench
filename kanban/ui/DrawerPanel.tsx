@@ -72,21 +72,30 @@ function HTMLBox({ as: Tag = 'div', html, ...rest }: { as?: any; html: string; [
    plain), and `sub` marks a subsection with no rule above it. */
 function SideSection(p: {
   label: string; id: string; count?: number; sub?: boolean
+  /** Overrides the 'sugg:<id>' collapse key, for a section whose stored state predates it. */
+  collapseKey?: string
+  /** Extra class on the <details>. */
+  className?: string
   open: (key: string) => boolean; html?: string
+  /** Buttons in the title bar, on the right (sideSection()'s `action`). */
+  action?: React.ReactNode
+  children?: React.ReactNode
 }) {
-  const key = 'sugg:' + p.id
+  const key = p.collapseKey || 'sugg:' + p.id
   const ref = useHTML(p.html)
   return (
     <>
       {p.sub ? null : <hr className="dsep" />}
       <details
-        ref={ref} className={'field sugg' + (p.sub ? ' subsec' : '')}
+        ref={ref} className={'field sugg' + (p.sub ? ' subsec' : '') + (p.className ? ' ' + p.className : '')}
         data-collapse={key} open={p.open(key)}
       >
         <summary>
           {p.label}
           {p.count && p.count > 1 ? <> <em className="sublabel">{p.count}</em></> : null}
+          {p.action ? <span className="sumaction">{p.action}</span> : null}
         </summary>
+        {p.children}
       </details>
     </>
   )
@@ -114,8 +123,6 @@ export interface DrawerBodyProps {
   tagsHTML: string
   subCount: number
   canCompleteAll: boolean
-  /** Start a project / Use an existing folder, as HTML, or empty. */
-  startLinksHTML: string
   /** The Outputs subsections, as HTML. */
   outputsHTML: string
   /** Chats and Dependencies, as HTML; empty while DRAWER_HIDDEN has them off. */
@@ -130,20 +137,14 @@ export function DrawerBody(p: DrawerBodyProps) {
   return (
     <div className="dcols">
       <div className="dcol dcol-main">
-        <label className="field">
-          <span>Title</span>
+        <SideSection label="Title" id="title" open={p.open}>
           <input type="text" id="f-title" defaultValue={p.title} disabled={ro} />
-        </label>
-        {p.themeHTML != null ? <HTMLBox className="field" html={'<span>Theme</span>' + p.themeHTML} /> : null}
-        <details className="field dgroup" data-collapse="details" open={p.open('details')}>
-          <summary>Details</summary>
+        </SideSection>
+        <SideSection label="Details" id="details" collapseKey="details" className="dgroup" open={p.open}>
           <div className="field"><span>Bucket</span><div data-pick-host="f-bucket" /></div>
-          <details className="field" data-collapse="notes" open={noteOpen}>
-            <summary>
-              Description
-              <em className="sublabel">Subtasks are in the list below.</em>
-              <button type="button" className="btn outline small completeall notegrow" id="f-body-grow" />
-            </summary>
+          {p.themeHTML != null ? <HTMLBox className="field" html={'<span>Theme</span>' + p.themeHTML} /> : null}
+          <details className="field sugg subsec" data-collapse="notes" open={noteOpen}>
+            <summary>Description</summary>
             <div id="f-body-view" className="repdoc noteview" title={ro ? undefined : 'Click to edit'} />
             <div id="f-body-mount" />
           </details>
@@ -173,21 +174,21 @@ export function DrawerBody(p: DrawerBodyProps) {
             </label>
           </div>
           <HTMLBox className="field" html={p.tagsHTML} />
-        </details>
-        <div className="field">
-          <span className="fieldhead">
-            Subtasks
-            {p.subCount > 0 && !ro ? <> <em className="sublabel">drag to reorder, click to open</em></> : null}
-            {p.canCompleteAll ? <button type="button" className="btn outline small completeall" id="f-completeall">Complete all</button> : null}
-          </span>
-          <div id="f-subs-host" />
-          {ro ? null : (
-            <button type="button" className="btn dashed small addsub" id="f-addsub" title="Enter keeps adding, blank Enter stops">+ Add subtask</button>
+        </SideSection>
+        <SideSection
+          label="Subtasks" id="subtasks" count={p.subCount} open={p.open}
+          action={ro && !p.canCompleteAll ? undefined : (
+            <>
+              {p.canCompleteAll ? <button type="button" className="btn outline small" id="f-completeall">Complete all</button> : null}
+              {ro ? null : <button type="button" className="btn outline small" id="f-addsub" title="Enter keeps adding, blank Enter stops">Add sub-task…</button>}
+            </>
           )}
-        </div>
+        >
+          <div id="f-subs-host" />
+        </SideSection>
       </div>
       <div className="dcol dcol-side" ref={side}>
-        <SideSection label="Outputs" id="outputs" open={p.open} html={p.startLinksHTML + p.outputsHTML} />
+        <SideSection label="Outputs" id="outputs" open={p.open} html={p.outputsHTML} />
         <SideSection label="History" id="history" open={p.open} html={p.historyHTML} />
       </div>
     </div>

@@ -7,6 +7,7 @@
  * and arrives here as a callback.
  */
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   StepSlider, TagChip, TagChipAdd, Calendar, DateButton, Dropdown, DragHandle, useReorder,
   type Step, type DropdownOption,
@@ -65,9 +66,13 @@ export interface TagsFieldProps {
   /** Returns a refusal message, or nothing once the tag is written. */
   onAdd: (key: string, value: string) => string | void
   onRefuse: (message: string) => void
+  /** Where the add control is drawn, when it sits in the field's title row
+   *  rather than after the last chip. */
+  addHost?: Element | null
 }
 
-export function TagsField({ tags, locked, onCommit, onAdd, onRefuse }: TagsFieldProps) {
+export function TagsField({ tags, locked, onCommit, onAdd, onRefuse, addHost }: TagsFieldProps) {
+  const add = locked ? null : <TagChipAdd onAdd={onAdd} onRefuse={onRefuse} />
   return (
     <>
       {tags.map((t, i) => (
@@ -80,7 +85,7 @@ export function TagsField({ tags, locked, onCommit, onAdd, onRefuse }: TagsField
           onCommit={v => onCommit(i, v)}
         />
       ))}
-      {!locked && <TagChipAdd onAdd={onAdd} onRefuse={onRefuse} />}
+      {addHost ? (add && createPortal(add, addHost)) : add}
     </>
   )
 }
