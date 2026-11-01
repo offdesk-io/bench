@@ -418,22 +418,21 @@ function contextSection(){
    `group` marks the defs that share one tab: Board, Matrix and Timeline are the
    same tasks under three renderers, and three peers between separators spent a
    third of the strip on that. The registry stays flat — the ids, isKnownView(),
-   the #matrix and #timeline fragments and syncHash() all carry on unchanged, and
-   only renderViewTabs() (18-timeline.js) knows the three are offered as one. */
+   the #matrix and #timeline fragments and syncHash() all carry on unchanged. The
+   order is the strip's: Overview, the three renderings, then Agents. */
 function viewDefs(){
   const defs = [
     { id:'overview', label:'Overview' },
     { id:'sep0', sep:true },
     { id:'board',    label:'Board' },
-    { id:'matrix',   label:'Matrix' },
     { id:'timeline', label:'Timeline' },
+    { id:'matrix',   label:'Matrix' },
     { id:'sep1', sep:true },
-    { id:'projects', label:'Projects' },
     { id:'agents',   label:'Agents' }
   ];
   /* The agents run on the owner's Mac, so the shared board has no Agents tab
-     (loadWhoami() in 21-datasets.js). */
-  if (state.who) return defs.filter(d => d.id !== 'agents');
+     (loadWhoami() in 21-datasets.js), and no separator left dangling before it. */
+  if (state.who) return defs.filter(d => d.id !== 'agents' && d.id !== 'sep1');
   return defs;
 }
 /* Backups isn't a view of the board, it's a data operation — see the Backups
@@ -444,8 +443,10 @@ function viewDefs(){
    its two columns are the end of Overview's row now, so a #reports link is
    still a link somebody may have, and renderView() sends it to Overview. 'plans'
    is here the same way: it used to be a tab, and renderView() sends an
-   old #plans link to the board. */
+   old #plans link to the board. 'projects' is a view with no tab: the list of
+   project folders is still drawn for a #projects link, and the project drawer
+   is reached from a task's drawer. */
 function isKnownView(id){
-  return id === 'backups' || id === 'reports' || id === 'plans' || viewDefs().some(d => d.id === id);
+  return id === 'backups' || id === 'reports' || id === 'plans' || id === 'projects' || viewDefs().some(d => d.id === id);
 }
 

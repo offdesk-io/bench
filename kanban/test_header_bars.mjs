@@ -153,19 +153,20 @@ try {
 
   /* ---- chips ---- */
 
-  check('the unscored chip counts the tasks with no score, and the agent chip the delegated ones', await evalJS(`
-    document.querySelector('#scoreChip').textContent === '1 need scoring' && !document.querySelector('#scoreChip').classList.contains('hidden') &&
+  check('the agent chip counts the delegated tasks, and there is no need-scoring chip', await evalJS(`
+    !document.querySelector('#scoreChip') && !/need scoring/.test(document.querySelector('#filterChips').textContent) &&
     document.querySelector('#agentFilterChip').textContent === '1 delegated to an agent'`))
-  await evalJS(`document.querySelector('#scoreChip').click()`)
+  await evalJS(`document.querySelector('#agentFilterChip').click()`)
   await wait(200)
-  check('clicking the unscored chip lights it and narrows the board', await evalJS(`
-    document.querySelector('#scoreChip').getAttribute('aria-pressed') === 'true' &&
-    document.querySelector('#scoreChip').textContent.startsWith('Showing 1 unscored') &&
+  check('clicking the agent chip lights it and narrows the board', await evalJS(`
+    document.querySelector('#agentFilterChip').getAttribute('aria-pressed') === 'true' &&
+    document.querySelector('#agentFilterChip').textContent.startsWith('Showing 1 delegated') &&
     document.querySelectorAll('#board .tenon-card').length === 1`))
-  await evalJS(`document.querySelector('#scoreChip').click()`)
+  await evalJS(`document.querySelector('#agentFilterChip').click()`)
   await wait(200)
   check('and clicking it again puts everything back', await evalJS(`
-    document.querySelector('#scoreChip').getAttribute('aria-pressed') === 'false' && document.querySelectorAll('#board .tenon-card').length === 4`))
+    document.querySelector('#agentFilterChip').getAttribute('aria-pressed') === 'false' && document.querySelectorAll('#board .tenon-card').length === 4`))
+  check('no card says it needs scoring', await evalJS(`!/needs scoring/.test(document.querySelector('#board').textContent)`))
 
   /* ---- the phone's chrome stays out of the desktop ---- */
 
@@ -173,7 +174,7 @@ try {
     typeof BoardUI.PhoneChrome === 'function' && !!document.querySelector('#phTabs') &&
     getComputedStyle(document.querySelector('#phTabs')).display === 'none' &&
     getComputedStyle(document.querySelector('#phTop')).display === 'none' &&
-    document.querySelectorAll('#scoreChip').length === 1 && document.querySelectorAll('#bucketFilters').length === 1`))
+    document.querySelectorAll('#agentFilterChip').length === 1 && document.querySelectorAll('#bucketFilters').length === 1`))
 
   /* ---- the Agents tab hides the strip ---- */
 

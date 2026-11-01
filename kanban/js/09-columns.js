@@ -353,18 +353,12 @@ function cardModel(t, opts){
      has no filled tone to match it. */
   if (!t.done && yourMove(t)) chips.push({ cls: 'tag yourmove', text: 'your move',
     title: 'A sub-task on this card is waiting on you' });
-  /* First, because it says which piece of work this belongs to, and that frames
-     everything after it. Clicking it opens the project rather than the card —
-     see the capture-phase handler on [data-project]. An outlined `Pill`, with
-     `proj` adding the hover and the icon a way into something else wants. */
-  const proj = taskProject(t);
-  if (proj) chips.push({ pill: 'neutral', cls: 'proj', text: proj, project: proj, title: 'Everything on ' + proj });
+  /* No project chip on the card since 1 Nov 2026: the project opens from the
+     drawer (Open project folder, and Files), and the chip repeated what the
+     card's own title and bucket already say. */
   /* The bucket's own sub-organisation — `[theme:: ]`, values declared per
-     bucket (see state.bucketThemes in 02-state.js). Beside the project chip:
-     both answer "what does this belong to", one level up and one level down. */
+     bucket (see state.bucketThemes in 02-state.js). */
   if (t.theme) chips.push({ pill: 'neutral', text: t.theme, title: 'Theme: ' + t.theme });
-  // Says it once, on the card, rather than leaving a gap that reads as "low".
-  if (unscored(t) && !t.done) chips.push({ tone: 'warning', text: 'needs scoring' });
   /* A cancellation is a tick plus a tag (CONVENTIONS.md, Cancelling a task), so
      on the board it is an ordinary done card wearing one more chip rather than
      a state of its own — the same shape every other tag already renders as. It

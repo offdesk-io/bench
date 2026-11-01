@@ -100,8 +100,7 @@ export interface FilterChip {
   avatarHTML?: string
 }
 
-/** The two chips beside the bucket strip: how many need scoring, how many are
- *  with an agent. */
+/** The chips beside the bucket strip: how many are with an agent, and how many are yours. */
 export function FilterChips({ chips }: { chips: FilterChip[] }) {
   return (
     <>
@@ -184,7 +183,7 @@ export interface PhoneChromeProps {
   /** The bucket strip as it stands, read at every render. */
   buckets: () => PhoneBucket[]
   onBucket: (key: string) => void
-  /** The score and mine toggles, then the buckets editor. */
+  /** The mine toggle, then the buckets editor. */
   toggles: () => PhoneToggle[]
   onEditBuckets: (() => void) | null
 }

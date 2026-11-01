@@ -825,8 +825,11 @@ function renderView(){
   // now, on the card, so an old #plans link lands on the board.
   if (state.view === 'plans') state.view = 'board';
   const isBackups = state.view === 'backups';
-  if (!isBackups && !defs.some(d => d.id === state.view)) state.view = 'board';
+  // Projects has no tab, but a #projects link still draws its list.
+  const isProjects = state.view === 'projects';
+  if (!isBackups && !isProjects && !defs.some(d => d.id === state.view)) state.view = 'board';
   const def = isBackups ? { id:'backups', label:'Backups' }
+    : isProjects ? { id:'projects', label:'Projects' }
     : defs.find(d => d.id === state.view);
   const isBoard = def.id === 'board';
   // The bulk action bar only ever means anything on the board — its own
@@ -1134,12 +1137,12 @@ function renderBoard(){
   renderColTabs(columns);
 }
 
-/* The intake queue. Counts across every bucket whatever the tabs say, because
-   a task with no scores is not in a bucket's flow yet — it is waiting to enter
-   one. Clicking it shows exactly those. */
+/* The filter chips beside the bucket strip. The "need scoring" chip is gone
+   (1 Nov 2026), so this only redraws the others; unscored() and the matrix
+   still know what has no score. */
 function renderScoreChip(){ renderFilterChips(); }
 
-/* Next to the unscored chip: how many open tasks are delegated to an agent —
+/* How many open tasks are delegated to an agent —
    on the task itself or on any of its sub-tasks (delegatedToAgent(),
    07-render-board.js) — across every bucket the tabs say, same reasoning as
    the score chip above. Clicking it narrows to just those. */
@@ -1148,25 +1151,14 @@ function renderAgentFilterChip(){ renderFilterChips(); }
 function renderFilterChips(){
   const host = $('#filterChips');
   if (!host) return;
-  let unscoredN = 0, agentN = 0, mineN = 0;
+  let agentN = 0, mineN = 0;
   if (state.doc) state.doc.buckets.forEach(b => b.tiers.forEach(ti => ti.tasks.forEach(t => {
     if (t.done) return;
-    if (unscored(t)) unscoredN++;
     if (delegatedToAgent(t)) agentN++;
     if (forMe(t)) mineN++;
   })));
   const noDoc = !state.doc;
   BoardUI.mountFlushed(host, BoardUI.h(BoardUI.FilterChips, { chips: [
-    {
-      id: 'scoreChip',
-      hidden: noDoc || (unscoredN === 0 && !state.unscoredOnly),
-      on: state.unscoredOnly,
-      text: state.unscoredOnly ? 'Showing ' + unscoredN + ' unscored · show all' : unscoredN + ' need scoring',
-      title: state.unscoredOnly
-        ? 'Back to the whole list'
-        : 'Tasks with no impact or no effort score yet. Click to see just those.',
-      onClick: () => { state.unscoredOnly = !state.unscoredOnly; refreshView(); }
-    },
     {
       id: 'agentFilterChip',
       hidden: noDoc || (agentN === 0 && !state.agentFilter),

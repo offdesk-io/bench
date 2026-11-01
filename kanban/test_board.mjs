@@ -381,8 +381,8 @@ const pillCheck = await evalJS(`(() => {
   renderView();
   return out;
 })()`)
-check('project, theme and start date are outlined Tenon Pills, and none is a .tag',
-  pillCheck.proj === 'demo' && pillCheck.theme === 'Tokens' && pillCheck.start && pillCheck.tags === 0,
+check('theme and start date are outlined Tenon Pills, none is a .tag, and the card carries no project chip',
+  pillCheck.proj === undefined && pillCheck.theme === 'Tokens' && pillCheck.start && pillCheck.tags === 0,
   JSON.stringify(pillCheck))
 
 /* ---- defaultAddBucket() reads the bucket filter ---- */
@@ -419,7 +419,8 @@ check('the view tabs are one radiogroup with the board checked', await evalJS(`(
   const g = document.querySelector('#viewToggle [role=radiogroup].tenon-segmented')
   const on = g && g.querySelector('[role=radio][aria-checked=true]')
   return !!on && on.dataset.value === 'board' && on.tabIndex === 0 &&
-    g.querySelectorAll('[role=radio]').length === 6 &&
+    g.querySelectorAll('[role=radio]').length === 5 &&
+    [...g.querySelectorAll('[role=radio]')].map(r => r.dataset.value).join() === 'overview,board,timeline,matrix,agents' &&
     g.querySelectorAll('.sepbefore').length === 2
 })()`))
 await evalJS(`document.querySelector('#viewToggle [data-value=matrix]').click()`)
@@ -429,9 +430,15 @@ check('picking a tab switches the view and the URL', await evalJS(`
   document.querySelector('#viewToggle [data-value=matrix]').getAttribute('aria-checked') === 'true'
 `))
 await evalJS(`document.querySelector('#viewToggle [data-value=matrix]').dispatchEvent(
-  new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))`)
+  new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))`)
 await new Promise(r => setTimeout(r, 150))
 check('the arrow keys move between views', await evalJS(`state.view === 'timeline'`))
+check('Projects has no tab, but a #projects link still draws its list', await evalJS(`(() => {
+  const none = !document.querySelector('#viewToggle [data-value=projects]');
+  state.view = 'projects'; renderView();
+  const drawn = state.view === 'projects' && !!document.querySelector('#projectsRoot');
+  return none && drawn && isKnownView('projects');
+})()`))
 await evalJS(`state.view = 'board'; renderView()`)
 await new Promise(r => setTimeout(r, 150))
 

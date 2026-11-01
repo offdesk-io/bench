@@ -36,12 +36,6 @@ function phoneBuckets(){
 
 function phoneToggles(){
   const out = [];
-  const score = document.querySelector('#scoreChip');
-  if (score) {
-    const on = score.getAttribute('aria-pressed') === 'true';
-    out.push({ id: 'score', label: on ? score.textContent : (score.hidden ? 'Nothing needs scoring' : score.textContent),
-               on, disabled: score.hidden && !on, onClick: () => phoneClick('#scoreChip') });
-  }
   const mine = document.querySelector('#mineChip');
   if (mine && state.who) {
     const on = mine.getAttribute('aria-pressed') === 'true';

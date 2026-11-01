@@ -274,15 +274,15 @@ async function run (label, width, height) {
     check(at('Filters has no badge while nothing is on'), await evalJS(`!document.querySelector('#phFilterBtn .phbadge')`))
     await evalJS(`document.querySelector('#phFilterBtn').click()`)
     await wait(300)
-    check(at('it offers need scoring, and says when nothing does'), await evalJS(`
-      !!document.querySelector('.phonesheet [data-filter="score"]')`))
+    check(at('it no longer offers need scoring'), await evalJS(`
+      !document.querySelector('.phonesheet [data-filter="score"]')`))
     await key('Escape')
     await wait(200)
-    // The count, with one on: the chip is hidden at zero, so give a task no score.
-    await evalJS(`state.unscoredOnly = true; refreshView()`)
+    // The count, with one on: Mine is the one toggle left, and it is a signed-in one.
+    await evalJS(`state.who = { email: 'me@example.com', name: 'Me' }; state.mineFilter = true; refreshView()`)
     await wait(300)
     check(at('Filters carries a badge counting what is on'), await evalJS(`document.querySelector('#phFilterBtn .phbadge')?.textContent === '1'`))
-    await evalJS(`state.unscoredOnly = false; refreshView()`)
+    await evalJS(`state.mineFilter = false; state.who = null; refreshView()`)
     await wait(200)
 
     // The account sheet.
