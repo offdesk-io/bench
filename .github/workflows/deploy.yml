@@ -15,9 +15,14 @@ permissions:
   contents: read
 
 jobs:
+  # On a Mac, in the owner's timezone, with a claude on the PATH: the board
+  # suites are written against that machine, and on Linux in UTC with no
+  # Claude Code a dozen of them test a different board.
   test:
-    runs-on: ubuntu-24.04
+    runs-on: macos-14
     timeout-minutes: 40
+    env:
+      TZ: Europe/Lisbon
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +45,16 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: bench/package-lock.json
+
+      # The server and the chat engine only ask whether claude is there, which
+      # is what turns agents and chats on. Nothing in a suite starts a real
+      # one, and this stand-in fails if anything tries.
+      - name: A stand-in claude on the PATH
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\necho "stand-in claude: the tests never start a real agent" >&2\nexit 1\n' > "$RUNNER_TEMP/bin/claude"
+          chmod 755 "$RUNNER_TEMP/bin/claude"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
 
       - name: Install
         working-directory: bench
@@ -64,10 +79,9 @@ jobs:
           node core/test_todo.mjs
           node kanban/ui/test_primitives.mjs
 
+      # Google Chrome is in /Applications on the runner, where test_browser.mjs looks.
       - name: Board suites in Chrome
         working-directory: bench
-        env:
-          CHROME_BIN: /usr/bin/google-chrome
         run: scripts/test-board.sh --all
 
   deploy:
