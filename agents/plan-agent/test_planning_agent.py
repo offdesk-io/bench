@@ -24,6 +24,17 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(ROOT, "core"))
 sys.path.insert(0, HERE)
 
+# Every list the suite reads is a throwaway one, so it runs the same on a fresh
+# clone (no data/) as on a Mac with real lists, and never reads those. Set
+# before the imports, since history, tick_queue and agent_runs read
+# $TODOS_DATA_ROOT once, when imported.
+SCRATCH_DATA = tempfile.mkdtemp(prefix="plan-agent-data-")
+os.makedirs(os.path.join(SCRATCH_DATA, "work"))
+open(os.path.join(SCRATCH_DATA, "work", "todo.md"), "w").close()
+with open(os.path.join(SCRATCH_DATA, ".current"), "w") as fh:
+    fh.write("work\n")
+os.environ["TODOS_DATA_ROOT"] = SCRATCH_DATA
+
 import brief  # noqa: E402
 import paths  # noqa: E402
 import pick  # noqa: E402
@@ -35,7 +46,7 @@ import windows  # noqa: E402
 
 # What a test that moves paths.ROOT to a temp tree puts back. paths.py reads
 # every list through DATA_ROOT, so moving ROOT alone left those tests reading
-# the real data/.
+# the data root behind it (SCRATCH_DATA, above).
 REAL_DATA_ROOT = paths.DATA_ROOT
 TZ = dt.timezone(dt.timedelta(hours=1))
 FAILED = []
@@ -1196,8 +1207,11 @@ def test_queue_routes():
             # spends real money on real agents, which is not a thing a test
             # suite gets to do. Claude Code is taken as present, so the lock is
             # what refuses, on a machine without it as much as one with it.
-            real_missing = server.agents_missing
+            # Nor is the suite's own scratch data root: the guard for it would
+            # answer before the lock is reached.
+            real_missing, real_scratch = server.agents_missing, server.SCRATCH
             server.agents_missing = lambda: None
+            server.SCRATCH = False
             try:
                 _, err = server.start_planning_agent_run()
                 check("it will not start a second run on top of one going",
@@ -1212,7 +1226,7 @@ def test_queue_routes():
                 finally:
                     server.ROOT = real_root
             finally:
-                server.agents_missing = real_missing
+                server.agents_missing, server.SCRATCH = real_missing, real_scratch
         finally:
             (server.plans_dir, server.current_dataset, server.todo_path,
              server.planning_lock) = real
@@ -1573,18 +1587,12 @@ def test_max_plans():
     tmp = tempfile.mkdtemp()
     try:
         schedule.path = lambda: os.path.join(tmp, "schedule.json")
-        # With no schedule file, load() asks data/.current, so give it one here.
-        paths.DATA_ROOT = tmp
-        os.makedirs(os.path.join(tmp, "work"))
-        with open(os.path.join(tmp, ".current"), "w") as fh:
-            fh.write("work\n")
         hooks.save_settings("work", {"max_items": 4, "hours": [1, 2]})
         check("the runner's item cap is saved as the schedule's max_plans",
               schedule.load("work")["max_plans"], 4)
         check("and read back as the runner's max_items", hooks.load_settings("work")["max_items"], 4)
     finally:
         schedule.path = real_path
-        paths.DATA_ROOT = REAL_DATA_ROOT
         shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -1872,4 +1880,7 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    finally:
+        shutil.rmtree(SCRATCH_DATA, ignore_errors=True)
