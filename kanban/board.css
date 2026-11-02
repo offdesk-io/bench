@@ -2379,6 +2379,11 @@
   .tenon-column:hover .tenon-card:is(.done,.waiting,.backlog,.todo){opacity:1}
   .tenon-card .tenon-card__eyebrow{display:flex; align-items:center; gap:6px; margin-bottom:5px}
   .bucket{font-size: var(--tenon-typography-size-xs); font-weight:700; letter-spacing:.03em; text-transform:uppercase; color:var(--bc)}
+  /* Author line, top right of the card on the eyebrow's row: plain muted text
+     that truncates before it pushes the bucket name. */
+  .tenon-card .byline{margin-left:auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+    font-size: var(--tenon-typography-size-xs); font-weight:400; color:var(--tenon-text-subtle)}
+  .tenon-card .tenon-card__eyebrow .bucket{flex:none; max-width:70%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
   .tenon-card .tenon-card__eyebrow .right{margin-left:auto; display:flex; gap:5px; align-items:center}
   /* One size and one weight on every card. The task card's own 570 was the
      odd one out — the plan card had been redrawn at Semi Bold most recently

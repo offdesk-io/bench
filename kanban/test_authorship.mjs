@@ -110,6 +110,9 @@ try {
     await until(async () => { await evalJS(`loadActivity()`); return evalJS(`state.authorNames['ana@example.com'] === 'Ana Silva'`) }))
   const cardText = title => evalJS(`(() => { const el = Array.from(document.querySelectorAll('.tenon-card')).find(c => c.textContent.includes(${JSON.stringify(title)})); return el ? el.textContent : ''; })()`)
   check('a card edited by somebody else says who', (await cardText('Shared')).includes('edited by Ana S.'), await cardText('Shared'))
+  check('the byline is plain text in the card\'s top row, not a chip',
+    await evalJS(`(() => { const el = Array.from(document.querySelectorAll('.tenon-card')).find(c => c.textContent.includes('Shared'));
+      const b = el && el.querySelector('.tenon-card__eyebrow .byline'); return !!b && b.textContent === 'edited by Ana S.' && !!b.title && !el.querySelector('.tenon-card__tags .byline'); })()`))
   check('a card only its writer touched says who wrote it', (await cardText('Written by Ana')).includes('by Ana S.'))
   check('a card from before sign-in says nobody', !/\bby\b/.test(await cardText('From before sign-in')), await cardText('From before sign-in'))
 

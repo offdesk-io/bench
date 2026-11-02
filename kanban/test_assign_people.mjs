@@ -150,7 +150,8 @@ try {
 
   const card = title => evalJS(`(() => { const el = Array.from(document.querySelectorAll('#board .tenon-card')).find(c => c.textContent.includes(${JSON.stringify(title)})); return el ? el.innerHTML : ''; })()`)
   const anaCard = await card('For Ana')
-  check('the card shows the person by name', anaCard.includes('→ Ana S.') && !anaCard.includes('→ ana@example.com'))
+  check('the card shows the person by face only, name in the tooltip',
+    anaCard.includes('title="Delegated to Ana S."') && anaCard.includes('aria-label="Delegated to Ana S."') && !anaCard.includes('→'))
   check('with their face', /svg class="person"/.test(anaCard) && />AS<\/text>/.test(anaCard))
   check('the same colour every time',
     await evalJS(`personAvatarSvg('ana@example.com', 'Ana Silva', 16) === personAvatarSvg('ANA@example.com ', 'Ana Silva', 16)`))

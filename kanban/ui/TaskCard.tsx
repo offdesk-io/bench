@@ -39,6 +39,9 @@ export interface Chip {
    *  the delegated chip when `[to::]` names an agent (agentAvatarHTML(),
    *  core/avatar.js), '' or unset for a person. */
   avatarHTML?: string
+  /** Draw the avatar alone (no text); `label` is its accessible name. */
+  avatarOnly?: boolean
+  label?: string
 }
 
 export type CardProgress = { kind: 'steps', done: number, total: number, pct: number }
@@ -60,6 +63,8 @@ export interface TaskCardModel {
   /** Urgent and due, drawn together in the row's own corner. */
   when: Chip[]
   progress: CardProgress | null
+  /** Who wrote or last edited the card, drawn top right as plain text. */
+  byline?: { text: string; title?: string } | null
   /** Null, or absent, for a task with no agent part open. */
   status?: CardRunStatus | null
 }
@@ -91,7 +96,8 @@ export interface TaskCardProps {
 
 function ChipSpan({ c }: { c: Chip }) {
   const avatar = c.avatarHTML
-    ? <span className="avatar" dangerouslySetInnerHTML={{ __html: c.avatarHTML }} />
+    ? <span className="avatar" dangerouslySetInnerHTML={{ __html: c.avatarHTML }}
+        {...(c.avatarOnly ? { role: 'img', 'aria-label': c.label || c.title } : {})} />
     : null
   if (c.tone) return <Tag tone={c.tone} title={c.title}>{avatar}{c.text}</Tag>
   if (c.pill) return (
@@ -150,6 +156,16 @@ export function TaskCard(props: TaskCardProps) {
     </>
   ) : null
 
+  const byline = m.byline
+    ? <span className="byline" title={m.byline.title}>{m.byline.text}</span>
+    : null
+  const eyebrow = (bucketLabel || byline) ? (
+    <>
+      {bucketLabel ? <span className="bucket">{bucketLabel}</span> : null}
+      {byline}
+    </>
+  ) : undefined
+
   const p = m.progress
   const s = m.status
   const prog = !p ? null : (
@@ -182,7 +198,7 @@ export function TaskCard(props: TaskCardProps) {
         onDragStart(e, m.id)
       }}
       onDragEnd={still || !onDragEnd ? undefined : e => onDragEnd(e, m.id)}
-      eyebrow={bucketLabel ? <span className="bucket">{bucketLabel}</span> : undefined}
+      eyebrow={eyebrow}
       title={<InlineMd text={m.title} />}
       tags={tags}
       body={body}

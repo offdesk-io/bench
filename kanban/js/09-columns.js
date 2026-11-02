@@ -385,9 +385,13 @@ function cardModel(t, opts){
     const to = t.to.trim(), agent = agentOf(to), who = assigneeLabel(to);
     /* A person on a shared board is stored by email and shown by name, with
        a round face rather than an agent's square one. */
-    chips.push({ tone: 'accent', text: '→ ' + who, title: 'Delegated to ' + who,
-      avatarHTML: agent ? avatarSvg(agent, 16)
-        : isPersonEmail(to) ? personAvatarSvg(to.toLowerCase(), personFullName(to.toLowerCase()), 16) : undefined });
+    const face = agent ? avatarSvg(agent, 16)
+      : isPersonEmail(to) ? personAvatarSvg(to.toLowerCase(), personFullName(to.toLowerCase()), 16) : undefined;
+    /* Face only on the card (name in the tooltip and aria-label); with no face
+       to draw, the text chip stays so the delegation never vanishes. */
+    chips.push(face
+      ? { tone: 'accent', text: '', title: 'Delegated to ' + who, avatarHTML: face, avatarOnly: true, label: 'Delegated to ' + who }
+      : { tone: 'accent', text: '→ ' + who, title: 'Delegated to ' + who });
   }
   /* A ticket waiting to be raised is a fact about the task worth seeing in the
      column, but the button belongs where there is room for it — the task panel
@@ -407,9 +411,10 @@ function cardModel(t, opts){
     title: 'Recurring ' + rep.label + '. The board moves the date on once this one has passed.' });
   /* Whose the card is, on a shared list: who wrote it, or who last changed
      it when that was somebody else. Last, because it is about the card
-     rather than the work. A list nobody signs in to never has the tags. */
+     rather than the work. A list nobody signs in to never has the tags.
+     Drawn top right of the card as plain text, not as a chip. */
   const by = authorShort(t);
-  if (by) chips.push({ tone: 'neutral', text: by, title: authorLong(t) });
+  const byline = by ? { text: by, title: authorLong(t) } : null;
   // Urgent and due are the "look at this now" signals, so they get their own
   // corner rather than sitting in the wrap with everything else.
   const when = [];
@@ -443,7 +448,7 @@ function cardModel(t, opts){
     id: t.id,
     cls: statusClass.trim() + (t.headline ? ' onething' : '') + (selected ? ' selected' : ''),
     title: t.title,
-    chips, when, progress, status
+    chips, when, progress, status, byline
   };
 }
 
