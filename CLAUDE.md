@@ -165,6 +165,21 @@ a stale document, and saving from it overwrites disk). The bundle is one global
 IIFE, `BoardUI` — keep it one, same reason every file in `kanban/js/` is a
 classic script.
 
+## Deploying to the agency server
+
+A merge to `main` deploys itself: `.github/workflows/deploy.yml` runs every
+test, then sends the commit id to the server, where the deploy key can only run
+`scripts/deploy-forced-command.sh`. That runs the installed copy of
+`scripts/deploy-on-server.sh` (check, checkout, build, restart, health check,
+rollback). `main` is protected, so only an approved PR with passing tests
+gets in.
+
+By hand, from the Mac, as before: `scripts/deploy-server.sh main` (dry run),
+then `--apply`. Both routes share one lock on the server. After changing
+`deploy-on-server.sh` or `deploy-forced-command.sh`, run
+`scripts/install-deploy-key.sh` again, since the server runs its installed
+copies and never the checkout's.
+
 ## Testing the board
 
 Full per-suite detail: [docs/TESTING.md](docs/TESTING.md). Run the browser
