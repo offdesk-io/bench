@@ -285,8 +285,11 @@ await new Promise(r => setTimeout(r, 500))
 check('a folder with no CLAUDE.md says what would describe it', await evalJS(`
   /Nothing describes this folder yet/.test(document.querySelector('#projAbout')?.textContent || '')
 `))
+// In the browser's own locale, as the board writes every date: "1 Aug" in
+// some, "Aug 1" in a headless Chrome left on US English.
 check('and still says when it was last edited', await evalJS(`
-  document.querySelector('#projAbout .projwhen')?.textContent === 'Edited 1 Aug'
+  document.querySelector('#projAbout .projwhen')?.textContent === 'Edited ' +
+    new Date('2026-08-01T09:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 `), await evalJS(`document.querySelector('#projAbout .projwhen')?.textContent`))
 await evalJS(`window.__about = null`)
 
