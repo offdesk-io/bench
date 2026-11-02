@@ -1573,12 +1573,18 @@ def test_max_plans():
     tmp = tempfile.mkdtemp()
     try:
         schedule.path = lambda: os.path.join(tmp, "schedule.json")
+        # With no schedule file, load() asks data/.current, so give it one here.
+        paths.DATA_ROOT = tmp
+        os.makedirs(os.path.join(tmp, "work"))
+        with open(os.path.join(tmp, ".current"), "w") as fh:
+            fh.write("work\n")
         hooks.save_settings("work", {"max_items": 4, "hours": [1, 2]})
         check("the runner's item cap is saved as the schedule's max_plans",
               schedule.load("work")["max_plans"], 4)
         check("and read back as the runner's max_items", hooks.load_settings("work")["max_items"], 4)
     finally:
         schedule.path = real_path
+        paths.DATA_ROOT = REAL_DATA_ROOT
         shutil.rmtree(tmp, ignore_errors=True)
 
 
@@ -1596,7 +1602,8 @@ def test_runner_root():
     # The paths ROOT is used for have to exist from the root the hooks name,
     # which is the check that would have caught it.
     import hooks
-    for rel in ("core/windows.py", "data"):
+    # Tracked paths only: data/ is gitignored, so a fresh clone has none.
+    for rel in ("core/windows.py", "kanban"):
         check("%s exists under the root the hooks use" % rel,
               os.path.exists(os.path.join(hooks.ROOT, rel)), True)
     # run.sh is kept only so the board's Run now still works.
