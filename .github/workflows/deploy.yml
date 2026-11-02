@@ -46,6 +46,7 @@ jobs:
         run: |
           pip install chevron
           npm ci --no-audit --no-fund
+          npm run build
 
       - name: Python and Node suites
         working-directory: bench
