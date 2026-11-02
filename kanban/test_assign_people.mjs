@@ -98,7 +98,8 @@ try {
         // Signed in with an override, an isolate, a mark and a bell in it.
         { email: 'jerome@example.com', name: '\\u202EJérôme\\u2066 Dupont\\u200F\\u0007' },
         { email: 'ana@example.com', name: 'Ana Silva' },
-        { email: 'carla@example.com', name: '' }
+        { email: 'carla@example.com', name: '' },
+        { email: 'pa-tiago@offdesk.invalid', name: 'Tiago Assistant' }
       ] }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
       return real(u, o);
     };
@@ -125,13 +126,18 @@ try {
     await loadBoardPeople();
     renderView();
   })()`)
-  check('signed in, the board\'s people load', await evalJS(`state.boardPeople.length === 4`))
+  check('signed in, the board\'s people load', await evalJS(`state.boardPeople.length === 5`))
   const pick = await evalJS(`(() => { openDrawer(findTaskByKey('ap0001').id);
     const o = PICK_SPECS['f-to'].options; closeDrawer();
     return o.map(x => ({ v: x.value, l: x.label, g: x.group || '', i: x.iconHtml || '' })); })()`)
   const ana = pick.find(o => o.v === 'ana@example.com')
   check('Delegate to offers the board\'s people, stored by email and shown by name',
     !!ana && ana.l === 'Ana S.' && ana.g === 'People', JSON.stringify(pick).slice(0, 300))
+  check('Delegate to leaves the PA\'s sign-in out, and lists the humans',
+    !pick.some(o => /@offdesk\.invalid$/.test(o.v)) && ['ana@example.com', 'jerome@example.com', 'carla@example.com'].every(e => pick.some(o => o.v === e)),
+    JSON.stringify(pick.map(o => o.v)))
+  check('a card the PA edited still resolves its name',
+    await evalJS(`personFullName('pa-tiago@offdesk.invalid') === 'Tiago Assistant'`))
   const jer = pick.find(o => o.v === 'jerome@example.com')
   check('a name is shown as first name and last initial, with bidi and control characters gone',
     !!jer && jer.l === 'Jérôme D.' && !/[\u202A-\u202E\u2066-\u2069\u200E\u200F\u0000-\u001F]/.test(jer.l), JSON.stringify(jer && jer.l))

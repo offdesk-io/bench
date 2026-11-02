@@ -32,8 +32,12 @@ function delegateSelectHTML(value, dis, id){
   /* Signed in, the board's own people come first, stored by email and shown
      by name with their face (/board-people.json). The Mac board has none, and
      offers people.md's names alone, as it always has. */
-  const board = state.who ? (state.boardPeople || []) : [];
-  const emails = board.map(p => p.email);
+  const everyone = state.who ? (state.boardPeople || []) : [];
+  const emails = everyone.map(p => p.email);
+  /* The PA's own sign-in (@offdesk.invalid) is on the list so its name still
+     resolves on cards, but a task is not handed to it here; it stays offered
+     only when this task already names it. */
+  const board = everyone.filter(p => !/@offdesk\.invalid$/i.test(p.email) || p.email === cur);
   const known = new Set(AGENT_NAMES.concat(peopleNames, emails));
   const people = peopleNames.filter(n => emails.indexOf(String(n).toLowerCase()) < 0);
   if (cur && !agentOf(cur) && !known.has(cur)) people.unshift(cur);
