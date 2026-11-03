@@ -39,8 +39,8 @@ without anyone deploying by hand, and only if every test has passed.
 ### 3. The deploy key
 
 - A new key pair, used only by this pipeline.
-- On the server, its `authorized_keys` line forces the one command (`command="<fixed path> \"$SSH_ORIGINAL_COMMAND\""`) with `restrict`: no shell, no port forwarding, no pty. The command accepts a 40-character commit id and nothing else, and deploys it with `--apply`.
-- GitHub holds two repository secrets: `DEPLOY_SSH_KEY` (the private key) and `DEPLOY_KNOWN_HOSTS` (the server's host key line), so the workflow refuses a server it does not recognise. The address is a third secret, `DEPLOY_HOST`, so it is not written in the public repo.
+- On the server, its `authorized_keys` line forces the one command (`command="<fixed path> \"$SSH_ORIGINAL_COMMAND\""`) with `restrict`: no shell, no port forwarding, no pty. The command accepts a 40-character commit id and nothing else, and deploys it with `--apply`. After fetching, the deploy refuses a commit that is not on `origin/main` (`git merge-base --is-ancestor`), so the key cannot put an unmerged commit on the server.
+- GitHub holds two secrets: `DEPLOY_SSH_KEY` (the private key) and `DEPLOY_KNOWN_HOSTS` (the server's host key line), so the workflow refuses a server it does not recognise. The address is a third secret, `DEPLOY_HOST`, so it is not written in the public repo. All three live in a `production` environment that only `main` may use, named by the deploy job, so a workflow on any other branch cannot read them.
 
 ### 4. Protecting `main` (Tiago, in the repo settings)
 

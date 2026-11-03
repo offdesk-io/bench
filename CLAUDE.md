@@ -171,8 +171,9 @@ A merge to `main` deploys itself: `.github/workflows/deploy.yml` runs every
 test, then sends the commit id to the server, where the deploy key can only run
 `scripts/deploy-forced-command.sh`. That runs the installed copy of
 `scripts/deploy-on-server.sh` (check, checkout, build, restart, health check,
-rollback). `main` is protected, so only an approved PR with passing tests
-gets in.
+rollback), and refuses a commit that is not on `origin/main`. The secrets sit
+in the `production` environment, which only `main` can use. `main` is
+protected, so only an approved PR with passing tests gets in.
 
 By hand, from the Mac, as before: `scripts/deploy-server.sh main` (dry run),
 then `--apply`. Both routes share one lock on the server. After changing

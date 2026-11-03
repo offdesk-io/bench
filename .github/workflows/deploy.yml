@@ -73,7 +73,8 @@ jobs:
                    agents/pa_agent/skills/pa/scripts/test_check_todo.py \
                    agents/pa_agent/skills/pa/scripts/test_pa_save.py \
                    companion/test_companion.py \
-                   scripts/test_deploy_forced.py; do
+                   scripts/test_deploy_forced.py \
+                   scripts/test_deploy_on_server.py; do
             echo "== $t"; python3 "$t"
           done
           node core/test_todo.mjs
@@ -89,6 +90,9 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    # The secrets live in this environment, which only main may use, so a
+    # workflow on any other branch cannot read them.
+    environment: production
     concurrency:
       group: deploy-server
       cancel-in-progress: false

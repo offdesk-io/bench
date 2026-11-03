@@ -505,7 +505,7 @@ A merge to main should reach the server without anyone deploying by hand, and on
 
 ## Still to do after merging
 
-1. Tiago makes the deploy key and adds the secrets DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS and DEPLOY_HOST.
+1. Tiago makes the deploy key and adds the secrets DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS and DEPLOY_HOST to the `production` environment.
 2. Protect main: approved PR, passing `test`, no force pushes, no bypass.
 3. First run by hand from the Actions tab.
 
@@ -558,7 +558,7 @@ Expected: the first two print `Refused: this key only deploys one full commit id
 
 ### Task 7: Repo settings (Tiago)
 
-- [ ] **Step 1: Add three repository secrets** (Settings → Secrets and variables → Actions)
+- [ ] **Step 1: Add three environment secrets** (Settings → Environments → New environment `production`; under Deployment branches and tags choose Selected branches and tags and add `main`; then Add environment secret)
 
 | Secret | Value |
 | --- | --- |
