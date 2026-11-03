@@ -60,6 +60,8 @@ jobs:
         working-directory: bench
         run: |
           pip install chevron
+          # deploy-on-server.sh needs bash 4+, as on the server; macOS ships 3.2.
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install bash
           npm ci --no-audit --no-fund
           npm run build
 
