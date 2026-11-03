@@ -69,6 +69,12 @@ if [ "$APPLY" = 1 ]; then
     NEW[$name]="$(resolve_local "$dir" "$ref")" || true
     [ -n "${NEW[$name]:-}" ] || die "$name: '$ref' not found on origin"
   done
+  # Set by deploy-forced-command.sh: the pipeline's key deploys only a commit
+  # the branch has reached, never one the server fetched from anywhere else.
+  if [ -n "${BENCH_DEPLOY_ONLY_ON:-}" ]; then
+    git_in "$BENCH_REPO" merge-base --is-ancestor "${NEW[bench]}" "refs/remotes/origin/$BENCH_DEPLOY_ONLY_ON" \
+      || die "bench: $(short "${NEW[bench]}") is not on origin/$BENCH_DEPLOY_ONLY_ON"
+  fi
 else
   say "DRY RUN (nothing on the server changes). Add --apply to deploy."
   for r in "${REPOS[@]}"; do

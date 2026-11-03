@@ -4,7 +4,8 @@
 # arrives here as SSH_ORIGINAL_COMMAND and is never run as a command.
 #
 # It deploys one full 40-character commit id with --apply, through the
-# installed copy of deploy-on-server.sh, and refuses everything else.
+# installed copy of deploy-on-server.sh, and refuses everything else. That
+# script refuses, after its fetch, a commit that is not on origin/main.
 # Installed by scripts/install-deploy-key.sh, with deploy-on-server.sh beside it.
 
 set -uo pipefail
@@ -16,4 +17,4 @@ if ! [[ "$ref" =~ ^[0-9a-f]{40}$ ]]; then
   exit 2
 fi
 
-exec bash "$DEPLOY_SCRIPT" 1 /opt/agency/bench /opt/agency/PACKAGES "$ref"
+exec env BENCH_DEPLOY_ONLY_ON=main bash "$DEPLOY_SCRIPT" 1 /opt/agency/bench /opt/agency/PACKAGES "$ref"

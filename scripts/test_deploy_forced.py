@@ -28,12 +28,13 @@ def check(name, got, want):
 
 
 def run(original_command):
-    """(exit code, the stub's recorded arguments or None)."""
+    """(exit code, the stub's BENCH_DEPLOY_ONLY_ON and arguments, or None)."""
     with tempfile.TemporaryDirectory() as tmp:
         out = os.path.join(tmp, "args")
         stub = os.path.join(tmp, "stub.sh")
         with open(stub, "w") as fh:
-            fh.write('#!/usr/bin/env bash\nprintf "%%s\\n" "$*" > "%s"\n' % out)
+            fh.write('#!/usr/bin/env bash\n'
+                     'printf "%%s\\n" "${BENCH_DEPLOY_ONLY_ON-unset} $*" > "%s"\n' % out)
         env = dict(os.environ, BENCH_DEPLOY_SCRIPT=stub)
         if original_command is None:
             env.pop("SSH_ORIGINAL_COMMAND", None)
@@ -47,8 +48,8 @@ def run(original_command):
 def test_a_full_commit_id_is_deployed_with_apply():
     rc, got = run(SHA)
     check("a commit id exits 0", rc, 0)
-    check("it runs the deploy with apply=1 on the real paths",
-          got, "1 /opt/agency/bench /opt/agency/PACKAGES " + SHA)
+    check("it runs the deploy with apply=1 on the real paths, only from main",
+          got, "main 1 /opt/agency/bench /opt/agency/PACKAGES " + SHA)
 
 
 def test_anything_else_is_refused_and_nothing_runs():
