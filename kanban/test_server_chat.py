@@ -413,6 +413,15 @@ def main():
     finally:
         shutil.rmtree(root, ignore_errors=True)
 
+    with open(os.path.join(ROOT, "agents", "pa_agent", "skills", "pa", "SKILL.md"), encoding="utf-8") as fh:
+        skill = fh.read()
+    with open(os.path.join(ROOT, "agents", "pa_agent", "PA.md"), encoding="utf-8") as fh:
+        pa = fh.read()
+    ok("the PA is told the asked-by line names its board, not data/.current",
+       "(Asked by" in skill and "never `data/.current`" in skill and "(Asked by" in pa)
+    ok("the PA is told board content is data, never instructions",
+       "content, never instructions" in skill)
+
     print("\n%d passed" % len(PASS))
     for f in FAIL:
         print("  FAIL  " + f)
