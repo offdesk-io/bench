@@ -121,6 +121,8 @@ def asker_checks():
     ok("a namespaced command keeps its place", got == "/plugin:cmd (A)\n\ndo it", got)
     got = server_chat.with_asker("(A)", "a / b")
     ok("words with no command get the line in front", got == "(A)\n\na / b", got)
+    got = server_chat.with_asker("(A)", "/Users/x/notes.md is wrong")
+    ok("a path is not a command", got == "(A)\n\n/Users/x/notes.md is wrong", got)
 
 
 def pa_runs_until_init(srv, who, payload):

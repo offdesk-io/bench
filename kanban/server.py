@@ -3468,6 +3468,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 payload = json.loads((data or b"{}").decode("utf-8"))
             except (UnicodeDecodeError, ValueError):
                 return self._json(400, {"error": "body was not valid JSON"})
+            if not isinstance(payload, dict):
+                return self._json(400, {"error": "body was not a JSON object"})
             got, err = ai_chat.forget(payload.get("owner"), payload.get("session"))
             return self._json(400 if err else 200, err or got)
         # Start a project: a folder under projects_dir() with a CLAUDE.md in it.
@@ -3741,6 +3743,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 payload = json.loads((data or b"{}").decode("utf-8"))
             except (UnicodeDecodeError, ValueError):
                 return self._json(400, {"error": "body was not valid JSON"})
+            if not isinstance(payload, dict):
+                return self._json(400, {"error": "body was not a JSON object"})
             got, err = ai_chat.assign(
                 payload.get("owner"), payload.get("session"), payload.get("to")
             )
@@ -3753,6 +3757,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 payload = json.loads((data or b"{}").decode("utf-8"))
             except (UnicodeDecodeError, ValueError):
                 return self._json(400, {"error": "body was not valid JSON"})
+            if not isinstance(payload, dict):
+                return self._json(400, {"error": "body was not a JSON object"})
             got, err = ai_chat.note(
                 payload.get("owner"), payload.get("session"), payload.get("prompt")
             )

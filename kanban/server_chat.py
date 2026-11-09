@@ -31,7 +31,7 @@ PA_KEY = "board-pa"
 EXTRA_DENIES = ["WebFetch", "WebSearch"]
 KEEP_VERDICTS = 200
 # claude -p runs a prompt as a slash command only when it starts with one.
-COMMAND = re.compile(r"^(/[\w:-]+)\s*")
+COMMAND = re.compile(r"^(/[\w:-]+)(?=\s|$)\s*")
 MAX_NAME = 60
 
 
@@ -243,7 +243,7 @@ class SharedChat:
             try:
                 handler.wfile.write((line + "\n").encode())
                 handler.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):
+            except OSError:
                 listening[0] = False
 
         try:
@@ -270,8 +270,8 @@ class SharedChat:
                     self._keep(sid, email, v)
                     send(json.dumps({"type": "board_pa_check", "hold": v["hold"], "why": v["why"]}))
         finally:
-            gen.close()
             chat_spend.add(self.spend_path, email, cost)
+            gen.close()
         return None
 
     def _verdict(self, payload, reply):
