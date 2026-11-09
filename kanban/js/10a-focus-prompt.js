@@ -81,6 +81,13 @@ function fpStart(d){
   return c;
 }
 
+/* The held card's id and title, for the server's second check: a change to
+   the card the person is holding counts as one they named. */
+function fpFocusRefs(c){
+  const t = fpFindTask(c.key);
+  return t ? [t.stableId, t.title].filter(Boolean) : [];
+}
+
 /* The line ahead of the owner's words that says what is held, readable and
    easy to pick apart: what it is, then what it holds now. */
 function fpReference(c){
@@ -144,14 +151,14 @@ function fpSend(text){
   Object.assign(c, { phase: 'working', line: 'Working on it…', time: fpClock(), fading: false });
   fpRender();
   paBeforeSend();
-  fpRun(c, prompt, ask);
+  fpRun(c, prompt, ask, words);
 }
 
-async function fpRun(c, prompt, ask){
+async function fpRun(c, prompt, ask, words){
   let reply = '', err = '';
   const seen = new Set();
   try {
-    for await (const line of claudeRunLines({ prompt, mode: 'ask', session: c.session, owner: PA_KEY, title: c.title })) {
+    for await (const line of claudeRunLines({ prompt, mode: 'ask', session: c.session, owner: PA_KEY, title: c.title, words: words || '', focus: fpFocusRefs(c) })) {
       let d;
       try { d = JSON.parse(line); } catch (e) { continue; }
       if (d.type === 'board_error') err = d.text || 'the run failed';
@@ -183,7 +190,7 @@ async function fpRun(c, prompt, ask){
   if (err) { playChime('error'); fpSettleLater(c, 'error', err, []); return; }
 
   const before = fpSnapshot();
-  try { await paAfterReply(null, { ask }, reply); } catch (e) { /* the status line has it */ }
+  try { await paAfterReply(null, { ask, session: c.session }, reply); } catch (e) { /* the status line has it */ }
   /* A redraw that took the held element away (the drawer is rebuilt whole)
      ends the focus: there is nothing left on the page for it to be on. */
   const held = typeof BoardUI !== 'undefined' && BoardUI.focusedElement();

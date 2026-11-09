@@ -925,7 +925,12 @@ function makeChatWin(newFor){
     ownerLabel: chatOwnerLabel,
     // The PA's doing:/done: lines are the focus prompt's status, not part of
     // the conversation: taken out of what a window shows. See paStripStatus().
-    transport: { run: chimeWatch(chatRunStripped, k => { lastEnd = k; }), transcript: chatTranscriptStripped },
+    // A PA run also carries the person's own words, for the shared board's
+    // second check (the window's prompt is them, plus the preface on a first
+    // message). paWaiting lives here, per window, so it is added here.
+    transport: { run: chimeWatch((payload, signal) => chatRunStripped(
+      (paWaiting && payload && payload.owner === PA_KEY) ? Object.assign({}, payload, { words: paWaiting.ask || '' }) : payload,
+      signal), k => { lastEnd = k; }), transcript: chatTranscriptStripped },
     readOnlyHelp: '',
     // "Can write" in the head, drawn only while the list's claude.json has
     // "work": true. The server holds a writing run to its cwd and refuses
@@ -1219,6 +1224,21 @@ async function paAfterReply(inst, sent, reply){
     reply = await paReadReply(inst, sent);
   }
   if (!reply || state.locked || !state.doc || modalEl) return;
+  // Signed in, the server's second check decides whether the changes apply
+  // now or wait for the person (kanban/pa_check.py). No verdict is a hold.
+  if (state.who && paChangesFromReply(reply).found) {
+    const sid = (sent && sent.session) || (inst && inst.session ? inst.session() : '');
+    let verdict = null;
+    try { verdict = sid ? await getJSON('/claude/pa-check.json?session=' + encodeURIComponent(sid)) : null; }
+    catch (e) { verdict = null; }               // a 404 or a failed fetch: no verdict
+    const items = (verdict && Array.isArray(verdict.items)) ? verdict.items : paChangesFromReply(reply).items;
+    const block = '```pa-changes\n' + JSON.stringify(items) + '\n```';
+    if (!verdict || verdict.hold !== false) {
+      paHoldChanges(inst, block, (verdict && verdict.why) || 'the check could not be read');
+      return;
+    }
+    reply = block;
+  }
   const out = applyPaChanges(reply);
   paShowOutcome(inst, out);
   return out;
@@ -1644,6 +1664,29 @@ function paShowOutcome(inst, out){
   if (inst && inst.setHeader) inst.setHeader({ subtitle: line });
   $('#status').textContent = 'the PA: ' + (n ? out.applied.join('; ') : 'nothing applied') + (r ? ' — ' + r + ' refused' : '');
   if (r) showToast('PA change refused: ' + out.refused.join('; '), 'blocked');
+}
+
+/* Changes the shared board's check held: listed, with why, and applied only
+   when the person accepts. Undo still takes them back as one step. */
+function paHoldChanges(inst, block, why){
+  const items = paChangesFromReply(block).items;
+  const rows = items.map(it => '<li>' + esc(paDescribe(it)) + '</li>').join('');
+  showModal('Apply the PA\'s changes?',
+    esc('They wait for you because ' + why + '.'),
+    '<ul class="pa-held">' + rows + '</ul>',
+    [{ label: 'Not now' },
+     { label: 'Apply ' + items.length + ' change' + (items.length === 1 ? '' : 's'), primary: true,
+       run: () => paShowOutcome(inst, applyPaChanges(block)) }]);
+  if (inst && inst.setHeader) inst.setHeader({ subtitle: 'changes waiting for you' });
+}
+
+/* One change in plain words, for the held list. */
+function paDescribe(it){
+  if (!it || typeof it !== 'object') return String(it);
+  const what = it.task || it.step || it.title || '';
+  const rest = Object.keys(it).filter(k => !['kind', 'task', 'step', 'title'].includes(k))
+    .map(k => k + ' ' + JSON.stringify(it[k])).join(', ');
+  return (it.kind || 'change') + (what ? ' "' + what + '"' : '') + (rest ? ': ' + rest : '');
 }
 
 /* A top-level task by its exact title — the only thing durable enough to
