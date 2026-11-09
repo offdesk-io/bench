@@ -1,0 +1,114 @@
+# Tests every PR to main. On a merge to main (or a manual run), tests the
+# merged commit again and deploys exactly that commit to the agency server.
+# The server side is scripts/deploy-forced-command.sh; the design is
+# docs/superpowers/specs/2026-10-29-deploy-pipeline-design.md.
+name: Test and deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # On a Mac, in the owner's timezone, with a claude on the PATH: the board
+  # suites are written against that machine, and on Linux in UTC with no
+  # Claude Code a dozen of them test a different board.
+  test:
+    runs-on: macos-14
+    timeout-minutes: 40
+    env:
+      TZ: Europe/Lisbon
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: bench
+
+      # server.py looks for the shared packages at ../PACKAGES, as on the server.
+      - name: Shared packages next to the repo
+        run: |
+          mkdir -p PACKAGES
+          git clone --depth 1 https://github.com/tiagopedras/agents-engine.git PACKAGES/agents-engine
+          git clone --depth 1 https://github.com/tiagopedras/ai-chat-engine.git PACKAGES/ai_chat_engine
+          git clone --depth 1 https://github.com/tiagopedras/work-streams.git PACKAGES/work-streams
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: bench/package-lock.json
+
+      # The server and the chat engine only ask whether claude is there, which
+      # is what turns agents and chats on. Nothing in a suite starts a real
+      # one, and this stand-in fails if anything tries.
+      - name: A stand-in claude on the PATH
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          printf '#!/bin/sh\necho "stand-in claude: the tests never start a real agent" >&2\nexit 1\n' > "$RUNNER_TEMP/bin/claude"
+          chmod 755 "$RUNNER_TEMP/bin/claude"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Install
+        working-directory: bench
+        run: |
+          pip install chevron
+          # deploy-on-server.sh needs bash 4+, as on the server; macOS ships 3.2.
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install bash
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Python and Node suites
+        working-directory: bench
+        run: |
+          set -e
+          for t in core/test_*.py kanban/test_*.py \
+                   agents/plan-agent/test_planning_agent.py \
+                   agents/implement-agent/test_implement_agent.py \
+                   agents/pa_agent/skills/pa/scripts/test_check_todo.py \
+                   agents/pa_agent/skills/pa/scripts/test_pa_save.py \
+                   companion/test_companion.py \
+                   scripts/test_deploy_forced.py \
+                   scripts/test_deploy_on_server.py; do
+            echo "== $t"; python3 "$t"
+          done
+          node core/test_todo.mjs
+          node kanban/ui/test_primitives.mjs
+
+      # Google Chrome is in /Applications on the runner, where test_browser.mjs looks.
+      - name: Board suites in Chrome
+        working-directory: bench
+        run: scripts/test-board.sh --all
+
+  deploy:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # The secrets live in this environment, which only main may use, so a
+    # workflow on any other branch cannot read them.
+    environment: production
+    concurrency:
+      group: deploy-server
+      cancel-in-progress: false
+    steps:
+      - name: Deploy this commit
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy
+          chmod 600 ~/.ssh/deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "root@$DEPLOY_HOST" "$GITHUB_SHA"

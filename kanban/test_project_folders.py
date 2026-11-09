@@ -266,7 +266,7 @@ def main():
         ok("a name only under data/projects/ falls back there", code == 200, "got %d" % code)
         code, _ = open_project(base, "alpha")
         ok("a name in both opens the projects folder's",
-           OPENED[-1] == ["open", os.path.join(shared, "alpha")], repr(OPENED[-1:]))
+           OPENED[-1] == [OPENER, os.path.join(shared, "alpha")], repr(OPENED[-1:]))
         code, _ = get_project(base, os.path.join(shared, "beta"))
         ok("its absolute path needs no approval", code == 200, "got %d" % code)
         code, _ = get_project(base, shared)

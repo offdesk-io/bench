@@ -24,6 +24,17 @@ ROOT = os.path.dirname(os.path.dirname(HERE))
 sys.path.insert(0, os.path.join(ROOT, "core"))
 sys.path.insert(0, HERE)
 
+# Every list the suite reads is a throwaway one, so it runs the same on a fresh
+# clone (no data/) as on a Mac with real lists, and never reads those. Set
+# before the imports, since history, tick_queue and agent_runs read
+# $TODOS_DATA_ROOT once, when imported.
+SCRATCH_DATA = tempfile.mkdtemp(prefix="plan-agent-data-")
+os.makedirs(os.path.join(SCRATCH_DATA, "work"))
+open(os.path.join(SCRATCH_DATA, "work", "todo.md"), "w").close()
+with open(os.path.join(SCRATCH_DATA, ".current"), "w") as fh:
+    fh.write("work\n")
+os.environ["TODOS_DATA_ROOT"] = SCRATCH_DATA
+
 import brief  # noqa: E402
 import paths  # noqa: E402
 import pick  # noqa: E402
@@ -35,7 +46,7 @@ import windows  # noqa: E402
 
 # What a test that moves paths.ROOT to a temp tree puts back. paths.py reads
 # every list through DATA_ROOT, so moving ROOT alone left those tests reading
-# the real data/.
+# the data root behind it (SCRATCH_DATA, above).
 REAL_DATA_ROOT = paths.DATA_ROOT
 TZ = dt.timezone(dt.timedelta(hours=1))
 FAILED = []
@@ -1196,8 +1207,11 @@ def test_queue_routes():
             # spends real money on real agents, which is not a thing a test
             # suite gets to do. Claude Code is taken as present, so the lock is
             # what refuses, on a machine without it as much as one with it.
-            real_missing = server.agents_missing
+            # Nor is the suite's own scratch data root: the guard for it would
+            # answer before the lock is reached.
+            real_missing, real_scratch = server.agents_missing, server.SCRATCH
             server.agents_missing = lambda: None
+            server.SCRATCH = False
             try:
                 _, err = server.start_planning_agent_run()
                 check("it will not start a second run on top of one going",
@@ -1212,7 +1226,7 @@ def test_queue_routes():
                 finally:
                     server.ROOT = real_root
             finally:
-                server.agents_missing = real_missing
+                server.agents_missing, server.SCRATCH = real_missing, real_scratch
         finally:
             (server.plans_dir, server.current_dataset, server.todo_path,
              server.planning_lock) = real
@@ -1596,7 +1610,8 @@ def test_runner_root():
     # The paths ROOT is used for have to exist from the root the hooks name,
     # which is the check that would have caught it.
     import hooks
-    for rel in ("core/windows.py", "data"):
+    # Tracked paths only: data/ is gitignored, so a fresh clone has none.
+    for rel in ("core/windows.py", "kanban"):
         check("%s exists under the root the hooks use" % rel,
               os.path.exists(os.path.join(hooks.ROOT, rel)), True)
     # run.sh is kept only so the board's Run now still works.
@@ -1865,4 +1880,7 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    finally:
+        shutil.rmtree(SCRATCH_DATA, ignore_errors=True)
