@@ -2325,17 +2325,18 @@ if os.path.isdir(AGENTS_ENGINE_DIR):
     except ImportError:
         agents_routes = None
 
-Engine = ChatEndpoints = None
+Engine = ChatEndpoints = server_chat = None
 if os.path.isdir(AI_CHAT_DIR):
     sys.path.insert(0, AI_CHAT_DIR)
     try:
-        from engine import Engine          # noqa: E402  (path set just above)
+        from engine import ASK_DENIES, Engine  # noqa: E402  (path set just above)
         from http_glue import ChatEndpoints  # noqa: E402
+        import server_chat                   # noqa: E402  (imports engine itself)
     except ImportError:
         # ai_chat_engine exists but is missing a file, or is an incompatible
         # version.
         # Same rule as a missing folder: no engine, no buttons — not a crash.
-        Engine = ChatEndpoints = None
+        Engine = ChatEndpoints = server_chat = None
 
 # One engine per dataset, built the first time something asks for it. Each
 # dataset owns its own claude.json and sessions.json exactly as it owns its
@@ -2354,11 +2355,54 @@ def planner_missing(bucket):
         return not planning_agent_plan.agent_on_disk(planning_agent_plan.bucket_agent(bucket))
 
 
-def ai_chat_for(name):
-    # Signed in, there is no chat: it runs Claude Code as whoever started this
-    # server, and that login is the server owner's own.
-    if not Engine or not name or AUTH:
+_shared_chat_cache = {}
+
+
+def shared_chat_for(name):
+    """The signed-in board's chat (kanban/server_chat.py), or None without
+    ANTHROPIC_API_KEY or with an engine older than ask_allows. Each run
+    starts in the board's own folder, so dontAsk refuses every other board,
+    data/users/ and anything added to data/ later; it may read the PA's
+    instructions and the board's outside project folders, and nothing else
+    beyond it. See docs/superpowers/specs/2026-11-04-server-chat-api-design.md, §3."""
+    if not server_chat or not os.environ.get("ANTHROPIC_API_KEY"):
         return None
+    inst = _shared_chat_cache.get(name)
+    if inst is not None:
+        return inst
+    board_dir = dataset_dir(name)
+    try:
+        engine = Engine(default_cwd=board_dir,
+                        config_path=os.path.join(board_dir, "claude.json"),
+                        sessions_path=os.path.join(board_dir, "sessions.json"),
+                        ask_denies=list(ASK_DENIES) + server_chat.EXTRA_DENIES,
+                        ask_allows=server_chat.read_allows(ROOT, board_dir, project_homes(name)))
+    except TypeError:
+        return None
+    read_config = engine.config
+
+    def held_config():
+        cfg = read_config()
+        cfg["cwd"] = board_dir
+        cfg["work"] = False
+        if not cfg.get("model"):
+            cfg["model"] = settings.model_for("chat", DATA_ROOT)
+        return cfg
+    engine.config = held_config
+    inst = server_chat.SharedChat(engine, name, requester,
+                                  os.path.join(DATA_ROOT, "agents", "chat-spend.json"),
+                                  os.environ["AGENTS_FENCES"])
+    _shared_chat_cache[name] = inst
+    return inst
+
+
+def ai_chat_for(name):
+    if not Engine or not name:
+        return None
+    # Signed in, a chat runs only on the server's own API key, never on the
+    # login of whoever started the server (shared_chat_for).
+    if AUTH:
+        return shared_chat_for(name)
     inst = _ai_chat_cache.get(name)
     if inst is None:
         paths = dict(
@@ -2476,7 +2520,8 @@ def shared_refusal(method, path):
     companion and the usage windows read from local Claude Code transcripts,
     and starting the Plan agent on the owner's own subscription. A 404, which
     is what the board already copes with from a host that has none of them.
-    The chat routes need no entry here: ai_chat_for() answers None.
+    The chat routes need no entry here: ai_chat_for() answers None without the
+    server's API key, and kanban/server_chat.py's SharedChat with it.
 
     The settings are the server's, not any one visitor's, and a folder named
     in them is a path on the server, so they are read-only. The profile is
@@ -3154,6 +3199,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             from urllib.parse import parse_qs, urlparse
             q = parse_qs(urlparse(self.path).query)
             got, err = ai_chat.transcript((q.get("session") or [""])[0], (q.get("cwd") or [""])[0])
+            return self._json(404 if err else 200, err or got)
+        # The second check's verdict on the asker's last PA reply, signed in
+        # only (server_chat.SharedChat.pa_check). The tab reads it before it
+        # applies the reply's changes; none found means they wait.
+        if AUTH and ai_chat and path == "/claude/pa-check.json":
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            got, err = ai_chat.pa_check((q.get("session") or [""])[0])
             return self._json(404 if err else 200, err or got)
         # Sessions Claude Code has on disk that aren't filed here yet — the
         # drawer's "Attach a session…" reads this list. ?q= narrows it
