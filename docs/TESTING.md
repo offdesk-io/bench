@@ -131,6 +131,10 @@ python3 companion/test_companion.py   # notify.py and digest.py; the Electron ap
 python3 core/test_notify_due.py    # desktop banners: the rules, the state file, the queue and its lock
 python3 kanban/test_bucket_brief.py # the brief routes — no board, no browser
 python3 kanban/test_board_access.py # signed-in mode and board access — starts its own servers
+python3 kanban/test_chat_spend.py   # the shared board's daily chat ledger and its limits
+python3 kanban/test_pa_check.py     # the second check on a PA reply's changes, with a fake model
+python3 kanban/test_server_chat.py  # chats on the signed-in board, end to end, with a stand-in claude
+python3 kanban/test_server_chat_live.py # the real CLI with the shared board's settings; skips without a key
 # the ones below need the board: scripts/test-board.sh --all runs every one
 node kanban/test_schedule.mjs
 node kanban/test_board_link.mjs   # a banner's link naming its board
@@ -188,6 +192,8 @@ the server in its own thread for the two cases no route reaches from outside:
 a first save to a list with no file, and the drain holding the save lock.
 **`test_authorship.mjs`** is the on-screen half, locked: the names on cards and
 in the task and sub-task panels, the status line, and the Mine chip.
+
+**`test_server_chat.py`** starts its own servers signed in, with a fake `ANTHROPIC_API_KEY` and a stand-in `claude` first on `PATH` that logs how it was started and answers from files the test writes. It needs `ai_chat_engine` with `ask_allows`: set `BENCH_PACKAGES` to a PACKAGES folder that has it. **`test_server_chat_live.py`** runs the real CLI with the same settings and costs a few cents, so it skips without a key; run it on the server after `scripts/setup-server-chat.sh`.
 
 **`test_board_people.py`** holds `/board-people.json` to a board's own people
 (owner, shared-with, signed-in team members), refuses an outsider and the Mac

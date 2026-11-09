@@ -65,6 +65,8 @@ The PA cannot read the asker's own profile in `data/users/`, which is outside th
 
 The board records every PA chat under one key, `board-pa`, in the board's `sessions.json`. When signed in, the server rewrites that key to one per person, `board-pa-<person id>`, where the id is a short hash of the signed-in email, on every route that takes an owner (`/claude`, `/claude/forget`, `/claude/assign`, `/claude/note`, `/claude/attach`). It filters `/claude/sessions.json` so each person sees only their own PA chats, and `/claude/transcript.json` refuses a session recorded under someone else's PA key. Card chats keep their card's key and stay shared.
 
+Attaching a session that started elsewhere (`/claude/attachable.json`, `/claude/attach`) is off when signed in: on a server it would list sessions from the CLI's whole projects folder, across boards and people. The transcript route answers only for a session this board has filed and the person can see. PA chats filed under the old shared key, `board-pa`, are shown to nobody. Signed in, the session index lives at `data/agents/chat-sessions/<board>.json`, outside the board's folder, because a chat may read everything in that folder; the setup script moves any old `data/<board>/sessions.json` out of it. When the words start with a slash command, the "asked by" line goes straight after the command (`/pa (Asked by …)`), since the CLI only runs a command at the very start of the prompt. A connection that drops stops the writing, not the run, so its cost still reaches the ledger; runs are capped at 15 minutes.
+
 ## 5. Spend
 
 - **Monthly.** A spend limit on the offdesk workspace, set in the Anthropic console. It is the hard ceiling.
