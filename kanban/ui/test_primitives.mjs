@@ -231,7 +231,7 @@ check('card — tags, which are markup rather than text',
   h(Card, { title: 'X', tags: h('span', { className: 'tag' }, 'S') }))
 
 check('card — every row at once',
-  "<article class=\"tenon-card tenon-card--flat tenon-card--accent plancard\" style=\"--tenon-card-accent:#1f8a5f\"><div class=\"tenon-card__eyebrow\">DS</div><div class=\"tenon-card__head\"><span class=\"tenon-card__lead\">2</span><div class=\"tenon-card__title\">X</div></div><div class=\"tenon-card__tags\"><span class=\"tag\">M</span></div><div class=\"tenon-card__meta\">Design System</div><div class=\"tenon-card__summary\">A summary.</div><div class=\"tenon-card__footer\">1 note</div></article>",
+  "<article class=\"tenon-card tenon-card--flat tenon-card--accent plancard\" style=\"--tenon-card-accent:#1f8a5f\"><div class=\"tenon-card__eyebrow\">DS</div><div class=\"tenon-card__head\"><span class=\"tenon-card__lead\">2</span><div class=\"tenon-card__title\">X</div></div><div class=\"tenon-card__summary\">A summary.</div><div class=\"tenon-card__tags\"><span class=\"tag\">M</span></div><div class=\"tenon-card__meta\">Design System</div><div class=\"tenon-card__footer\">1 note</div></article>",
   h(Card, toTenonCard({
     title: 'X', eyebrow: 'DS', position: '2', tags: h('span', { className: 'tag' }, 'M'),
     meta: 'Design System', summary: 'A summary.', note: '1 note', stripe: '#1f8a5f',

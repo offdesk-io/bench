@@ -120,7 +120,12 @@ const shadow = title => evalJS(`(() => { const el = ${cardEl(title)}; return el 
 const slides = title => evalJS(`(() => { const el = ${cardEl(title)}; return el ? el.getAnimations().filter(a => !(a instanceof CSSAnimation)).length : -1; })()`)
 const column = title => evalJS(`locate(state.doc.buckets[0].tiers.flatMap(x => x.tasks).find(t => t.title === ${JSON.stringify(title)}).id).tier.name`)
 
+// Motion on, whatever the machine says: a runner with Reduce Motion switched on
+// would otherwise draw every card still and fail the checks that expect a glow.
+const MOTION_ON = { name: 'prefers-reduced-motion', value: 'no-preference' }
+
 try {
+  await send('Emulation.setEmulatedMedia', { features: [MOTION_ON] })
   await wait(2500)
   check('the board loaded', await evalJS(`typeof paWorkingTick === 'function' && typeof settleChanges === 'function'`))
 
@@ -181,7 +186,7 @@ try {
   check('and the settled glow steps rather than fades',
     await evalJS(`getComputedStyle(${cardEl('Write the agenda')}).animationTimingFunction`) === 'steps(1)',
     await evalJS(`getComputedStyle(${cardEl('Write the agenda')}).animationTimingFunction`))
-  await send('Emulation.setEmulatedMedia', { features: [] })
+  await send('Emulation.setEmulatedMedia', { features: [MOTION_ON] })
 
   /* ---- no route behind the page ---- */
 

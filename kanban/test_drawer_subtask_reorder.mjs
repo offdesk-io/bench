@@ -60,6 +60,12 @@ async function evalJS (expr) {
   return r.result?.result?.value
 }
 const wait = ms => new Promise(r => setTimeout(r, ms))
+// A hold is 600ms and the fade 200ms more, which a fixed wait left too little
+// room around on a slow machine; this waits for the state itself instead.
+const until = async (expr, ms = 3000) => {
+  for (let t = 0; t < ms; t += 50) { if (await evalJS(expr)) return true; await wait(50) }
+  return false
+}
 
 try {
   await wait(2500)
@@ -146,7 +152,7 @@ try {
   await evalJS(`window.__fev = []; ['board:focus', 'board:unfocus'].forEach(n => window.addEventListener(n, e =>
     __fev.push(n + ':' + e.detail.kind + ':' + e.detail.taskId + ':' + (e.detail.section || e.detail.subIndex))))`)
   await evalJS(`(() => { const p = __mid(${sec}.querySelector('summary')); __ptr('pointerdown', ${sec}.querySelector('summary'), ...p) })()`)
-  await wait(950)
+  await until(`${sec}.classList.contains('is-held') && __eff(${sib}) <= 0.35 && __eff(${row}) <= 0.35`)
   check('holding a section gives it the held class', await evalJS(`${sec}.classList.contains('is-held')`))
   check('the held section stays lit and its sibling section and the sub-task cards fade',
     await evalJS(`__eff(${sec}) === +getComputedStyle(${sec}).opacity && __eff(${sib}) <= 0.35 && __eff(${row}) <= 0.35`),
@@ -164,7 +170,7 @@ try {
     await evalJS(`__fev.join()`))
 
   await evalJS(`(() => { const r = ${row}; __ptr('pointerdown', r.querySelector('.subtext'), ...__mid(r.querySelector('.subtext'))) })()`)
-  await wait(950)
+  await until(`${row}.classList.contains('is-held') && __eff(document.querySelectorAll('#f-subs .sub')[1]) <= 0.35 && __eff(${sib}) <= 0.35`)
   check('holding a sub-task card gives it the held class, and not its section',
     await evalJS(`${row}.classList.contains('is-held') && !${row}.closest('.dcol > .field').classList.contains('is-held')`))
   check('the other sub-task cards and the other sections fade',

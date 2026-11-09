@@ -222,10 +222,18 @@ await new Promise(r => setTimeout(r, 400))
    Everything below is about one property: a document that is not today's list
    is in the tab, and nothing may write it back. */
 
-await evalJS(`(() => { state.locked = false; state.lockedLabel = ''; state.dirty = true; })()`)
-await evalJS(`document.querySelector('#backupsOut [data-load-url]').click()`)
+// Unlocked and dirty only for the length of the click: loadBackupPreview()
+// refuses before its first await, and a tab left that way across a wait gets
+// saved by the board's own autosave (every 2 s), which a slow machine hits
+// every time.
+const refusedOverUnsaved = await evalJS(`(() => {
+  state.locked = false; state.lockedLabel = ''; state.dirty = true;
+  document.querySelector('#backupsOut [data-load-url]').click();
+  const stayed = state.locked === false;
+  state.dirty = false;
+  return stayed })()`)
 await new Promise(r => setTimeout(r, 400))
-check('a backup will not load over unsaved work', await evalJS(`state.locked === false`))
+check('a backup will not load over unsaved work', refusedOverUnsaved)
 check('and it says why rather than failing quietly', await evalJS(`
   window.__alerts.some(a => /unsaved changes/.test(a))
 `))
