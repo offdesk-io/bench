@@ -93,7 +93,12 @@ def ask_model(prompt, binary, timeout=60):
             cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=timeout)
         got = json.loads(done.stdout)
-        return str(got.get("result") or ""), float(got.get("total_cost_usd") or 0)
+        if not isinstance(got, dict):
+            raise ValueError("the check did not answer with a JSON object")
+        cost = got.get("total_cost_usd") or 0
+        if isinstance(cost, bool) or not isinstance(cost, (int, float)):
+            raise ValueError("the check's cost was not a number")
+        return str(got.get("result") or ""), float(cost)
     finally:
         shutil.rmtree(cwd, ignore_errors=True)
 

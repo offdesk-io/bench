@@ -19,6 +19,7 @@ Imported by server.py only once ai_chat_engine is on sys.path.
 import hashlib
 import json
 import os
+import re
 import threading
 
 import chat_spend
@@ -29,25 +30,58 @@ PA_KEY = "board-pa"
 # Added to the engine's ASK_DENIES, never instead of it.
 EXTRA_DENIES = ["WebFetch", "WebSearch"]
 KEEP_VERDICTS = 200
+# claude -p runs a prompt as a slash command only when it starts with one.
+COMMAND = re.compile(r"^(/[\w:-]+)\s*")
+MAX_NAME = 60
+
+
+def normal_email(email):
+    return str(email or "").strip().lower()
 
 
 def person_key(email):
-    return PA_KEY + "-" + hashlib.sha256(email.strip().lower().encode("utf-8")).hexdigest()[:12]
+    return PA_KEY + "-" + hashlib.sha256(normal_email(email).encode("utf-8")).hexdigest()[:12]
 
 
 def asked_by(name, board):
+    name = " ".join(re.sub(r'["()]', "", str(name or "")).split())[:MAX_NAME].strip() or "someone"
     return '(Asked by %s on the shared board "%s".)' % (name, board)
 
 
-def read_allows(root, board_dir, homes):
+def with_asker(line, words):
+    """The asked-by line in front of the words, or just after the command
+    when the words start with one, so "/pa ..." still runs the PA."""
+    m = COMMAND.match(words)
+    if not m:
+        return line + "\n\n" + words
+    rest = words[m.end():]
+    return m.group(1) + " " + line + ("\n\n" + rest if rest else "")
+
+
+def _within(path, folder):
+    return path == folder or path.startswith(folder.rstrip(os.sep) + os.sep)
+
+
+def read_allows(root, data_root, board_dir, homes):
     """Read rules for what a run may read outside its board's folder: the PA's
-    instructions, and any project folder the board keeps elsewhere."""
+    instructions, and any project folder the board keeps elsewhere. A folder
+    broad enough to hold the board, the data root or the checkout, or one
+    inside the data root (another board's), is left out with a warning."""
     board = os.path.realpath(board_dir)
-    folders = [os.path.realpath(os.path.join(root, "agents", "pa_agent"))]
+    data = os.path.realpath(data_root)
+    checkout = os.path.realpath(root)
+    broad = {os.path.realpath(os.sep), os.path.realpath(os.path.expanduser("~"))}
+    folders = [os.path.realpath(os.path.join(checkout, "agents", "pa_agent"))]
     for home in homes:
         real = os.path.realpath(home)
-        if real != board and not real.startswith(board + os.sep) and real not in folders:
-            folders.append(real)
+        if _within(real, board) or real in folders:
+            continue
+        if real in broad or _within(board, real) or _within(data, real) or _within(checkout, real) \
+                or _within(real, data):
+            print("shared chat: chats on %s may not read %s, it is too broad or inside the data"
+                  % (os.path.basename(board), real))
+            continue
+        folders.append(real)
     # `//` makes a permission-rule path absolute.
     return ["Read(/%s/**)" % f.rstrip("/") for f in folders]
 
@@ -62,6 +96,9 @@ class SharedChat:
         self.check = check or (lambda prompt: pa_check.ask_model(prompt, self.engine.binary()))
         self.verdicts = {}
         self.lock = threading.Lock()
+
+    def _email(self):
+        return normal_email(self.who()["email"])
 
     def guard_ok(self, handler):
         return handler.headers.get("X-Board") == "1"
@@ -118,8 +155,9 @@ class SharedChat:
         return {"sessions": []}
 
     def pa_check(self, session_id):
-        v = self.verdicts.get(session_id or "")
-        if not v or v["email"] != self.who()["email"]:
+        with self.lock:
+            v = self.verdicts.get(session_id or "")
+        if not v or v["email"] != self._email():
             return None, {"error": "no check for that conversation"}
         return {"hold": v["hold"], "why": v["why"], "items": v["items"]}, None
 
@@ -135,6 +173,10 @@ class SharedChat:
         key, to = self._key(owner), self._key(to_owner)
         if not key or not to or not OWNER_KEY.match(key) or not OWNER_KEY.match(to):
             return None, {"error": "bad owner key"}
+        # Into the asker's private PA chats only from there: a card's chat is
+        # everyone's on the board, and hiding it would take it from them.
+        if str(to_owner) == PA_KEY and str(owner) != PA_KEY:
+            return None, {"error": "a card's chat cannot be made a private PA chat"}
         if not SESSION_ID.match(session_id or ""):
             return None, {"error": "not a session id"}
         return {"ok": self.engine.sessions.assign(key, session_id, to)}, None
@@ -149,17 +191,20 @@ class SharedChat:
         return None, {"error": "attaching a session is not on the shared board"}
 
     def stream(self, handler, payload):
+        if not isinstance(payload, dict):
+            return 400, {"error": "the body must be a JSON object"}
         who = self.who()
+        email = normal_email(who["email"])
         mode = payload.get("mode") or "ask"
         if mode != "ask":
             return 403, {"error": "chats on the shared board only read"}
-        why = chat_spend.refusal(self.spend_path, self.fences_path, who["email"])
+        why = chat_spend.refusal(self.spend_path, self.fences_path, email)
         if why:
             return 429, {"error": why}
         words = str(payload.get("prompt") or "").strip()
         if not words:
             return 400, {"error": "no prompt"}
-        prompt = asked_by(who["name"], self.board) + "\n\n" + words
+        prompt = with_asker(asked_by(who["name"], self.board), words)
         if len(prompt) > MAX_PROMPT:
             return 413, {"error": "prompt too long"}
         asked_for = str(payload.get("owner") or payload.get("chat") or "")
@@ -182,52 +227,70 @@ class SharedChat:
         except RuntimeError as err:
             return 501, {"error": str(err)}
 
+        # A verdict kept from an earlier turn must never answer for this one.
+        self._drop(session)
         handler.send_response(200)
         handler.send_header("Content-Type", "application/x-ndjson")
         handler.end_headers()
         reply, cost, sid = "", 0.0, session
-        try:
+        listening = [True]
+
+        def send(line):
+            # A closed tab stops the writing, not the run: the result line and
+            # its cost still have to come, and the verdict is kept for a reload.
+            if not listening[0]:
+                return
             try:
-                for line in gen:
-                    if '"type":"result"' in line or '"subtype":"init"' in line:
-                        try:
-                            row = json.loads(line)
-                        except ValueError:
-                            row = {}
-                        sid = row.get("session_id") or sid
-                        if row.get("type") == "result":
-                            reply = row.get("result") if isinstance(row.get("result"), str) else ""
-                            got = row.get("total_cost_usd")
-                            cost = float(got) if isinstance(got, (int, float)) else 0.0
-                    handler.wfile.write((line + "\n").encode())
-                    handler.wfile.flush()
+                handler.wfile.write((line + "\n").encode())
+                handler.wfile.flush()
             except (BrokenPipeError, ConnectionResetError):
-                gen.close()
-                return None
+                listening[0] = False
+
+        try:
+            for line in gen:
+                if '"type":"result"' in line or '"subtype":"init"' in line:
+                    try:
+                        row = json.loads(line)
+                    except ValueError:
+                        row = {}
+                    row = row if isinstance(row, dict) else {}
+                    got_sid = str(row.get("session_id") or "")
+                    if got_sid and got_sid != sid:
+                        sid = got_sid
+                        self._drop(sid)
+                    if row.get("type") == "result":
+                        reply = row.get("result") if isinstance(row.get("result"), str) else ""
+                        got = row.get("total_cost_usd")
+                        cost = float(got) if isinstance(got, (int, float)) and not isinstance(got, bool) else 0.0
+                send(line)
             if asked_for == PA_KEY and sid:
                 v = self._verdict(payload, reply)
                 if v is not None:
                     cost += v["cost"]
-                    self._keep(sid, who["email"], v)
-                    line = json.dumps({"type": "board_pa_check", "hold": v["hold"], "why": v["why"]})
-                    try:
-                        handler.wfile.write((line + "\n").encode())
-                        handler.wfile.flush()
-                    except (BrokenPipeError, ConnectionResetError):
-                        pass
+                    self._keep(sid, email, v)
+                    send(json.dumps({"type": "board_pa_check", "hold": v["hold"], "why": v["why"]}))
         finally:
-            chat_spend.add(self.spend_path, who["email"], cost)
+            gen.close()
+            chat_spend.add(self.spend_path, email, cost)
         return None
 
     def _verdict(self, payload, reply):
         items = pa_check.changes_in(reply)
         if items == []:
             return None
-        focus = [str(f) for f in (payload.get("focus") or []) if isinstance(f, str)][:4]
-        most = chat_spend.limits(self.fences_path)["auto_apply_max"]
-        v = pa_check.verdict(str(payload.get("words") or ""), items, focus, most, self.check)
+        try:
+            focus = [str(f) for f in (payload.get("focus") or []) if isinstance(f, str)][:4]
+            most = chat_spend.limits(self.fences_path)["auto_apply_max"]
+            v = pa_check.verdict(str(payload.get("words") or ""), items, focus, most, self.check)
+        except Exception:  # noqa: BLE001  (any failure of the check holds the changes)
+            v = {"hold": True, "why": "the check could not run", "cost": 0.0}
         v["items"] = items or []
         return v
+
+    def _drop(self, sid):
+        if sid:
+            with self.lock:
+                self.verdicts.pop(sid, None)
 
     def _keep(self, sid, email, v):
         with self.lock:

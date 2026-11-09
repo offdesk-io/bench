@@ -10,19 +10,31 @@ started and answers from files the test writes. Nothing real is run.
 import json
 import os
 import shutil
+import socket
 import stat
+import struct
 import sys
 import tempfile
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from test_board_access import (BOARD, FAIL, JEROME, PASS, TIAGO, Server, access,  # noqa: E402
-                               as_json, ok, seed)
+                               as_json, seed)
+from test_board_access import ok as _ok  # noqa: E402
+
+
+def ok(label, cond, detail=""):
+    _ok(label, bool(cond), detail if isinstance(detail, str) else repr(detail))
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(ROOT, "core"))
+import bench_root  # noqa: E402
+sys.path.insert(0, os.path.join(bench_root.packages(), "ai_chat_engine"))
+import server_chat  # noqa: E402
 F = "`" * 3
 
 STUB = r'''#!/usr/bin/env python3
-import json, os, sys, uuid
+import json, os, sys, time, uuid
 here = os.environ["STUB_DIR"]
 args = sys.argv[1:]
 with open(os.path.join(here, "log.jsonl"), "a") as fh:
@@ -30,18 +42,23 @@ with open(os.path.join(here, "log.jsonl"), "a") as fh:
 def say(row):
     # Compact, as the real CLI writes stream-json: the engine finds the init
     # and result lines by substring.
-    print(json.dumps(row, separators=(",", ":")))
+    print(json.dumps(row, separators=(",", ":")), flush=True)
 def read(name, default=""):
     try:
         return open(os.path.join(here, name)).read()
     except OSError:
         return default
 if args[args.index("--output-format") + 1] == "json":
+    if os.path.exists(os.path.join(here, "check-raw")):
+        print(read("check-raw"))
+        sys.exit(0)
     say({"type": "result", "result": read("check", "yes"), "total_cost_usd": 0.001})
     sys.exit(0)
 sid = args[args.index("--resume") + 1] if "--resume" in args else str(uuid.uuid4())
 reply = read("reply", "Hello.")
 say({"type": "system", "subtype": "init", "session_id": sid})
+if os.path.exists(os.path.join(here, "slow")):
+    time.sleep(1.5)
 say({"type": "assistant", "message": {"id": "m1", "content": [{"type": "text", "text": reply}]}})
 say({"type": "result", "subtype": "success", "result": reply, "session_id": sid, "total_cost_usd": 0.05})
 '''
@@ -69,8 +86,71 @@ def lines(body):
     return [as_json(l) or {} for l in body.split("\n") if l.strip()]
 
 
+def allow_checks(root):
+    """read_allows() on its own: an outside folder is readable, anything
+    broad enough to hold the board, the data root or the checkout is not."""
+    data = os.path.realpath(os.path.join(root, "data"))
+    board = os.path.join(data, "offdesk")
+    outside = os.path.realpath(os.path.join(root, "outside-projects"))
+    os.makedirs(outside, exist_ok=True)
+    pa = "Read(/%s/**)" % os.path.realpath(os.path.join(ROOT, "agents", "pa_agent"))
+
+    def allows(home):
+        return server_chat.read_allows(ROOT, data, board, [home])
+    got = allows(outside)
+    ok("an outside project folder may be read", got == [pa, "Read(/%s/**)" % outside], got)
+    got = allows(os.path.join(board, "projects"))
+    ok("the board's own projects folder needs no rule", got == [pa], got)
+    for label, home in (("the checkout", ROOT), ("the data root", data),
+                        ("an ancestor of the board", root), ("/", "/"),
+                        ("the home folder", os.path.expanduser("~")),
+                        ("another board's folder", os.path.join(data, "other", "projects"))):
+        got = allows(home)
+        ok("%s may not be read" % label, got == [pa], got)
+
+
+def asker_checks():
+    line = server_chat.asked_by('  Ann  "the (boss)"\n Smith ', "b")
+    ok("the asker's name loses quotes, brackets and runs of space",
+       line == '(Asked by Ann the boss Smith on the shared board "b".)', line)
+    ok("  is capped", len(server_chat.asked_by("x" * 200, "b")) == len(server_chat.asked_by("", "b")) - 7 + 60)
+    ok("  and is someone when nothing is left", "Asked by someone " in server_chat.asked_by('"()"', "b"))
+    got = server_chat.with_asker("(A)", "/pa")
+    ok("a bare command keeps its place", got == "/pa (A)", got)
+    got = server_chat.with_asker("(A)", "/plugin:cmd do it")
+    ok("a namespaced command keeps its place", got == "/plugin:cmd (A)\n\ndo it", got)
+    got = server_chat.with_asker("(A)", "a / b")
+    ok("words with no command get the line in front", got == "(A)\n\na / b", got)
+
+
+def pa_runs_until_init(srv, who, payload):
+    """POST /claude, read until the init line, then hang up: the tab closed."""
+    body = json.dumps(payload).encode()
+    head = dict(who, **BOARD)
+    req = "POST /claude HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: %d\r\n" % len(body)
+    req += "".join("%s: %s\r\n" % kv for kv in head.items()) + "\r\n"
+    s = socket.create_connection(("127.0.0.1", srv.port), timeout=10)
+    s.sendall(req.encode() + body)
+    got = b""
+    while b'"subtype":"init"' not in got or not got.endswith(b"\n"):
+        chunk = s.recv(4096)
+        if not chunk:
+            break
+        got += chunk
+    # Reset rather than close, so the server's next write fails at once.
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack("ii", 1, 0))
+    s.close()
+    for line in got.decode("utf-8", "replace").split("\n"):
+        row = as_json(line.strip()) or {}
+        if row.get("subtype") == "init":
+            return row.get("session_id")
+    return None
+
+
 def main():
     root = tempfile.mkdtemp(prefix="server-chat-")
+    allow_checks(root)
+    asker_checks()
     d = stub(root)
     env = {"PATH": d + os.pathsep + os.environ.get("PATH", ""), "STUB_DIR": d}
     try:
@@ -82,7 +162,7 @@ def main():
         board = os.path.realpath(os.path.join(data, "offdesk"))
         # A claude.json asking for the checkout and for work mode, both ignored.
         with open(os.path.join(board, "claude.json"), "w") as fh:
-            json.dump({"cwd": ROOT, "work": True}, fh)
+            json.dump({"cwd": ROOT, "work": True, "timeout": 3600}, fh)
 
         # --- no key: no chat ------------------------------------------------------
         srv = Server(data, "header", env=env)
@@ -102,6 +182,8 @@ def main():
             ok("signed in with a key: chat is there", code == 200 and st.get("available"), body)
             ok("  and it cannot write, whatever claude.json says", st.get("work") is False, body)
             ok("  and it sits in the board's folder", os.path.realpath(st.get("cwd", "")) == board, body)
+            ok("  and claude.json cannot stretch a run past the engine's default",
+               st.get("timeout") == 900, body)
 
             def ask(who, payload):
                 return srv.ask("POST", "/claude", dict(who, **BOARD), body=payload)
@@ -109,8 +191,12 @@ def main():
             code, body, _ = ask(JEROME, {"prompt": "hi", "mode": "write", "owner": "chat-ab12cd"})
             ok("mode=write is refused", code == 403, "got %d %s" % (code, body))
 
+            code, body, _ = srv.ask("POST", "/claude", dict(JEROME, **BOARD), body=["what is due"])
+            ok("a body that is not an object is refused", code == 400, "got %d %s" % (code, body))
+
             code, body, _ = ask(JEROME, {"prompt": "what is due", "owner": "chat-ab12cd", "title": "Due"})
             ok("a card chat runs", code == 200, "got %d %s" % (code, body))
+            card_sid = next(l["session_id"] for l in lines(body) if l.get("subtype") == "init")
             run = runs(d)[-1]
             argv = run["argv"]
             ok("  in the board's folder", os.path.realpath(run["cwd"]) == board, run["cwd"])
@@ -130,6 +216,9 @@ def main():
             code, body, _ = ask(JEROME, {"prompt": "/pa what now", "owner": "board-pa", "title": "Now", "words": "what now"})
             ok("Jérôme's PA chat runs", code == 200, body)
             jerome_sid = next(l["session_id"] for l in lines(body) if l.get("subtype") == "init")
+            prompt = runs(d)[-1]["argv"][runs(d)[-1]["argv"].index("-p") + 1]
+            ok("a slash command keeps its place, the asked-by line after it",
+               prompt == '/pa (Asked by Jérôme on the shared board "offdesk".)\n\nwhat now', prompt)
             code, body, _ = ask(TIAGO, {"prompt": "/pa and me", "owner": "board-pa", "title": "Me", "words": "and me"})
             tiago_sid = next(l["session_id"] for l in lines(body) if l.get("subtype") == "init")
 
@@ -141,7 +230,9 @@ def main():
                [r["id"] for r in mine.get("board-pa", [])] == [jerome_sid]
                and [r["id"] for r in his.get("board-pa", [])] == [tiago_sid], (mine, his))
             ok("card chats are seen by both", "chat-ab12cd" in mine and "chat-ab12cd" in his, (mine, his))
-            with open(os.path.join(board, "sessions.json")) as fh:
+            ok("the session store is not in the board's folder, where a run could read it",
+               not os.path.exists(os.path.join(board, "sessions.json")))
+            with open(os.path.join(data, "agents", "chat-sessions", "offdesk.json")) as fh:
                 stored = json.load(fh)["chats"]
             ok("PA chats are stored under one key per person",
                len([k for k in stored if k.startswith("board-pa-")]) == 2 and "board-pa" not in stored, stored)
@@ -181,7 +272,7 @@ def main():
             ok("  by the asker only", code == 404, "%d %s" % (code, body))
             check_runs = [r for r in runs(d) if "json" in r["argv"] and "--model" in r["argv"]]
             ok("  the check ran with no tools, outside the board",
-               check_runs and "Read" in check_runs[-1]["argv"]
+               check_runs and "Read" in check_runs[-1]["argv"][check_runs[-1]["argv"].index("--disallowedTools") + 1:]
                and not os.path.realpath(check_runs[-1]["cwd"]).startswith(board), check_runs[-1:])
 
             code, body, _ = ask(JEROME, {"prompt": "/pa tidy up", "owner": "board-pa", "words": "tidy up my board"})
@@ -197,6 +288,50 @@ def main():
             ok("a change the check does not confirm is held",
                check and check[-1]["hold"] is True and "something else" in check[-1]["why"], body)
 
+            # A later turn of the same conversation whose check fails must not
+            # be read back as the earlier turn's yes.
+            with open(os.path.join(d, "check"), "w") as fh:
+                fh.write("yes")
+            code, body, _ = ask(JEROME, {"prompt": "/pa tick it", "owner": "board-pa", "words": "tick it",
+                                         "focus": ["ab12cd"]})
+            turn_sid = next(l["session_id"] for l in lines(body) if l.get("subtype") == "init")
+            got = as_json(srv.ask("GET", "/claude/pa-check.json?session=" + turn_sid, JEROME)[1]) or {}
+            ok("turn one of a conversation is confirmed", got.get("hold") is False, got)
+            with open(os.path.join(d, "check-raw"), "w") as fh:
+                fh.write("[]")
+            code, body, _ = ask(JEROME, {"prompt": "/pa tick it again", "owner": "board-pa",
+                                         "session": turn_sid, "words": "tick it", "focus": ["ab12cd"]})
+            got = as_json(srv.ask("GET", "/claude/pa-check.json?session=" + turn_sid, JEROME)[1]) or {}
+            ok("  turn two, whose check fails, is held rather than read as turn one's yes",
+               got.get("hold") is True and got.get("why") == "the check could not run", got)
+            os.remove(os.path.join(d, "check-raw"))
+            with open(os.path.join(d, "reply"), "w") as fh:
+                fh.write("Nothing to change.")
+            code, body, _ = ask(JEROME, {"prompt": "/pa and now", "owner": "board-pa",
+                                         "session": turn_sid, "words": "and now"})
+            code, body, _ = srv.ask("GET", "/claude/pa-check.json?session=" + turn_sid, JEROME)
+            ok("  and turn three, with no changes, leaves no verdict to read", code == 404,
+               "%d %s" % (code, body))
+            reply('[{"kind":"tick","task":"ab12cd"}]')
+
+            # The tab closes mid-run: the cost still lands, and the verdict is
+            # kept for the tab to read after a reload.
+            with open(os.path.join(board, "..", "agents", "chat-spend.json")) as fh:
+                before = json.load(fh)
+            before = before[sorted(before)[-1]].get("jerome@example.com", 0)
+            open(os.path.join(d, "slow"), "w").close()
+            gone_sid = pa_runs_until_init(srv, JEROME, {"prompt": "/pa tick it", "owner": "board-pa",
+                                                        "words": "tick it", "focus": ["ab12cd"]})
+            time.sleep(3)
+            os.remove(os.path.join(d, "slow"))
+            with open(os.path.join(board, "..", "agents", "chat-spend.json")) as fh:
+                after = json.load(fh)
+            after = after[sorted(after)[-1]].get("jerome@example.com", 0)
+            ok("a run whose tab closed still costs what it cost",
+               abs(after - before - 0.051) < 1e-6, "%r -> %r" % (before, after))
+            got = as_json(srv.ask("GET", "/claude/pa-check.json?session=%s" % gone_sid, JEROME)[1]) or {}
+            ok("  and its verdict is kept", got.get("hold") is False, got)
+
             os.remove(os.path.join(d, "reply"))   # the stand-in answers "Hello."
             code, body, _ = ask(JEROME, {"prompt": "/pa hello", "owner": "board-pa", "words": "hello"})
             ok("a reply with no changes gets no verdict",
@@ -207,7 +342,15 @@ def main():
                 ledger = json.load(fh)
             day = sorted(ledger)[-1]
             ok("every run's cost is in the ledger, the check's included",
-               abs(ledger[day].get("jerome@example.com", 0) - (0.05 * 6 + 0.001 * 2)) < 1e-6, ledger)
+               abs(ledger[day].get("jerome@example.com", 0) - (0.05 * 10 + 0.001 * 4)) < 1e-6, ledger)
+            leaks = []
+            for here, _, names in os.walk(board):
+                for name in names:
+                    with open(os.path.join(here, name), encoding="utf-8", errors="replace") as fh:
+                        text = fh.read()
+                    if jerome_sid in text or tiago_sid in text or "board-pa-" in text:
+                        leaks.append(os.path.join(here, name))
+            ok("no PA conversation is named in any file under the board's folder", not leaks, leaks)
             os.makedirs(os.path.join(data, "agents"), exist_ok=True)
             with open(os.path.join(data, "agents", "fences.json"), "w") as fh:
                 json.dump({"chat_person_budget": 0.3}, fh)
@@ -216,6 +359,40 @@ def main():
                "%d %s" % (code, body))
             code, body, _ = ask(TIAGO, {"prompt": "one more", "owner": "chat-ab12cd"})
             ok("  another person is not", code == 200, "%d %s" % (code, body))
+
+            # --- the PA key, on the routes that name one ----------------------------
+            def post(path, payload, who=JEROME):
+                return srv.ask("POST", path, dict(who, **BOARD), body=payload)
+            named = server_chat.person_key("jerome@example.com")
+            for route, payload in (("/claude/forget", {"owner": named, "session": jerome_sid}),
+                                   ("/claude/note", {"owner": named, "session": jerome_sid, "prompt": "x"}),
+                                   ("/claude/assign", {"owner": named, "session": jerome_sid,
+                                                       "to": "chat-ab12cd"}),
+                                   ("/claude/assign", {"owner": "chat-ab12cd", "session": card_sid,
+                                                       "to": named})):
+                code, body, _ = post(route, payload)
+                ok("%s naming a person's PA key outright is refused" % route, code == 400,
+                   "%d %s" % (code, body))
+            code, body, _ = post("/claude/assign", {"owner": "chat-ab12cd", "session": card_sid,
+                                                    "to": "board-pa"})
+            ok("a card chat cannot be moved into the asker's private PA chats", code == 400,
+               "%d %s" % (code, body))
+            code, body, _ = post("/claude/note", {"owner": "board-pa", "session": jerome_sid,
+                                                  "prompt": "my note"})
+            with open(os.path.join(data, "agents", "chat-sessions", "offdesk.json")) as fh:
+                stored = json.load(fh)["chats"]
+            row = next((r for r in stored.get(named, []) if r["id"] == jerome_sid), {})
+            ok("a note on board-pa lands on the asker's own key", code == 200 and row.get("prompt") == "my note",
+               "%d %s %s" % (code, body, stored))
+            code, body, _ = post("/claude/assign", {"owner": "board-pa", "session": jerome_sid,
+                                                    "to": "chat-ab12cd"})
+            mine = (as_json(srv.ask("GET", "/claude/sessions.json", JEROME)[1]) or {}).get("chats", {})
+            ok("a PA chat can be moved onto a card",
+               code == 200 and jerome_sid in [r["id"] for r in mine.get("chat-ab12cd", [])], "%d %s" % (code, mine))
+            code, body, _ = post("/claude/forget", {"owner": "board-pa", "session": tiago_sid}, TIAGO)
+            his = (as_json(srv.ask("GET", "/claude/sessions.json", TIAGO)[1]) or {}).get("chats", {})
+            ok("forgetting on board-pa forgets from the asker's own key",
+               code == 200 and not his.get("board-pa"), "%d %s" % (code, his))
         finally:
             srv.stop()
 

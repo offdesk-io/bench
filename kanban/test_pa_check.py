@@ -98,5 +98,23 @@ ok("a failed check holds the changes", v["hold"] and "check" in v["why"], v)
 v = pa_check.verdict("tick {it}", one, ["zz9999"], 3, model("yes"))
 ok("braces in the words are fine", v["hold"] is False, v)
 
+# ask_model against a stand-in claude that answers with something other
+# than the JSON object the CLI writes: each is a failure, so the reply waits.
+import shutil, stat, tempfile  # noqa: E402,E401
+bin_dir = tempfile.mkdtemp(prefix="pa-check-test-")
+try:
+    for label, out in (("a JSON list", "[]"), ("a JSON string", '"yes"'), ("not JSON", "yes"),
+                       ("a cost that is not a number", '{"result": "yes", "total_cost_usd": "x"}')):
+        fake = os.path.join(bin_dir, "claude")
+        with open(fake, "w") as fh:
+            fh.write("#!/bin/sh\ncat <<'END'\n%s\nEND\n" % out)
+        os.chmod(fake, os.stat(fake).st_mode | stat.S_IEXEC)
+        v = pa_check.verdict("tick it", one, ["zz9999"], 3,
+                             lambda prompt: pa_check.ask_model(prompt, fake))
+        ok("a check answering with %s holds the changes" % label,
+           v["hold"] and v["why"] == "the check could not run", v)
+finally:
+    shutil.rmtree(bin_dir, ignore_errors=True)
+
 print("\n%d failed" % failed if failed else "\nall checks passed")
 sys.exit(1 if failed else 0)

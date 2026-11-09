@@ -2331,12 +2331,17 @@ if os.path.isdir(AI_CHAT_DIR):
     try:
         from engine import ASK_DENIES, Engine  # noqa: E402  (path set just above)
         from http_glue import ChatEndpoints  # noqa: E402
-        import server_chat                   # noqa: E402  (imports engine itself)
     except ImportError:
         # ai_chat_engine exists but is missing a file, or is an incompatible
         # version.
         # Same rule as a missing folder: no engine, no buttons — not a crash.
-        Engine = ChatEndpoints = server_chat = None
+        Engine = ChatEndpoints = None
+    # On its own, so a problem in the shared board's half never switches off
+    # the Mac board's chat.
+    try:
+        import server_chat  # noqa: E402  (imports engine itself)
+    except ImportError:
+        server_chat = None
 
 # One engine per dataset, built the first time something asks for it. Each
 # dataset owns its own claude.json and sessions.json exactly as it owns its
@@ -2356,6 +2361,7 @@ def planner_missing(bucket):
 
 
 _shared_chat_cache = {}
+_shared_chat_lock = threading.Lock()
 
 
 def shared_chat_for(name):
@@ -2367,16 +2373,28 @@ def shared_chat_for(name):
     beyond it. See docs/superpowers/specs/2026-11-04-server-chat-api-design.md, §3."""
     if not server_chat or not os.environ.get("ANTHROPIC_API_KEY"):
         return None
-    inst = _shared_chat_cache.get(name)
-    if inst is not None:
+    with _shared_chat_lock:
+        inst = _shared_chat_cache.get(name)
+        if inst is None:
+            inst = _build_shared_chat(name)
+            if inst is not None:
+                _shared_chat_cache[name] = inst
         return inst
+
+
+def _build_shared_chat(name):
     board_dir = dataset_dir(name)
+    # The sessions index names every PA chat on the board, the person's own
+    # titles and prompts included, so it is kept outside the run's folder.
+    sessions_dir = os.path.join(DATA_ROOT, "agents", "chat-sessions")
+    os.makedirs(sessions_dir, exist_ok=True)
     try:
         engine = Engine(default_cwd=board_dir,
                         config_path=os.path.join(board_dir, "claude.json"),
-                        sessions_path=os.path.join(board_dir, "sessions.json"),
+                        sessions_path=os.path.join(sessions_dir, name + ".json"),
                         ask_denies=list(ASK_DENIES) + server_chat.EXTRA_DENIES,
-                        ask_allows=server_chat.read_allows(ROOT, board_dir, project_homes(name)))
+                        ask_allows=server_chat.read_allows(ROOT, DATA_ROOT, board_dir,
+                                                           project_homes(name)))
     except TypeError:
         return None
     read_config = engine.config
@@ -2385,15 +2403,15 @@ def shared_chat_for(name):
         cfg = read_config()
         cfg["cwd"] = board_dir
         cfg["work"] = False
+        # claude.json may shorten a run, never stretch it.
+        cfg["timeout"] = min(cfg["timeout"], engine.default_timeout)
         if not cfg.get("model"):
             cfg["model"] = settings.model_for("chat", DATA_ROOT)
         return cfg
     engine.config = held_config
-    inst = server_chat.SharedChat(engine, name, requester,
+    return server_chat.SharedChat(engine, name, requester,
                                   os.path.join(DATA_ROOT, "agents", "chat-spend.json"),
                                   os.environ["AGENTS_FENCES"])
-    _shared_chat_cache[name] = inst
-    return inst
 
 
 def ai_chat_for(name):
