@@ -344,9 +344,10 @@ def _cell(value):
 def write_people_table(text, rows):
     """`text` (a people.md, or "") with its people table replaced by `rows`,
     each {name, role, team, reports_to, notes}. Everything else in the file is
-    kept as it is: headings, prose, the other tables. The table is the first
-    headed `Name | Role`; any further one is dropped, because read_people()
-    merged its rows into the same list. Its columns stay as the file has them,
+    kept as it is: headings, prose, the other tables. The table is the one
+    headed `Name | Role`; a file with two of them raises ValueError, because
+    read_people() merges their rows and there is no telling which a row
+    belongs in. Its columns stay as the file has them,
     and a column the file does not have yet (Team, Reports to, Notes) is added
     on the right. A person already in the file keeps their cells as written
     wherever the saved value is the one read from them. A file with no such
@@ -364,6 +365,8 @@ def write_people_table(text, rows):
             i = j
         else:
             i += 1
+    if len(blocks) > 1:
+        raise ValueError("more than one people table")
     heads = ["Name", "Role"]
     old = {}                # name -> its raw cells in the first table
     if blocks:
@@ -400,26 +403,31 @@ def write_people_table(text, rows):
     if not blocks:
         body = text.rstrip("\n")
         return (body + "\n\n" if body else "# People\n\n") + "\n".join(table) + "\n"
-    out, pos = [], 0
-    for n, (a, b) in enumerate(blocks):
-        out.extend(lines[pos:a])
-        if n == 0:
-            out.extend(table)
-        pos = b
-    out.extend(lines[pos:])
-    return "\n".join(out)
+    a, b = blocks[0]
+    return "\n".join(lines[:a] + table + lines[b:])
 
 
 def write_text_file(path, text):
     """`text` into `path`, through a temp file and a swap, so a crash cannot
     leave half of it for a reader."""
+    # A link (a memory_root file) is written through, so it stays a link.
+    path = os.path.realpath(path)
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8", newline="") as fh:
-        fh.write(text)
-        fh.flush()
-        os.fsync(fh.fileno())
-    os.replace(tmp, path)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".write-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        try:
+            os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+        except OSError:
+            os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
 
 
 def about_path(name=None):
@@ -4012,7 +4020,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._json(404, {"error": "no list you can see"})
         path = people_path(ds)
         text, _ = _read_text(path)
-        write_text_file(path, write_people_table(text, rows))
+        try:
+            table = write_people_table(text, rows)
+        except ValueError:
+            return self._json(409, {"error": "people.md has more than one people table; tidy it by hand first"})
+        write_text_file(path, table)
         text, _ = _read_text(path)
         return self._json(200, {"ok": True, "people": read_people(text)})
 

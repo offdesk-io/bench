@@ -169,12 +169,45 @@ def in_process(root):
         ok("a pipe or line break in a cell cannot split the row",
            code == 200 and got["people"][0]["name"] == "Pipe / Man" and got["people"][0]["role"] == "a b", str(got))
 
+        # --- two people tables: refused, nothing written --------------------------
+        split = PEOPLE_MD + "\n| Name | Role |\n| --- | --- |\n| Zed | Intern |\n"
+        with open(os.path.join(tmp, "people.md"), "w", encoding="utf-8") as fh:
+            fh.write(split)
+        code, got = request(base, "PUT", "/people", {"people": rows}, FROM_BOARD)
+        ok("a file with two people tables is refused with 409",
+           code == 409 and got.get("error") == "people.md has more than one people table; tidy it by hand first",
+           "%s %s" % (code, got))
+        with open(os.path.join(tmp, "people.md"), encoding="utf-8") as fh:
+            ok("and nothing is written", fh.read() == split)
+
+        # --- a linked file is written through ------------------------------------
+        real = os.path.join(root, "memory-folder")
+        os.makedirs(real)
+        target = os.path.join(real, "people.md")
+        with open(target, "w", encoding="utf-8") as fh:
+            fh.write(PEOPLE_MD)
+        link = os.path.join(tmp, "people.md")
+        os.remove(link)
+        os.symlink(target, link)
+        code, got = request(base, "PUT", "/people", {"people": rows}, FROM_BOARD)
+        ok("a linked people.md saves", code == 200, "%s %s" % (code, got))
+        ok("the link is still a link", os.path.islink(link))
+        with open(target, encoding="utf-8") as fh:
+            ok("and the file it points at holds the save", "| Bo | Engineer | Dev | Anu |" in fh.read())
+        ok("with no temp file left in either folder",
+           not [f for d in (tmp, real) for f in os.listdir(d) if f.endswith(".tmp")])
+        os.remove(link)
+        with open(link, "w", encoding="utf-8") as fh:
+            fh.write("# People\n")
+        with open(os.path.join(tmp, "about.md"), "w", encoding="utf-8") as fh:
+            fh.write("A studio of four.\n\nWe build things.")
+
         # --- memory.json --------------------------------------------------------
         code, got = request(base, "GET", "/memory.json")
         ok("memory.json answers", code == 200, "%s %s" % (code, got))
         ok("it names the board", got["board"] == "memory-test")
         ok("and carries the about text", got["about"] == {"text": "A studio of four.\n\nWe build things.", "exists": True})
-        ok("and the people", [p["name"] for p in got["people"]] == ["Pipe / Man"], str(got["people"]))
+        ok("and the people", got["people"] == [], str(got["people"]))
         ok("and every bucket in file order", [b["name"] for b in got["buckets"]] == ["People", "Money"], str(got["buckets"]))
         people_b = got["buckets"][0]
         ok("a bucket carries heading, slug and brief text",
