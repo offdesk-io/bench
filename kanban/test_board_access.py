@@ -116,12 +116,16 @@ class Server:
     def wait(self):
         for _ in range(100):
             if self.proc.poll() is not None:
-                return False
+                break
             try:
                 socket.create_connection(("127.0.0.1", self.port), timeout=0.2).close()
                 return True
             except OSError:
                 time.sleep(0.1)
+        # Say why, rather than only that it did not start: whether it exited
+        # (and with what) or was still running, and everything it printed.
+        state = ("exited %d" % self.proc.returncode) if self.proc.poll() is not None else "still not listening after 10s"
+        sys.stderr.write("server on port %d did not start: %s\n%s\n" % (self.port, state, self.stop()))
         return False
 
     def stop(self):
