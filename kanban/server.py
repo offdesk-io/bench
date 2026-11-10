@@ -2619,6 +2619,20 @@ def static_allowed(segs, trailing):
                                       for f in STATIC_FOLDERS)
 
 
+class BoardHTTPServer(http.server.ThreadingHTTPServer):
+    """ThreadingHTTPServer without the reverse DNS lookup its server_bind()
+    does (socket.getfqdn), only to fill in a server_name nothing here reads.
+    On a machine whose resolver is slow, that lookup kept the board from
+    listening for longer than a test waits, and could stall a real start."""
+
+    def server_bind(self):
+        import socketserver
+        socketserver.TCPServer.server_bind(self)
+        host, port = self.server_address[:2]
+        self.server_name = host
+        self.server_port = port
+
+
 class Handler(http.server.SimpleHTTPRequestHandler):
     # Markdown as text rather than a download. The project drawer links
     # straight at the files in a project folder, and most of them are .md —
@@ -4134,7 +4148,7 @@ def main():
         print("")
 
     try:
-        httpd = http.server.ThreadingHTTPServer((HOST, PORT), Handler)
+        httpd = BoardHTTPServer((HOST, PORT), Handler)
     except OSError as err:
         if err.errno in (48, 98):
             # Attaching to whatever already holds the port is usually right, but
