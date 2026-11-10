@@ -2,8 +2,8 @@
 """Ask for a desktop banner. A shim: the queue belongs to the notifier.
 
 Since 31 Oct 2026 the queue and the script that appends to it live in the
-notifier's own folder beside this checkout (bench_root.notify_home(),
-~/Code/notify on the owner's Mac), with a poster of its own that drains it
+notifier's own folder in PACKAGES (bench_root.notify_home(),
+~/Code/PACKAGES/notify on the owner's Mac), with a poster of its own that drains it
 whether or not the board is running. This file stays so that every caller
 that reaches it by path, inside Bench and out, keeps working with the same
 arguments:
