@@ -129,12 +129,16 @@ class Server:
         return False
 
     def stop(self):
+        # Safe to call twice: wait() reads the output of a server that did not
+        # start, and a check that expects a refusal reads it again.
+        if getattr(self, "out", None) is not None:
+            return self.out
         if self.proc.poll() is None:
             self.proc.terminate()
             self.proc.wait(timeout=5)
-        out = self.proc.stdout.read().decode("utf-8", "replace")
+        self.out = self.proc.stdout.read().decode("utf-8", "replace")
         self.proc.stdout.close()
-        return out
+        return self.out
 
     def ask(self, method, path, headers=None, body=None):
         data = body if isinstance(body, bytes) else (json.dumps(body).encode() if body is not None else None)
