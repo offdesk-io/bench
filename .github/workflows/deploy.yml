@@ -19,7 +19,7 @@ jobs:
   # suites are written against that machine, and on Linux in UTC with no
   # Claude Code a dozen of them test a different board.
   test:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 40
     env:
       TZ: Europe/Lisbon

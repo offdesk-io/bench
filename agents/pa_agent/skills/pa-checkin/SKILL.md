@@ -23,9 +23,11 @@ On a quiet morning where nothing has changed, moves 2, 3 and 5 are the whole ses
 
 **Off by default.** The check-in does not pull meeting actions on its own and does not mention the recorder or the `Meeting actions last pulled` line. Invoke `pa-retrieve-tasks` only when the owner asks for it in this session ("check my calls", "pull my action items"). Otherwise go straight to move 2.
 
-## Move 2: read
+## Move 2: confirm the board, then read
 
-Read `data/.current`, then that dataset's `todo.md`, including the `## Context` section at the bottom. Context holds who is who, who is on leave and whose contract runs out when. It also holds `### How I want messages and prompts written` and `### Recurring meeting prep scripts`, both the owner's own words, and both override anything in the reference files wherever they disagree.
+**Ask which board to review before reading or rendering anything.** Read `data/.current`, name it in the question ("Current list is `<name>`, is that the one?") and wait for the owner's answer. Never brief from `data/.current` unconfirmed. If the owner names a different board, use that one for the whole session.
+
+Then read the confirmed dataset's `todo.md`, including the `## Context` section at the bottom. Context holds who is who, who is on leave and whose contract runs out when. It also holds `### How I want messages and prompts written` and `### Recurring meeting prep scripts`, both the owner's own words, and both override anything in the reference files wherever they disagree.
 
 Then run the checker:
 

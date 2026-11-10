@@ -95,7 +95,7 @@ def main():
     server.dataset_dir = lambda name=None: ds
     server.current_dataset = lambda: "up-test"
 
-    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    httpd = server.BoardHTTPServer(("127.0.0.1", 0), server.Handler)
     port = httpd.server_address[1]
     base = "http://127.0.0.1:%d" % port
     threading.Thread(target=httpd.serve_forever, daemon=True).start()

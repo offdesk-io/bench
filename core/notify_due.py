@@ -24,8 +24,8 @@ restart does not repeat a banner. Entries older than 14 days are dropped.
 The queue half drains the agents' lines for each board, by the rules the
 companion used: nothing before 08:30 or after 20:00 (the `content` board is
 exempt), at most three per tick, the rest left for the next one, and a line
-with no body is dropped. The queue belongs to the notifier, a folder beside
-this checkout (bench_root.notify_home(), ~/Code/notify on the owner's Mac),
+with no body is dropped. The queue belongs to the notifier, a folder in PACKAGES
+(bench_root.notify_home(), ~/Code/PACKAGES/notify on the owner's Mac),
 whose own poster drains it whether or not the board is running; the board
 drains its boards' queues there too, so a Mac where the poster was never
 started loses nothing. Both hold the queue's lock from reading a line to

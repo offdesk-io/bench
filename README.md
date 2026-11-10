@@ -1223,7 +1223,7 @@ before today.
 retried every ten minutes and only its first failure is written to the log.
 
 **Agents' messages.** The queue an agent asks for a banner on belongs to the
-notifier, a folder of its own beside this checkout (`~/Code/notify` on the
+notifier, a folder of its own in PACKAGES (`~/Code/PACKAGES/notify` on the
 owner's Mac, `$NOTIFY_HOME` elsewhere), because agents outside Bench need it as
 much as the ones inside, and they should not have to reach into Bench's folders
 or wait for the board to be open to be heard. It keeps the layout Bench used,

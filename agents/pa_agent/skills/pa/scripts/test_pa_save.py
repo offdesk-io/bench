@@ -195,7 +195,15 @@ def host_checks(root):
         def log_message(self, *a):
             pass
 
-    stub = http.server.HTTPServer(("127.0.0.1", 0), Stub)
+    class NoLookup(http.server.HTTPServer):
+        # HTTPServer.server_bind() looks the host name up in DNS, which can
+        # hang on a machine with a slow resolver (a CI runner).
+        def server_bind(self):
+            import socketserver
+            socketserver.TCPServer.server_bind(self)
+            self.server_name, self.server_port = self.server_address[:2]
+
+    stub = NoLookup(("127.0.0.1", 0), Stub)
     threading.Thread(target=stub.serve_forever, daemon=True).start()
     url = "http://127.0.0.1:%d" % stub.server_address[1]
     env = {"PATH": bin_dir + os.pathsep + os.environ.get("PATH", "")}

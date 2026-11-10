@@ -31,6 +31,7 @@ What it holds to:
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -115,27 +116,45 @@ class Server:
         env.update(extra)
         if auth is not None:
             env["BENCH_AUTH"] = auth
-        self.proc = subprocess.Popen([sys.executable, SERVER], env=env, cwd=ROOT,
+        # -u and -X faulthandler: a server that hangs before it listens can be
+        # made to print every thread's stack (wait() sends SIGABRT).
+        self.proc = subprocess.Popen([sys.executable, "-u", "-X", "faulthandler", SERVER], env=env, cwd=ROOT,
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     def wait(self):
         for _ in range(100):
             if self.proc.poll() is not None:
-                return False
+                break
             try:
                 socket.create_connection(("127.0.0.1", self.port), timeout=0.2).close()
                 return True
             except OSError:
                 time.sleep(0.1)
+        # Say why, rather than only that it did not start: whether it exited
+        # (and with what) or was still running, and everything it printed.
+        if self.proc.poll() is None:
+            state = "still not listening after 10s; its stacks follow"
+            self.proc.send_signal(signal.SIGABRT)
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+        else:
+            state = "exited %d" % self.proc.returncode
+        sys.stderr.write("server on port %d did not start: %s\n%s\n" % (self.port, state, self.stop()))
         return False
 
     def stop(self):
+        # Safe to call twice: wait() reads the output of a server that did not
+        # start, and a check that expects a refusal reads it again.
+        if getattr(self, "out", None) is not None:
+            return self.out
         if self.proc.poll() is None:
             self.proc.terminate()
             self.proc.wait(timeout=5)
-        out = self.proc.stdout.read().decode("utf-8", "replace")
+        self.out = self.proc.stdout.read().decode("utf-8", "replace")
         self.proc.stdout.close()
-        return out
+        return self.out
 
     def ask(self, method, path, headers=None, body=None):
         data = body if isinstance(body, bytes) else (json.dumps(body).encode() if body is not None else None)
