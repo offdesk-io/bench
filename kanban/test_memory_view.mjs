@@ -97,8 +97,10 @@ try {
   // --- Edit and Cancel; one section at a time ------------------------------
   await click('[data-mem-edit=about]')
   check('Edit swaps Company for a form', await evalJS(`!!${$q('[data-mem-about]')} && !!${$q('[data-mem-save=about]')} && !!${$q('[data-mem=about] [data-mem-cancel]')}`))
+  check('while one form is open the other Edit buttons are disabled', await evalJS(`[...document.querySelectorAll('[data-mem-edit]')].every(b => b.disabled)`))
+  await click('[data-mem=about] [data-mem-cancel]')
   await click('[data-mem-edit=people]')
-  check('opening another section closes the first', await evalJS(`!${$q('[data-mem-about]')} && !!${$q('[data-mem=people] [data-mem-add]')}`))
+  check('opening another section after Cancel works', await evalJS(`!${$q('[data-mem-about]')} && !!${$q('[data-mem=people] [data-mem-add]')}`))
   await click('[data-mem=people] [data-mem-cancel]')
   check('Cancel puts the text back', await evalJS(`!${$q('[data-mem=people] input')} && !!${$q('[data-mem-edit=people]')}`))
 
@@ -181,7 +183,7 @@ try {
 
   // --- the hash survives a view switch -------------------------------------
   await evalJS(`state.view = 'board'; syncHash(true); renderView()`)
-  check('leaving the view leaves the board', await evalJS(`!document.querySelector('#memView') || document.querySelector('#lists').classList.contains('hidden')`))
+  check('leaving the view leaves the board', await evalJS(`(() => { const m = document.querySelector('#memView'); return !m || m.offsetParent === null })()`))
   await evalJS(`state.view = 'memory'; syncHash(true); renderView()`)
   check('and the hash names it again', await evalJS(`location.hash.startsWith('#memory')`))
 } finally {

@@ -46,7 +46,7 @@ const MEM_PEOPLE_COLS = [
 function memContextSpan(){
   if (!state.doc) return null;
   for (const arr of [state.doc.pre, state.doc.post]) {
-    const at = arr.findIndex(l => /^##\s+context\b/i.test(l));
+    const at = arr.findIndex(l => /^##\s+context\s*$/i.test(l));
     if (at < 0) continue;
     let end = arr.length;
     for (let i = at + 1; i < arr.length; i++) if (/^##\s/.test(arr[i])) { end = i; break; }
@@ -75,14 +75,16 @@ function memSetContext(text){
 
 /* ---- Drawing ---- */
 
-function memRender(md){
+function memRender(md, isBrief){
   const clean = String(md || '').split('\n')
-    .filter(l => l.trim() !== BRIEF_MARKER && !/^>/.test(l.trim())).join('\n');
+    .filter(l => l.trim() !== BRIEF_MARKER && !(isBrief && /^>/.test(l.trim()))).join('\n');
   return '<div class="repdoc memtext">' + mdBlocks(clean, { keepH1: false }) + '</div>';
 }
 function memEmpty(line){ return '<p class="memempty">' + esc(line) + '</p>'; }
 function memEditBtn(which, hidden){
-  return hidden ? '' : '<button class="btn small outline" data-mem-edit="' + esc(which) + '">Edit</button>';
+  const off = memEditing && memEditing !== which;
+  return hidden ? '' : '<button class="btn small outline" data-mem-edit="' + esc(which) + '"' +
+    (off ? ' disabled title="Save or cancel the open edit first"' : '') + '>Edit</button>';
 }
 function memFormButtons(which){
   return '<div class="memactions">' +
@@ -152,7 +154,7 @@ function memBucketsHTML(){
           memFormButtons(which);
       } else if (!b.exists) body = memEmpty('No brief yet.');
       else if (!b.filled) body = memEmpty('The brief is still the empty template.');
-      else body = memRender(b.text);
+      else body = memRender(b.text, true);
       return '<article class="membucket" data-mem-bucket="' + esc(b.heading) + '">' +
         '<div class="memhead"><h4>' + esc(b.name) + '</h4>' + memEditBtn(which, memEditing === which) + '</div>' + body +
       '</article>';
@@ -244,7 +246,7 @@ async function memSave(which){
     }
   } catch (err) {
     memFormError = String(err.message || err);
-    memDraw();
+    if (state.view === 'memory') memDraw();
     return;
   }
   memEditing = null; memPeopleDraft = null; memBucketParts = null;
