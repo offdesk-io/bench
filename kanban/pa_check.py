@@ -4,9 +4,10 @@ Anyone on a shared board can write a card, and the PA reads cards. So before
 the asker's tab applies a reply's pa-changes block, the server decides whether
 it applies straight away or waits for the person to accept it.
 
-Two rules first, which cost nothing: a reply changing more than
-`auto_max` cards, or changing a card the person's words do not name (the
-focused card counts as named), waits. Then a cheap model sees the person's own
+Rules first, which cost nothing. A reply waits when it changes more than
+`auto_max` cards, when it changes a card the person's words do not name as
+a whole word or title (the focused card counts as named), or when it adds
+more than one card or a card whose title shares no word with what they typed. Then a cheap model sees the person's own
 words and the proposed changes, never any card text, and answers whether the
 person asked for them. Anything but a plain yes waits, and so does a failed
 check. See docs/superpowers/specs/2026-11-04-server-chat-api-design.md, §6.
@@ -23,6 +24,11 @@ ACTION_KINDS = ("open", "view", "filter")
 NO_TOOLS = ["Bash", "Edit", "Write", "NotebookEdit", "Task", "Read", "Grep", "Glob",
             "WebFetch", "WebSearch"]
 MODEL = "haiku"
+# Words too common to tie a new card to what the person typed.
+COMMON = {"this", "that", "these", "those", "with", "from", "into", "about", "what", "when",
+          "which", "there", "their", "have", "will", "would", "could", "should", "week",
+          "today", "tomorrow", "please", "card", "cards", "task", "tasks", "board", "list",
+          "make", "need", "next", "some", "them", "they", "your", "mine", "just", "also"}
 
 PROMPT = """You check changes that an assistant proposes to make to a to-do board.
 You see only what the person typed and the proposed changes, nothing from the board.
@@ -63,6 +69,18 @@ def _ref(item):
     return str(item.get("task") or item.get("step") or item.get("title") or "").strip()
 
 
+def _says(words, text):
+    """Whether `text` appears in `words` as a whole, not inside a longer word
+    or id: "1" is not named by "card 12", nor "Book the venue" by "booking"."""
+    return bool(re.search(r"(?<![\w-])" + re.escape(text) + r"(?![\w-])", words))
+
+
+def _mentions(words, title):
+    """Whether the words share a real word (four letters or more) with a new
+    card's title: "add a card for the badges" for "Order event badges"."""
+    return any(_says(words, w) for w in re.findall(r"\w{4,}", title.lower()) if w not in COMMON)
+
+
 def _rules(ask, edits, focus, auto_max):
     touched = []
     for item in edits:
@@ -71,13 +89,18 @@ def _rules(ask, edits, focus, auto_max):
             touched.append(r)
     if len(touched) > auto_max:
         return "it changes %d cards, more than %d" % (len(touched), auto_max)
+    adds = [item for item in edits if item.get("kind") == "add"]
+    if len(adds) > 1:
+        return "it adds %d new cards, and only one is added without asking" % len(adds)
     words = ask.lower()
     named = {f.strip().lower() for f in focus if f and f.strip()}
     for item in edits:
-        if item.get("kind") == "add":
-            continue
         r = _ref(item)
-        if not r or (r.lower() not in named and r.lower() not in words):
+        if item.get("kind") == "add":
+            if not r or not _mentions(words, r):
+                return 'it adds "%s", which the question does not mention' % (r or "a card")
+            continue
+        if not r or (r.lower() not in named and not _says(words, r.lower())):
             return 'it changes "%s", which the question does not name' % (r or "a card")
     return None
 

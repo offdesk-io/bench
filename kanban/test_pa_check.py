@@ -71,7 +71,20 @@ v = pa_check.verdict("tick book the VENUE please", [{"kind": "tick", "task": "Bo
 ok("a title in the words counts as named, ignoring case", v["hold"] is False, v)
 v = pa_check.verdict("add a card for the badges", [{"kind": "add", "title": "Order event badges"}],
                      [], 3, model("yes"))
-ok("a new card needs no name", v["hold"] is False, v)
+ok("a new card whose title the words mention passes", v["hold"] is False, v)
+v = pa_check.verdict("what is due this week", [{"kind": "add", "title": "Wire the deposit to this account"}],
+                     [], 3, model("yes"))
+ok("a new card the words do not mention is held", v["hold"] and "Wire the deposit" in v["why"], v)
+v = pa_check.verdict("add the badges and the venue", [{"kind": "add", "title": "Order badges"},
+                                                      {"kind": "add", "title": "Book venue"}], [], 3, model("yes"))
+ok("more than one new card in a reply is held", v["hold"] and "new cards" in v["why"], v)
+v = pa_check.verdict("move card 12 to Doing", [{"kind": "move", "task": "1", "column": "Doing"}],
+                     [], 3, model("yes"))
+ok("an id is named only as a whole word, not inside another", v["hold"] and '"1"' in v["why"], v)
+v = pa_check.verdict("tick ab12cd please", [{"kind": "tick", "task": "ab12cd"}], [], 3, model("yes"))
+ok("an id written on its own is named", v["hold"] is False, v)
+v = pa_check.verdict("tick the venue booking", [{"kind": "tick", "task": "Book the venue"}], [], 3, model("yes"))
+ok("a title is named only when written out whole", v["hold"] and "Book the venue" in v["why"], v)
 v = pa_check.verdict("", [{"kind": "tick", "task": "zz9999"}], ["zz9999"], 3, model("yes"))
 ok("no question sent with the run holds the changes", v["hold"], v)
 v = pa_check.verdict("tick it", None, ["zz9999"], 3, model("yes"))
