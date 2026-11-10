@@ -31,6 +31,7 @@ What it holds to:
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -110,7 +111,9 @@ class Server:
         env.pop("BENCH_AUTH", None)
         if auth is not None:
             env["BENCH_AUTH"] = auth
-        self.proc = subprocess.Popen([sys.executable, SERVER], env=env, cwd=ROOT,
+        # -u and -X faulthandler: a server that hangs before it listens can be
+        # made to print every thread's stack (wait() sends SIGABRT).
+        self.proc = subprocess.Popen([sys.executable, "-u", "-X", "faulthandler", SERVER], env=env, cwd=ROOT,
                                      stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     def wait(self):
@@ -124,7 +127,15 @@ class Server:
                 time.sleep(0.1)
         # Say why, rather than only that it did not start: whether it exited
         # (and with what) or was still running, and everything it printed.
-        state = ("exited %d" % self.proc.returncode) if self.proc.poll() is not None else "still not listening after 10s"
+        if self.proc.poll() is None:
+            state = "still not listening after 10s; its stacks follow"
+            self.proc.send_signal(signal.SIGABRT)
+            try:
+                self.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                pass
+        else:
+            state = "exited %d" % self.proc.returncode
         sys.stderr.write("server on port %d did not start: %s\n%s\n" % (self.port, state, self.stop()))
         return False
 
