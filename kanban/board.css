@@ -3217,3 +3217,44 @@ body.signed-in #runAgentBtn{display:none !important}
 .sharing .sharekind, .sharing .shareteam{display:block; margin:4px 0}
 .sharing .sharewith{margin-top:8px}
 .sharing .sharewith[hidden]{display:none}
+
+/* Memory view (31-memory.js). One column of sections at a readable width;
+   #lists is a two-column flow for the other views, so this spans both. */
+.memview{column-span:all; max-width:760px; margin:0 auto; padding:8px 0 40px; display:flex; flex-direction:column; gap:28px}
+.memsec{display:flex; flex-direction:column; gap:10px}
+.memhead{display:flex; align-items:center; justify-content:space-between; gap:12px}
+.memhead h3{margin:0; font-size:var(--tenon-typography-size-md); font-weight:660; color:var(--tenon-text-default)}
+.memhead h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:660; color:var(--tenon-text-default)}
+.membucket{display:flex; flex-direction:column; gap:8px; padding:12px 0; border-top:1px solid var(--tenon-stroke-default)}
+.memtext{max-width:68ch}
+.memempty{margin:0; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-faint)}
+.memerr{margin:0; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-error)}
+.memactions{display:flex; align-items:center; flex-wrap:wrap; gap:8px}
+.memarea{
+  width:100%; box-sizing:border-box; min-height:160px; padding:8px 10px; resize:vertical;
+  font:inherit; font-size:var(--tenon-typography-size-sm); line-height:1.6;
+  color:var(--tenon-text-default); background:var(--tenon-background-raised);
+  border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-md);
+}
+.memarea:focus{outline:2px solid var(--tenon-stroke-focus); outline-offset:1px}
+.memscroll{overflow-x:auto}
+.memtable{width:100%; border-collapse:collapse; font-size:var(--tenon-typography-size-sm)}
+.memtable th{text-align:left; padding:6px 10px 6px 0; font-weight:650; color:var(--tenon-text-faint); border-bottom:1px solid var(--tenon-stroke-default)}
+.memtable td{padding:6px 10px 6px 0; vertical-align:top; color:var(--tenon-text-subtle); border-bottom:1px solid var(--tenon-stroke-default)}
+.memtable td:first-child{color:var(--tenon-text-default); font-weight:600}
+.memrows{display:flex; flex-direction:column; gap:12px}
+.memrow{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)) auto; gap:8px; align-items:end}
+.memdl{display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; margin:0 0 10px; font-size:var(--tenon-typography-size-sm)}
+.memdl dt{color:var(--tenon-text-faint)}
+.memdl dd{margin:0; color:var(--tenon-text-subtle)}
+@media (max-width:640px){
+  .memrow{grid-template-columns:1fr 1fr}
+  .memrow .btn{grid-column:1 / -1; justify-self:start}
+  .memtable thead{display:none}
+  .memtable, .memtable tbody, .memtable tr, .memtable td{display:block}
+  .memtable tr{padding:8px 0; border-bottom:1px solid var(--tenon-stroke-default)}
+  .memtable td{border:0; padding:2px 0}
+  .memtable td:empty{display:none}
+  .memtable td::before{content:attr(data-label) ": "; color:var(--tenon-text-faint)}
+  .memtable td:first-child::before{content:""}
+}

@@ -869,6 +869,7 @@ function renderView(){
   $('#headline').classList.add('hidden');
   if (def.id === 'projects') { renderFilterBar(); renderProjectsView(); return; }
   if (def.id === 'agents') { renderFilterBar(); renderAgentsView(); return; }
+  if (def.id === 'memory') { renderFilterBar(); renderMemoryView(); return; }
   if (def.id === 'backups') { renderFilterBar(); renderBackupsView(); return; }
   renderSections(def.id);
 }
@@ -880,6 +881,7 @@ function refreshView(){
   if (state.view === 'board') renderBoard();
   else if (state.view === 'projects') renderProjectsView();
   else if (state.view === 'agents') renderAgentsView();
+  else if (state.view === 'memory') memDraw();
   else if (state.view === 'backups') renderBackupsView();
   else renderSections(state.view);
   updateArchiveChip();
