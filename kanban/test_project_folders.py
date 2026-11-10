@@ -102,7 +102,7 @@ def main():
     server.subprocess.Popen = FakePopen
     server.platform_calls.os.startfile = lambda path: OPENED.append(["startfile", path])
 
-    httpd = http.server.ThreadingHTTPServer(("127.0.0.1", 0), server.Handler)
+    httpd = server.BoardHTTPServer(("127.0.0.1", 0), server.Handler)
     base = "http://127.0.0.1:%d" % httpd.server_address[1]
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
 
