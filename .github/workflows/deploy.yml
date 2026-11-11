@@ -28,13 +28,19 @@ jobs:
         with:
           path: bench
 
-      # server.py looks for the shared packages at ../PACKAGES, as on the server.
+      # server.py looks for the shared packages at ../PACKAGES, as on the server,
+      # each at the commit packages.lock names: the one a deploy puts there.
       - name: Shared packages next to the repo
         run: |
+          set -e
           mkdir -p PACKAGES
-          git clone --depth 1 https://github.com/tiagopedras/agents-engine.git PACKAGES/agents-engine
-          git clone --depth 1 https://github.com/tiagopedras/ai-chat-engine.git PACKAGES/ai_chat_engine
-          git clone --depth 1 https://github.com/tiagopedras/work-streams.git PACKAGES/work-streams
+          grep -v '^#' bench/packages.lock | while read -r name sha url; do
+            [ -n "$name" ] || continue
+            git init -q "PACKAGES/$name"
+            git -C "PACKAGES/$name" fetch -q --depth 1 "$url" "$sha"
+            git -C "PACKAGES/$name" checkout -q --detach FETCH_HEAD
+            echo "$name $(git -C "PACKAGES/$name" rev-parse HEAD)"
+          done
 
       - uses: actions/setup-python@v5
         with:
