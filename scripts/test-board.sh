@@ -28,6 +28,9 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO" || exit 1
 
 SUITE_TIMEOUT="${SUITE_TIMEOUT:-240}"
+# How many more times a failed suite runs before it counts as failed. 0 here;
+# the GitHub workflow sets 1, where a slow runner fails timing checks now and then.
+SUITE_RETRIES="${SUITE_RETRIES:-0}"
 BUILD=1
 ALL=0
 ARGS=()
@@ -144,8 +147,10 @@ if [ "$ok" != 1 ]; then
 fi
 echo "Test server on $PORT, data in $RESOLVED"
 
-FAILED=()
-for s in "${SUITES[@]}"; do
+# One run of one suite: sets CODE, PASSES, FAILS and SECS, and leaves its
+# output in $TMP/<name>.log.
+run_suite() {
+  local s="$1" name log pid start
   name="$(basename "$s")"
   log="$TMP/$name.log"
   seed
@@ -162,28 +167,64 @@ for s in "${SUITES[@]}"; do
   pid=$!; SUITE_PID=$pid
   ( sleep "$SUITE_TIMEOUT"; kill "$pid" 2>/dev/null ) 2>/dev/null &
   WATCHDOG=$!
-  wait "$pid"; code=$?
+  wait "$pid"; CODE=$?
   pkill -P "$WATCHDOG" 2>/dev/null; kill "$WATCHDOG" 2>/dev/null; wait "$WATCHDOG" 2>/dev/null
   SUITE_PID=""; WATCHDOG=""
   # A suite that threw before chrome.kill() leaves its Chrome behind.
   pkill -f -- "--user-data-dir=$TMP/" 2>/dev/null
-  secs=$(( $(date +%s) - start ))
-  passes=$(grep -c '^ *ok ' "$log")
+  SECS=$(( $(date +%s) - start ))
+  PASSES=$(grep -c '^ *ok ' "$log")
   # Two suites print a total rather than a line per check.
-  if [ "$passes" = 0 ]; then
-    passes=$(grep -Eo '^([0-9]+) (checks )?passed' "$log" | tail -1 | grep -Eo '^[0-9]+' || echo 0)
+  if [ "$PASSES" = 0 ]; then
+    PASSES=$(grep -Eo '^([0-9]+) (checks )?passed' "$log" | tail -1 | grep -Eo '^[0-9]+' || echo 0)
   fi
-  fails=$(grep -c ' FAIL ' "$log")
-  if [ "$code" = 0 ] && [ "$fails" = 0 ]; then
-    printf '  PASS  %-32s %3s ok, %ss\n' "$name" "$passes" "$secs"
-  else
-    FAILED+=("$name")
-    printf '  FAIL  %-32s %3s ok, %s failed, exit %s, %ss\n' "$name" "$passes" "$fails" "$code" "$secs"
-    if [ "$fails" != 0 ]; then grep ' FAIL ' "$log" | head -15 | sed 's/^/        /'
-    else tail -12 "$log" | sed 's/^/        /'; fi
-  fi
+  FAILS=$(grep -c ' FAIL ' "$log")
+}
+
+report_fail() {
+  local name="$1" log="$TMP/$1.log"
+  printf '  FAIL  %-32s %3s ok, %s failed, exit %s, %ss\n' "$name" "$PASSES" "$FAILS" "$CODE" "$SECS"
+  if [ "$FAILS" != 0 ]; then grep ' FAIL ' "$log" | head -15 | sed 's/^/        /'
+  else tail -12 "$log" | sed 's/^/        /'; fi
+}
+
+FAILED=()
+RETRIED=()
+for s in "${SUITES[@]}"; do
+  name="$(basename "$s")"
+  tries=0
+  while :; do
+    run_suite "$s"
+    if [ "$CODE" = 0 ] && [ "$FAILS" = 0 ]; then
+      if [ "$tries" = 0 ]; then
+        printf '  PASS  %-32s %3s ok, %ss\n' "$name" "$PASSES" "$SECS"
+      else
+        printf '  PASS  %-32s %3s ok, %ss, on try %s\n' "$name" "$PASSES" "$SECS" "$((tries + 1))"
+        RETRIED+=("$name")
+      fi
+      break
+    fi
+    report_fail "$name"
+    if [ "$tries" -ge "$SUITE_RETRIES" ]; then FAILED+=("$name"); break; fi
+    tries=$((tries + 1))
+    echo "        running $name again (try $((tries + 1)))"
+  done
 done
 
+# A suite that only passed on a second try is flaky, and says so: on GitHub as
+# a warning on the run and a line in its summary, so it gets fixed rather than
+# hidden.
+if [ "${#RETRIED[@]}" != 0 ]; then
+  echo
+  echo "Passed only on another try: ${RETRIED[*]}"
+  if [ -n "${GITHUB_ACTIONS:-}" ]; then
+    for n in "${RETRIED[@]}"; do echo "::warning title=Flaky suite::$n failed, then passed on another try"; done
+    if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+      { echo "### Board suites that needed another try"; echo
+        for n in "${RETRIED[@]}"; do echo "- \`$n\`"; done; } >> "$GITHUB_STEP_SUMMARY"
+    fi
+  fi
+fi
 echo
 if [ "${#FAILED[@]}" = 0 ]; then
   echo "All ${#SUITES[@]} passed."
