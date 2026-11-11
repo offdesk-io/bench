@@ -103,12 +103,17 @@ def seed(data_root, name, text="# To-do\n\n## 1. Tasks\n\n### To do\n\n- [ ] A t
 class Server:
     """kanban/server.py in a process of its own, over `data_root`."""
 
-    def __init__(self, data_root, auth):
+    def __init__(self, data_root, auth, env=None):
         self.port = free_port()
         self.base = "http://127.0.0.1:%d" % self.port
+        extra = dict(env or {})
         env = dict(os.environ, TODOS_DATA_ROOT=data_root, TODOS_PORT=str(self.port),
                    TODOS_NO_BROWSER="1")
         env.pop("BENCH_AUTH", None)
+        # A key in the shell that runs the suites would turn the signed-in
+        # board's chat on; only a test that means to sets one.
+        env.pop("ANTHROPIC_API_KEY", None)
+        env.update(extra)
         if auth is not None:
             env["BENCH_AUTH"] = auth
         # -u and -X faulthandler: a server that hangs before it listens can be

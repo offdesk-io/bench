@@ -73,7 +73,7 @@ try {
     window.__blocked = [];
     window.fetch = (u, o) => {
       const m = (o && o.method) || 'GET';
-      if (m !== 'GET') { window.__blocked.push(m + ' ' + u); return Promise.resolve(new Response('{}', { status: 200 })) }
+      if (m !== 'GET') { if (m !== 'HEAD') window.__blocked.push(m + ' ' + u); return Promise.resolve(new Response('{}', { status: 200 })) }
       return real(u, o);
     };
     load([
@@ -243,7 +243,7 @@ try {
     window.fetch = (u, o) => {
       const m = (o && o.method) || 'GET';
       if (String(u).startsWith('/tick-queue.json') && m === 'GET') return Promise.resolve(new Response(JSON.stringify(window.__queue), { status: 200 }));
-      if (m !== 'GET') { window.__posted.push(m + ' ' + u + ' ' + (o && o.body || '')); return Promise.resolve(new Response('{}', { status: 200 })) }
+      if (m !== 'GET') { if (m !== 'HEAD') window.__posted.push(m + ' ' + u + ' ' + (o && o.body || '')); return Promise.resolve(new Response('{}', { status: 200 })) }
       return real(u, o);
     };
     load([

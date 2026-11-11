@@ -36,6 +36,8 @@ Where the profile and this file disagree, the profile wins. With no profile, use
 switch which list is current from the board's own dropdown and the skills must
 follow. Never hardcode a dataset name.
 
+On the shared board the message carries `(Asked by <name> on the shared board "<board>".)`: that line names the board, its list is `todo.md` in your working folder, and `data/.current` is not read there. The person asking is `<name>`.
+
 `data/` is the only folder git ignores. `data/profile.md` sits at its root and holds the owner's setup, unless Bench's `memory_root` setting is set and `<memory_root>/me/profile.md` exists, which is read instead. Anywhere a skill says `data/todo.md`, `data/backups/` or `data/projects/`, it means that path inside the current dataset's own folder,
 not the bare `data/` root. A project folder is the exception when the list has its own projects folder (Bench's `projects_roots` in `data/settings.json`, keyed by list name): `data/projects/<name>` then means `<name>/` in the list's projects folder when it is there, a new project folder is made there, and `data/<dataset>/projects/<name>/` is the fallback. A list with none keeps `data/<dataset>/projects/`. If the pointer file is not reachable, look for a
 `todo.md` under some folder inside `data/` before asking the owner where it is.

@@ -641,6 +641,58 @@ check('  a refusal shows as a toast too', paFlow.toast)
 check('  the same turn is never applied twice', paFlow.reapplied === false)
 check('  a transcript whose last turn is not this ask is left alone', paFlow.staleHeader === 'untouched', String(paFlow.staleHeader))
 
+// Signed in, the server's second check decides: applied on its yes, held in a
+// modal otherwise, and held when there is no verdict to read.
+const paShared = await evalJS(`(async () => {
+  const real = { diskVersion, fetch: window.fetch, who: state.who };
+  diskVersion = async () => ({ stamp: '', hash: '' });
+  state.who = { email: 'jerome@example.com', name: 'Jérôme', teams: [] };
+  const fence = String.fromCharCode(96).repeat(3);
+  const title = 'Tidy up the shared 1:1 notes template';
+  const block = JSON.stringify([{ kind: 'edit', task: title, field: 'week', value: true }]);
+  const reply = 'Done.\\n' + fence + 'pa-changes\\n' + block + '\\n' + fence;
+  let verdict = null, asked = [];
+  window.fetch = (url, opts) => {
+    if (String(url).startsWith('/claude/pa-check.json')) {
+      asked.push(String(url));
+      return Promise.resolve(verdict ? new Response(JSON.stringify(verdict), { status: 200 })
+                                     : new Response('{"error":"no check"}', { status: 404 }));
+    }
+    return real.fetch(url, opts);
+  };
+  const find = () => { for (const b of state.doc.buckets) for (const ti of b.tiers) for (const t of ti.tasks) if (t.title === title) return t; return null; };
+  find().week = false;
+
+  verdict = { hold: false, why: '', items: JSON.parse(block) };
+  await paAfterReply(null, { ask: 'tidy it', session: 'shared-1' }, reply);
+  const confirmed = find().week === true;
+  const askedSession = !!(asked[0] && asked[0].includes('session=shared-1'));
+  find().week = false;
+
+  verdict = { hold: true, why: 'it changes a card the question does not name', items: JSON.parse(block) };
+  await paAfterReply(null, { ask: 'tidy it', session: 'shared-2' }, reply);
+  const heldUntouched = find().week === false;
+  const modal = modalEl;
+  const modalText = modal ? modal.innerText : '';
+  const apply = modal && [...modal.querySelectorAll('button')].find(b => /^Apply/.test(b.textContent.trim()));
+  if (apply) apply.click();
+  await new Promise(r => setTimeout(r, 50));
+  const appliedOnAccept = find().week === true;
+  find().week = false;
+
+  verdict = null;
+  await paAfterReply(null, { ask: 'tidy it', session: 'shared-3' }, reply);
+  const noVerdictHeld = find().week === false && !!modalEl;
+  closeModal();
+
+  window.fetch = real.fetch; diskVersion = real.diskVersion; state.who = real.who;
+  return { confirmed, askedSession, heldUntouched, modalText, appliedOnAccept, noVerdictHeld };
+})()`)
+check('signed in, a confirmed PA reply applies', paShared.confirmed && paShared.askedSession, JSON.stringify(paShared))
+check('  a held one waits, saying why', paShared.heldUntouched && /does not name/.test(paShared.modalText), paShared.modalText)
+check('  and applies when the person accepts', paShared.appliedOnAccept, JSON.stringify(paShared))
+check('  no verdict holds it too', paShared.noVerdictHeld, JSON.stringify(paShared))
+
 check('a locked tab refuses to write down what was opened', await evalJS(`
   (() => {
     state.locked = true;
