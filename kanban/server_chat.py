@@ -27,8 +27,15 @@ import pa_check
 from engine import MAX_PROMPT, MAX_TITLE, OWNER_KEY, SESSION_ID, RunLimitError, transcript_read
 
 PA_KEY = "board-pa"
-# Added to the engine's ASK_DENIES, never instead of it.
-EXTRA_DENIES = ["WebFetch", "WebSearch"]
+# Added to the engine's ASK_DENIES, never instead of it. Besides the web, the
+# CLI lets an Ask run use tools that need no permission: schedule a prompt
+# that keeps the run going past its answer (CronCreate, ScheduleWakeup),
+# message other sessions on the server (ListAgents, SendMessage), start
+# agents, worktrees or workflows. A board chat needs none of them.
+EXTRA_DENIES = ["WebFetch", "WebSearch",
+                "CronCreate", "CronDelete", "CronList", "ScheduleWakeup", "RemoteTrigger",
+                "ListAgents", "SendMessage", "Agent", "TaskStop", "Monitor", "PushNotification",
+                "EnterWorktree", "ExitWorktree", "Workflow"]
 KEEP_VERDICTS = 200
 # claude -p runs a prompt as a slash command only when it starts with one.
 COMMAND = re.compile(r"^(/[\w:-]+)(?=\s|$)\s*")
