@@ -344,8 +344,31 @@ def todo_moved(before_hash, since):
     return None
 
 
+# How long a usage limit holds the agents when its message gave no reset time.
+LIMIT_FALLBACK = dt.timedelta(hours=1)
+
+
+def limited_until(now=None):
+    """When the last usage limit resets, while that is still ahead, else None.
+
+    The reset time the limit's own message gave (record_limit()). A limit
+    whose message named none holds for LIMIT_FALLBACK from when it was hit.
+    """
+    now = now or dt.datetime.now().astimezone()
+    state = windows.read_state(paths.window_path())
+    until = windows.known_expiry(state, now)
+    if until:
+        return until
+    hit = _parse_iso(state.get("limited_at") or "")
+    expires = _parse_iso(state.get("expires") or "")
+    if hit and (expires is None or expires < hit) and hit + LIMIT_FALLBACK > now:
+        return hit + LIMIT_FALLBACK
+    return None
+
+
 def record_limit(err):
-    """Keep the reset time out of a usage limit message, for should_stop()."""
+    """Keep the reset time out of a usage limit message, for limited_until()
+    and should_stop()."""
     state = windows.read_state(paths.window_path())
     state["limited_at"] = dt.datetime.now().astimezone().isoformat()
     state["message"] = (err or "")[:300]

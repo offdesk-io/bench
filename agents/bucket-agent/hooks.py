@@ -226,7 +226,7 @@ def items(target):
                     "name": agent["name"], "bucket": agent["bucket"], "start": agent["start"],
                     "plan": path, "plan_rel": rel, "front": front,
                     "type": kind_of_work,
-                    "feedback": row["feedback"], "skip": row["skip"]})
+                    "feedback": row["feedback"], "skip": row["skip"], "review_done": row["review_done"]})
     pending = _pending({(i["name"], i["sub"]) for i in out if i["sub"]})
     for i in out:
         i["pending"] = i["sub"] in pending
@@ -254,6 +254,11 @@ def eligible(item, target):
         return item["skip"]
     if not item["sub"]:
         return "its sub-task has no id on its line, so its tick could not be queued"
+    until = plans.limited_until()
+    if until:
+        # Stable wording, so core/bucket_wake.py logs it once rather than every minute.
+        return "the usage limit was hit, and it resets at %s" % until.strftime(
+            "%H:%M" if until.date() == dt.date.today() else "%H:%M on %a %d %b")
     if agent["start"] == "scheduled":
         hours = board_hours(target["id"])
         now = dt.datetime.now()
@@ -275,6 +280,9 @@ def eligible(item, target):
             return "the %s is free-rein, so it does not plan: hand the task over again" % name
         return None
     if agent["mode"] == "plan-first":
+        # Approval is the owner's tick on Review the plan, whatever blocked-by says.
+        if not item["review_done"]:
+            return "its Review the plan is not ticked: the owner approves the plan first"
         if not item["plan_rel"]:
             return "its Review the plan names no plan"
         if not item["front"]:

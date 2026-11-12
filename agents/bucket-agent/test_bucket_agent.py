@@ -20,6 +20,11 @@ import subprocess
 import sys
 import tempfile
 
+# test_free_rein_code links the real improve-agent folder in, so nothing here
+# may leave bytecode behind in it, nor in any process this starts.
+sys.dont_write_bytecode = True
+os.environ["PYTHONDONTWRITEBYTECODE"] = "1"
+
 TMP = tempfile.mkdtemp(prefix="bucket-agent-test-")
 DATA = os.path.join(TMP, "data")
 # Before anything imports paths.py, which reads it once.
@@ -711,6 +716,77 @@ def test_free_rein_code():
         shutil.rmtree(improve, ignore_errors=True)
 
 
+def test_usage_limit():
+    """A usage limit holds every item until its reset time, logged once by the
+    on-assign wake, rather than being retried every minute."""
+    import windows
+    reset_queue()
+    set_todo(doc(task("lim001", "After the limit", "T ops agent", kinds=("implement", "work-review"))))
+    item = hooks.items(TARGET)[0]
+    hooks.failed(item, {"error": "You have hit your usage limit. Resets at 23:59", "kind": "limit"}, TARGET)
+    check("a limit hit records when it resets", plans.limited_until() is not None, True)
+    held = why(item) or ""
+    check("and every item is held until then, saying when",
+          held.startswith("the usage limit was hit, and it resets at 23:59"), True)
+    got = hooks.pending(agent())["t"]
+    check("the on-assign wake is told to start nothing", (got["run"], [w for _, w in got["skipped"]]), ([], [held]))
+    started, logged = [], []
+    for _ in range(3):
+        bucket_wake.tick(DATA, ["t"], {}, seen_limit, logged.append,
+                         pending=lambda b: hooks.pending(agent())[b], start=started.append)
+    check("so it starts nothing, minute after minute", started, [])
+    check("and logs the reason once", len([l for l in logged if "usage limit" in l]), 1)
+
+    now = dt.datetime.now().astimezone()
+    path = os.path.join(DATA, "t", "plans", "window.json")
+    windows.write_state(path, {"limited_at": (now - dt.timedelta(hours=2)).isoformat(),
+                               "expires": (now - dt.timedelta(minutes=5)).isoformat()})
+    check("once the reset time has passed, the item is taken again", why(item), None)
+    windows.write_state(path, {"limited_at": (now - dt.timedelta(minutes=10)).isoformat()})
+    check("a limit that named no reset time holds for an hour", (why(item) or "").startswith("the usage limit"), True)
+    windows.write_state(path, {"limited_at": (now - dt.timedelta(hours=2)).isoformat()})
+    check("and not after it", why(item), None)
+    os.remove(path)
+
+
+seen_limit = {}
+
+
+def test_review_must_be_ticked():
+    """A plan-first Implement waits for the owner's tick on Review the plan,
+    whatever its blocked-by says."""
+    write(os.path.join(DATA, "t", "plans", "ok.md"),
+          "---\ntitle: x\nneeds_you: no\ntype: write-up\nsummary: S.\n---\n\nBody.\n")
+    reset_queue()
+
+    def unblocked(review_done):
+        text = task("rev001", "No blocked-by on Implement", "T news agent", done=("plan",) + (
+            ("plan-review",) if review_done else ()), plan="ok.md")
+        return text.replace(" `blocked-by:rev001-plan-review`", "")
+
+    set_todo(doc(unblocked(False)))
+    items = [i for i in hooks.items(TARGET) if i["kind"] == "implement"]
+    check("an Implement with no blocked-by is still listed", len(items), 1)
+    check("but refused while Review the plan is open",
+          why(items[0]), "its Review the plan is not ticked: the owner approves the plan first")
+    set_todo(doc(unblocked(True)))
+    check("and taken once the owner ticks it", why(hooks.items(TARGET)[0]), None)
+
+
+def test_one_wake_per_data_root():
+    root = os.path.join(TMP, "wake-root")
+    os.makedirs(root, exist_ok=True)
+    other = [sys.executable, "-c", "import sys; sys.path.insert(0, %r); import bucket_wake; "
+             "print(bucket_wake.claim(%r))" % (os.path.join(ROOT, "core"), root)]
+    check("the first server claims the data root", bucket_wake.claim(root), True)
+    check("a second server on it is refused",
+          subprocess.run(other, capture_output=True, text=True).stdout.strip(), "False")
+    check("and so is a second claim from the same process", bucket_wake.claim(root), False)
+    bucket_wake.release(root)
+    check("once the first is gone, another may claim it",
+          subprocess.run(other, capture_output=True, text=True).stdout.strip(), "True")
+
+
 def test_wiring():
     spec = json.load(open(os.path.join(HERE, "agent.json"), encoding="utf-8"))
     check("agent.json is contract 1.7, id bucket-agent", (spec["contract"], spec["id"], spec["name"]),
@@ -736,7 +812,8 @@ def main():
         for fn in (test_names_and_queue, test_plan_first, test_replan_after_send_back, test_free_rein,
                    test_board_off, test_scheduled, test_todo_guard, test_figma_and_plan_checks, test_guard,
                    test_handovers, test_wake, test_on_assign_failure_waits, test_spending_caps,
-                   test_free_rein_code, test_wiring):
+                   test_free_rein_code, test_usage_limit, test_review_must_be_ticked,
+                   test_one_wake_per_data_root, test_wiring):
             try:
                 fn()
             except Exception as exc:  # noqa: BLE001
