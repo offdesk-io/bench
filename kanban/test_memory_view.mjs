@@ -25,7 +25,7 @@ const check = (name, pass, detail = '') => {
 const chrome = spawn(CHROME_BIN, [
   '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-memory-test-profile'}`, '--window-size=1400,1000',
-  `http://127.0.0.1:${BOARD}/kanban/index.html#memory`
+  `http://127.0.0.1:${BOARD}/kanban/index.html#settings/memory`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
 
 async function page () {
@@ -72,9 +72,9 @@ const sections = `[...document.querySelectorAll('#memView .memsec')].map(s => s.
 
 try {
   await wait(2500)
-  check('the board loaded on #memory', await evalJS(`state.view === 'memory' && !!document.querySelector('#memView')`),
+  check('the board loaded on #settings/memory', await evalJS(`state.view === 'settings' && settingsTab === 'memory' && !!document.querySelector('#memView')`),
     await evalJS(`location.hash + ' / ' + state.view`))
-  check('Memory is a tab', await evalJS(`viewDefs().some(d => d.id === 'memory')`))
+  check('Memory is a tab of the Settings page, not of the top bar', await evalJS(`!viewDefs().some(d => d.id === 'memory') && settingsTabs().some(t => t[0] === 'memory')`))
   await wait(500)
   check('the sections are in order', await evalJS(sections) === 'about,people,buckets,context,profile', await evalJS(sections))
   check('an empty Company says so with an Edit button', await evalJS(`(() => {
@@ -261,7 +261,7 @@ try {
   await evalJS(`state.view = 'board'; renderView()`)
   await wait(600)
   check('leaving the view disconnects the observer', await evalJS(`memObserver === null`))
-  await evalJS(`state.view = 'memory'; renderView()`)
+  await evalJS(`openSettingsPage('memory')`)
   await wait(500)
 
   await shot(process.env.SHOT_DESKTOP, 1200, 1000, false)
@@ -276,8 +276,11 @@ try {
   // --- the hash survives a view switch -------------------------------------
   await evalJS(`state.view = 'board'; syncHash(true); renderView()`)
   check('leaving the view leaves the board', await evalJS(`(() => { const m = document.querySelector('#memView'); return !m || m.offsetParent === null })()`))
-  await evalJS(`state.view = 'memory'; syncHash(true); renderView()`)
-  check('and the hash names it again', await evalJS(`location.hash.startsWith('#memory')`))
+  await evalJS(`openSettingsPage('memory')`)
+  check('and the hash names it again', await evalJS(`location.hash.startsWith('#settings/memory')`))
+  await evalJS(`history.replaceState(null, '', '#memory'); window.dispatchEvent(new HashChangeEvent('hashchange'))`)
+  await wait(500)
+  check('an old #memory link opens the Memory tab', await evalJS(`state.view === 'settings' && settingsTab === 'memory'`))
 } finally {
   chrome.kill()
 }

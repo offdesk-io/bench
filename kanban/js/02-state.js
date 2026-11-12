@@ -359,7 +359,8 @@ function openChatByKey(id){
    in 11-chat-cards.js, not loaded yet at this point in the script order. */
 function initViewFromHash(){
   const h = parseHash();
-  if (isKnownView(h.view)) state.view = h.view;
+  const onSettings = adoptSettingsRoute(h);
+  if (!onSettings && isKnownView(h.view)) state.view = h.view;
   /* A link naming another board holds its card back until /datasets.json has
      said whether that board is there: opening it on this list first would find
      the wrong card or none. See resolvePendingBoard() in 21-datasets.js. */
@@ -367,7 +368,7 @@ function initViewFromHash(){
   state.pendingBoardTask = h.board ? h.task : '';
   state.pendingTask = h.board ? '' : h.task;
   state.pendingChat = h.chat;
-  state.pendingBucketSlug = h.bucketSlug || null;
+  state.pendingBucketSlug = onSettings ? null : (h.bucketSlug || null);
 }
 
 /* Ten, and the fifth used to be the accent blue — which is the first bucket's

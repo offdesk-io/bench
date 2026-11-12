@@ -428,17 +428,18 @@ function viewDefs(){
     { id:'timeline', label:'Timeline' },
     { id:'matrix',   label:'Matrix' },
     { id:'sep1', sep:true },
-    { id:'agents',   label:'Agents' },
-    { id:'memory',   label:'Memory' }
+    { id:'agents',   label:'Agents' }
   ];
   /* The agents run on the owner's Mac, so the shared board has no Agents tab
      (loadWhoami() in 21-datasets.js), and no separator left dangling before it. */
   if (state.who) return defs.filter(d => d.id !== 'agents');
   return defs;
 }
-/* Backups isn't a view of the board, it's a data operation — see the Backups
-   button in the header's data menu — so it sits outside viewDefs() and its
-   tabs, but it still needs a #backups URL and a renderView() case of its own.
+/* Settings isn't a view of the board either: Memory, Settings, Spend, Schedules
+   and Backups are the five tabs of one page, opened from the Data menu's
+   Settings item, so it sits outside viewDefs() and its tabs but needs a
+   #settings URL (the tab after a slash) and a renderView() case of its own. An
+   old #memory or #backups link opens that tab (adoptSettingsRoute(), 29-settings.js).
 
    'reports' is here for a different reason: it used to be a tab and
    its two columns are the end of Overview's row now, so a #reports link is
@@ -448,6 +449,6 @@ function viewDefs(){
    project folders is still drawn for a #projects link, and the project drawer
    is reached from a task's drawer. */
 function isKnownView(id){
-  return id === 'backups' || id === 'reports' || id === 'plans' || id === 'projects' || viewDefs().some(d => d.id === id);
+  return id === 'settings' || id === 'reports' || id === 'plans' || id === 'projects' || viewDefs().some(d => d.id === id);
 }
 

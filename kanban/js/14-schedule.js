@@ -5,9 +5,9 @@
 
    Three things around this app run on a schedule rather than on demand: the
    Plan agent's wakes, the desktop banners, and the weekly backup
-   thread inside this server. Both halves live behind one button in the Data
-   menu, Spend and schedules — renderSched() draws the jobs into their own card and
-   renderUsage() draws the token chart, both inside the modal openRefCards()
+   thread inside this server. The halves live in the Spend and Schedules tabs of
+   the Settings page — renderSched() draws the jobs into their own card and
+   renderUsage() draws the token chart, both inside the page drawRefCards()
    (13-agent-run.js) opens. Nothing here holds a view id or a route, just the
    render functions that modal calls.
 
@@ -33,13 +33,15 @@ function schedWhen(iso){
                                 hour:'2-digit', minute:'2-digit' });
 }
 
-/* What the modal's React tree is drawn from. Each renderer below fills its own
-   slice and calls paintRefCards(), which draws only when the modal is open, so
-   a fetch that lands after it has shut costs nothing. The chart, the job list
+/* What the page's React tree is drawn from. Each renderer below fills its own
+   slice and calls paintRefCards(), which draws only when the page is open, so
+   a fetch that lands after it has gone costs nothing. The chart, the job list
    and the run-cost fold are RefCards in kanban/ui/RefCards.tsx. */
 let usageState = { kind: 'loading' };
 let schedState = { kind: 'loading' };
 let runResultsState = null;
+/* Which of the two cards the page is drawing: 'spend' or 'schedules' (13-agent-run.js). */
+let refCardsShow;
 
 function setRunResults(r){
   runResultsState = r;
@@ -55,7 +57,8 @@ function paintRefCards(){
     ranges: USAGE_RANGES,
     onDays: days => { usageDays = days; renderUsage(); },
     schedule: schedState,
-    runResults: runResultsState
+    runResults: runResultsState,
+    show: refCardsShow
   }));
 }
 

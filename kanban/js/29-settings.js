@@ -246,22 +246,24 @@ function settingsErrors(draft, first){
 /* The Save button follows the form: off while anything required is missing,
    and the message under a field shows once the owner has been in it. */
 function paintSetupErrors(draft, first, attempted){
-  if (!modalEl) return;
+  const root = settingsRoot();
+  if (!root) return;
   const err = settingsErrors(draft, first);
-  modalEl.querySelectorAll('[data-err]').forEach(el => {
+  root.querySelectorAll('[data-err]').forEach(el => {
     const k = el.dataset.err;
     const show = !!err[k] && (draft.touched[k] || attempted);
     el.textContent = show ? err[k] : '';
     el.hidden = !show;
   });
-  const save = modalEl.querySelector('button[data-i="0"]');
+  const save = root.querySelector('button[data-i="0"], [data-settings-save]');
   if (save) save.disabled = Object.keys(err).length > 0;
 }
 
 /* A country Nager.Date has no public holidays for is still saved; the note says
    what that means. */
 function paintCountryNote(draft){
-  const note = modalEl && modalEl.querySelector('[data-nolist]');
+  const root = settingsRoot();
+  const note = root && root.querySelector('[data-nolist]');
   if (!note) return;
   const c = draft.countries.find(x => x.code === draft.country);
   note.hidden = !(c && c.holidays === false);
@@ -270,8 +272,9 @@ function paintCountryNote(draft){
 /* Keeps the empty option of every "Use default" select naming the model it
    resolves to, so changing Default relabels them straight away. */
 function paintModelLabels(draft){
-  if (!modalEl) return;
-  modalEl.querySelectorAll('[data-model]').forEach(sel => {
+  const root = settingsRoot();
+  if (!root) return;
+  root.querySelectorAll('[data-model]').forEach(sel => {
     const empty = sel.querySelector('option[value=""]');
     if (empty) empty.textContent = settingsEmptyLabel(sel.dataset.model, draft.models);
   });
@@ -279,43 +282,44 @@ function paintModelLabels(draft){
 
 /* Updates `draft` from the open form as it changes. */
 function trackSettingsForm(draft, first){
-  if (!modalEl) return;
+  const root = settingsRoot();
+  if (!root) return;
   const sync = e => {
-    const n = modalEl.querySelector('[data-name]');
+    const n = root.querySelector('[data-name]');
     if (n) draft.name = n.value;
-    modalEl.querySelectorAll('[data-about]').forEach(i => {
+    root.querySelectorAll('[data-about]').forEach(i => {
       draft.about[i.dataset.about] = i.value;
       if (e && e.target === i) draft.touched['about-' + i.dataset.about] = true;
     });
-    const c = modalEl.querySelector('[data-country]');
-    const r = modalEl.querySelector('[data-region]');
+    const c = root.querySelector('[data-country]');
+    const r = root.querySelector('[data-region]');
     if (c) draft.country = c.value;
     if (r) draft.region = r.value;
-    const m = modalEl.querySelector('[data-memory]');
+    const m = root.querySelector('[data-memory]');
     if (m) draft.memoryRoot = m.value;
-    const ch = modalEl.querySelector('[data-chime]');
+    const ch = root.querySelector('[data-chime]');
     if (ch) draft.chime = ch.getAttribute('aria-checked') === 'true';
-    const bm = modalEl.querySelector('[data-board-memory-mode]');
+    const bm = root.querySelector('[data-board-memory-mode]');
     if (bm) {
       draft.board.mode = bm.value;
-      const bp = modalEl.querySelector('[data-board-memory]');
+      const bp = root.querySelector('[data-board-memory]');
       bp.hidden = bm.value !== 'own';
       draft.board.path = bp.value;
       if (e && e.target === bp) draft.touched['board-memory'] = true;
     }
-    const bb = modalEl.querySelector('[data-board-banners]');
+    const bb = root.querySelector('[data-board-banners]');
     if (bb) draft.board.banners = bb.getAttribute('aria-checked') === 'true';
-    const ba = modalEl.querySelector('[data-board-agents]');
+    const ba = root.querySelector('[data-board-agents]');
     if (ba) draft.board.agents = ba.getAttribute('aria-checked') === 'true';
-    const pr = modalEl.querySelector('[data-projects]');
+    const pr = root.querySelector('[data-projects]');
     if (pr) draft.projectsRoot = pr.value;
-    modalEl.querySelectorAll('[data-model]').forEach(s => { draft.models[s.dataset.model] = s.value || null; });
-    modalEl.querySelectorAll('[data-start]').forEach(s => { draft.agents[s.dataset.start].start = s.value; });
+    root.querySelectorAll('[data-model]').forEach(s => { draft.models[s.dataset.model] = s.value || null; });
+    root.querySelectorAll('[data-start]').forEach(s => { draft.agents[s.dataset.start].start = s.value; });
     if (e && e.target && e.target.matches('[data-name]')) draft.touched.name = true;
     if (e && e.target && e.target.matches('[data-country]')) draft.touched.country = true;
-    const b = modalEl.querySelector('[data-budget]');
+    const b = root.querySelector('[data-budget]');
     if (b) { draft.budget = b.value; if (e && e.target === b) draft.touched.budget = true; }
-    modalEl.querySelectorAll('[data-agent-budget]').forEach(i => {
+    root.querySelectorAll('[data-agent-budget]').forEach(i => {
       draft.agentBudgets[i.dataset.agentBudget] = i.value;
       if (e && e.target === i) draft.touched['budget-' + i.dataset.agentBudget] = true;
     });
@@ -323,10 +327,10 @@ function trackSettingsForm(draft, first){
     paintCountryNote(draft);
     paintSetupErrors(draft, first);
   };
-  modalEl.addEventListener('input', sync);
-  modalEl.addEventListener('change', sync);
+  root.addEventListener('input', sync);
+  root.addEventListener('change', sync);
   /* A switch is a button, so it reports a click rather than a change. */
-  modalEl.addEventListener('click', e => {
+  root.addEventListener('click', e => {
     if (e.target.closest('[data-sharing]')) { openSharing(); return; }
     const sw = e.target.closest('[data-chime], [data-board-banners], [data-board-agents]');
     if (!sw) return;
@@ -335,13 +339,13 @@ function trackSettingsForm(draft, first){
     sw.classList.toggle('tenon-switch--on', on);
     sync();
   });
-  modalEl.addEventListener('focusout', e => {
+  root.addEventListener('focusout', e => {
     if (e.target.matches('[data-name]')) draft.touched.name = true;
     if (e.target.matches('[data-country]')) draft.touched.country = true;
     paintSetupErrors(draft, first);
   });
   /* A new country has its own regions: fetch them and refill the Region select. */
-  modalEl.addEventListener('change', async e => {
+  root.addEventListener('change', async e => {
     if (!e.target.matches('[data-country]')) return;
     const code = e.target.value;
     draft.region = '';
@@ -351,8 +355,8 @@ function trackSettingsForm(draft, first){
       catch (err) { draft.regions = []; }
       if (!Array.isArray(draft.regions)) draft.regions = [];
     }
-    const field = modalEl.querySelector('[data-region-field]');
-    const sel = modalEl.querySelector('[data-region]');
+    const field = root.querySelector('[data-region-field]');
+    const sel = root.querySelector('[data-region]');
     if (sel) sel.innerHTML = settingsRegionOptions(draft);
     if (field) field.hidden = !draft.regions.length;
   });
@@ -399,23 +403,29 @@ function boardChanges(draft){
   return Object.keys(out).length ? out : null;
 }
 
-/* first: the welcome. needsList: step 2 follows step 1 (no list on disk). */
+/* Checks the form and saves it, from the welcome's button or the page's. */
+async function runSettingsSave(draft, first, needsList){
+  if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return; }
+  try { await saveSettingsDraft(draft, first); }
+  catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
+  if (first && needsList) { openFirstList(); return; }
+  /* Signed in, the name on the page is the sign-in's, so nothing to reload. */
+  if (draft.signedIn) { if (!settingsHostEl) closeModal(); showToast('Saved.', 'good'); return; }
+  /* The owner's name is read once, from /owner.js, as the page loads. */
+  location.reload();
+}
+
+/* first: the welcome. needsList: step 2 follows step 1 (no list on disk). The
+   welcome is the one place this form is still a pop-up; Data > Settings opens
+   the same form as a tab of the Settings page (drawSettingsTab). */
 async function openSettings(first, needsList){
   let loaded;
   try { loaded = await loadSettingsDraft(first); }
   catch (err) { showToast('Could not read settings: ' + (err.message || err)); return; }
   const { draft, set } = loaded;
   const choices = (set.choices && set.choices.models) || [];
-  const save = { label: 'Save', primary: true, run: async () => {
-    if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return; }
-    try { await saveSettingsDraft(draft, first); }
-    catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
-    if (first && needsList) { openFirstList(); return; }
-    /* Signed in, the name on the page is the sign-in's, so nothing to reload. */
-    if (draft.signedIn) { closeModal(); showToast('Saved.', 'good'); return; }
-    /* The owner's name is read once, from /owner.js, as the page loads. */
-    location.reload();
-  } };
+  settingsHostEl = null;
+  const save = { label: 'Save', primary: true, run: () => runSettingsSave(draft, first, needsList) };
   const buttons = first ? [save] : [save, { label: 'Cancel', run: closeModal }];
   const note = first
     ? '<p class="help" style="margin-top:14px">Next, run <code>scripts/install.sh</code> to link the skills and set up the hourly wake.</p>'
@@ -588,7 +598,126 @@ async function openSharing(){
   trackSharing(sh);
 }
 
-$('#settingsBtn').onclick = () => openSettings(false);
+/* ---- The Settings page ------------------------------------------------------
+   Data > Settings opens one page in the board's own area, with five tabs drawn
+   in the bucket bar while it is up: Memory (31-memory.js), Settings (this form),
+   Spend and Schedules (the two cards of 14-schedule.js), Backups (15-backups.js).
+   The URL is #settings/<tab>; an old #memory or #backups link opens its tab. */
+const SETTINGS_TABS = [
+  ['memory', 'Memory', 'what Bench keeps about this board and you'],
+  ['settings', 'Settings', 'your profile, models, folders and agent options'],
+  ['spend', 'Spend', 'what the agents have spent, window by window'],
+  ['schedules', 'Schedules', 'what runs on a clock'],
+  ['backups', 'Backups', 'every copy of this list the board has kept'],
+];
+let settingsTab = 'settings';
+/* The page's form, when it is drawn there rather than in the pop-up. */
+let settingsHostEl = null;
+const settingsRoot = () => settingsHostEl || modalEl;
+
+/* The tabs on offer: where no agent can run, or on the shared board, Spend and
+   Schedules go, and a folder opened from disk has no backups. */
+function settingsTabs(){
+  const noAgents = !!listFolder || state.agentsReady === false || !!state.who;
+  return SETTINGS_TABS.filter(([k]) =>
+    !((k === 'spend' || k === 'schedules') && noAgents) && !(k === 'backups' && listFolder));
+}
+
+/* A hash or a stray state.view that names the page, or one of the views that
+   became its tabs. True when it did, with settingsTab and state.view set. */
+function adoptSettingsRoute(h){
+  let tab = null;
+  if (h.view === 'settings') tab = SETTINGS_TABS.some(t => t[0] === h.bucketSlug) ? h.bucketSlug : settingsTab;
+  else if (h.view === 'memory' || h.view === 'backups') tab = h.view;
+  if (!tab) return false;
+  settingsTab = tab;
+  state.view = 'settings';
+  return true;
+}
+
+function openSettingsPage(tab){
+  if (tab) settingsTab = tab;
+  state.view = 'settings';
+  syncHash(true);
+  renderView();
+}
+
+/* The bucket bar, while the page is up: the five tabs where the bucket tabs
+   were, and none of the bucket bar's other controls. */
+function renderSettingsTabs(){
+  const bar = $('#bucketBar'), wrap = $('#bucketFilters');
+  if (!bar || !wrap) return;
+  const tabs = settingsTabs();
+  if (!tabs.some(t => t[0] === settingsTab)) settingsTab = 'settings';
+  bar.classList.remove('hidden');
+  bar.classList.add('bucketbar--page');
+  wrap.classList.remove('hidden');
+  $('#themeBar').classList.add('hidden');
+  BoardUI.mountFlushed(wrap, BoardUI.h(BoardUI.FilterTabs, {
+    tabs: tabs.map(([key, label, title]) => ({ key, label, on: settingsTab === key, title })),
+    label: 'Settings sections',
+    onToggle: key => { if (key !== settingsTab) { settingsTab = key; syncHash(true); renderSettingsPage(); } }
+  }));
+  renderPhoneChrome();
+}
+
+/* The page is being left for a board view: the bucket tabs come back (the view
+   being drawn calls renderTabs), and what the tabs mounted goes. */
+function leaveSettingsPage(){
+  leaveRefCards();
+  settingsHostEl = null;
+  if (typeof memStopObserving === 'function') memStopObserving();
+  const bar = $('#bucketBar');
+  if (bar) {
+    bar.classList.remove('bucketbar--page');
+    if (!state.doc) bar.classList.add('hidden');
+  }
+}
+
+function renderSettingsPage(){
+  renderSettingsTabs();
+  leaveRefCards();
+  settingsHostEl = null;
+  if (typeof memStopObserving === 'function') memStopObserving();
+  syncHash();
+  const tab = settingsTab;
+  if (tab === 'memory') renderMemoryView();
+  else if (tab === 'backups') renderBackupsView();
+  else if (tab === 'spend' || tab === 'schedules') drawRefCards(tab);
+  else drawSettingsTab();
+}
+
+/* What refreshView() does while the page is up: the tabs that show the list or
+   its files follow it, and the form is never redrawn under the person typing. */
+function refreshSettingsPage(){
+  if (settingsTab === 'memory') memDraw();
+  else if (settingsTab === 'backups') renderBackupsView();
+}
+
+/* The Settings tab: the form of the pop-up, drawn in the page. */
+async function drawSettingsTab(){
+  const lists = $('#lists');
+  lists.innerHTML = '<div class="settingspage" id="settingsPage"><p class="memempty">Reading settings…</p></div>';
+  let loaded;
+  try { loaded = await loadSettingsDraft(false); }
+  catch (err) {
+    if (state.view === 'settings' && settingsTab === 'settings')
+      lists.innerHTML = '<div class="settingspage"><p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p></div>';
+    return;
+  }
+  if (state.view !== 'settings' || settingsTab !== 'settings') return;
+  const { draft, set } = loaded;
+  const choices = (set.choices && set.choices.models) || [];
+  const host = $('#settingsPage');
+  host.innerHTML = '<h3 class="settingspage__title">' + (draft.signedIn ? 'Your profile' : 'Settings') + '</h3>' +
+    settingsFormHTML(draft, choices, false) +
+    '<div class="settingspage__actions"><button type="button" class="btn primary" data-settings-save>Save</button></div>';
+  settingsHostEl = host;
+  trackSettingsForm(draft, false);
+  host.querySelector('[data-settings-save]').onclick = () => runSettingsSave(draft, false, false);
+}
+
+$('#settingsBtn').onclick = () => { closeDataMenu(); openSettingsPage('settings'); };
 
 /* ---- Starting an agent straight away ------------------------------------
    Settings > Agent options says, per agent, whether a task handed to it waits

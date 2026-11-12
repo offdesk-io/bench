@@ -3219,12 +3219,19 @@
    these keep the page from offering them. See loadWhoami() in 21-datasets.js. */
 .whoami form{display:contents}
 body.signed-in #projOpenFolder,
-body.signed-in #refCardsBtn,
 body.signed-in #runAgentBtn{display:none !important}
 /* Who sees a list: the wizard's last step, and Settings on the shared board. */
 .sharing .sharekind, .sharing .shareteam{display:block; margin:4px 0}
 .sharing .sharewith{margin-top:8px}
 .sharing .sharewith[hidden]{display:none}
+
+/* The Settings page (29-settings.js): its tabs sit in the bucket bar, which
+   drops the controls that only mean something for buckets. */
+.bucketbar--page #editBuckets, .bucketbar--page #editTiers, .bucketbar--page #filterChips,
+.bucketbar--page #q{display:none}
+.settingspage{column-span:all; max-width:760px; margin:0 auto; padding:8px 0 40px}
+.settingspage__title{margin:0 0 12px; font-size:var(--tenon-typography-size-lg); font-weight:660; letter-spacing:-.01em; color:var(--tenon-text-default)}
+.settingspage__actions{display:flex; gap:8px; margin-top:16px}
 
 /* Memory view (31-memory.js). An index on the left, one column of sections at
    a readable width beside it; #lists is a two-column flow for the other views,

@@ -289,7 +289,8 @@ async function run (label, width, height) {
     await evalJS(`document.querySelector('#phAvatar').click()`)
     await wait(300)
     check(at('the avatar opens a sheet of the header actions'), await evalJS(`
-      ['undo', 'download', 'backups', 'settings'].every(id => !!document.querySelector('.phonesheet [data-action="' + id + '"]'))`))
+      ['undo', 'download', 'settings'].every(id => !!document.querySelector('.phonesheet [data-action="' + id + '"]')) &&
+      !document.querySelector('.phonesheet [data-action="backups"], .phonesheet [data-action="spend"]')`))
     check(at('with the status line underneath'), await evalJS(`
       document.querySelector('.phonesheet .tenon-modal__subtitle')?.textContent === document.querySelector('#status').textContent`))
     await key('Escape')

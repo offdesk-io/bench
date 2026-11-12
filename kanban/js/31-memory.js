@@ -41,6 +41,9 @@ const MEM_PEOPLE_COLS = [
   { key: 'reports_to', label: 'Reports to' }, { key: 'notes', label: 'Notes' }
 ];
 
+/* The Memory tab of the Settings page is what is on screen. */
+function memOnScreen(){ return state.view === 'settings' && settingsTab === 'memory'; }
+
 /* ---- Context: context.md, or the old todo.md section until the first save ---- */
 
 /* Where the `## Context` section sits: which of the document's two loose
@@ -390,7 +393,7 @@ async function memSave(which){
     }
   } catch (err) {
     memFormError = String(err.message || err);
-    if (state.view === 'memory') memDraw();
+    if (memOnScreen()) memDraw();
     return;
   }
   memEditing = null; memPeopleDraft = null; memBucketParts = null;
@@ -441,7 +444,7 @@ async function memLoad(){
   } catch (err) {
     memError = 'Could not read what Bench keeps. The board helper may need restarting. ' + (err.message || err);
   }
-  if (state.view === 'memory') memDraw();
+  if (memOnScreen()) memDraw();
 }
 
 function renderMemoryView(){

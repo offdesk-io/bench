@@ -824,11 +824,14 @@ function renderView(){
   // Plans was once a view. A plan is read from the review behind it
   // now, on the card, so an old #plans link lands on the board.
   if (state.view === 'plans') state.view = 'board';
-  const isBackups = state.view === 'backups';
+  // Memory and Backups were views of their own: they are tabs of the Settings
+  // page now, and anything that still names them lands there.
+  if (state.view === 'memory' || state.view === 'backups') { settingsTab = state.view; state.view = 'settings'; }
+  const isSettings = state.view === 'settings';
   // Projects has no tab, but a #projects link still draws its list.
   const isProjects = state.view === 'projects';
-  if (!isBackups && !isProjects && !defs.some(d => d.id === state.view)) state.view = 'board';
-  const def = isBackups ? { id:'backups', label:'Backups' }
+  if (!isSettings && !isProjects && !defs.some(d => d.id === state.view)) state.view = 'board';
+  const def = isSettings ? { id:'settings', label:'Settings' }
     : isProjects ? { id:'projects', label:'Projects' }
     : defs.find(d => d.id === state.view);
   const isBoard = def.id === 'board';
@@ -849,6 +852,7 @@ function renderView(){
   // otherwise never show. forgetWrittenReports() only clears the cache — the
   // fetch itself is ensureWrittenReports(), from renderSections().
   if (def.id === 'overview' && lastRenderedView !== 'overview') { forgetWrittenReports(); refreshOrphanPlans(); }
+  if (lastRenderedView === 'settings' && def.id !== 'settings') leaveSettingsPage();
   lastRenderedView = def.id;
   if (def.id !== 'agents') leaveAgentsView();
 
@@ -858,7 +862,6 @@ function renderView(){
   $('#lists').classList.toggle('hidden', isBoard);
   // renderColTabs() puts it back; nothing else on any other view wants it.
   if (!isBoard) $('#colTabs').classList.add('hidden');
-  $('#backupsBtn').classList.toggle('on', isBackups);
 
   if (isBoard) { renderBoard(); return; }
   // The one thing bar is a board idea specifically — pinning a card above
@@ -869,8 +872,7 @@ function renderView(){
   $('#headline').classList.add('hidden');
   if (def.id === 'projects') { renderFilterBar(); renderProjectsView(); return; }
   if (def.id === 'agents') { renderFilterBar(); renderAgentsView(); return; }
-  if (def.id === 'memory') { renderFilterBar(); renderMemoryView(); return; }
-  if (def.id === 'backups') { renderFilterBar(); renderBackupsView(); return; }
+  if (def.id === 'settings') { renderSettingsPage(); return; }
   renderSections(def.id);
 }
 
@@ -881,8 +883,7 @@ function refreshView(){
   if (state.view === 'board') renderBoard();
   else if (state.view === 'projects') renderProjectsView();
   else if (state.view === 'agents') renderAgentsView();
-  else if (state.view === 'memory') memDraw();
-  else if (state.view === 'backups') renderBackupsView();
+  else if (state.view === 'settings') refreshSettingsPage();
   else renderSections(state.view);
   updateArchiveChip();
 }

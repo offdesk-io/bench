@@ -97,12 +97,12 @@ try {
     `(() => { const f = $('#whoami form'); return !$('#whoami').classList.contains('hidden') && f.method === 'post' && f.getAttribute('action') === '/auth/logout' })()`))
   check('the page knows it is signed in', await evalJS(`document.body.classList.contains('signed-in') && state.who.email === 'jerome@example.com'`))
   check('no Agents tab', await evalJS(`!viewDefs().some(d => d.id === 'agents') && !$('#viewToggle').textContent.includes('Agents')`))
-  check('no Spend and schedules', await evalJS(`getComputedStyle($('#refCardsBtn')).display === 'none'`))
+  check('no Spend and Schedules tabs', await evalJS(`!settingsTabs().some(t => t[0] === 'spend' || t[0] === 'schedules') && settingsTabs().some(t => t[0] === 'settings')`))
   check('the board loaded the list', await evalJS(`!!state.doc && !state.demo && state.dataset === 'offdesk'`))
 
   // --- a new list, shared with the team ---------------------------------------
   await evalJS(`createDataset()`); await wait(300)
-  const press = label => evalJS(`[...modalEl.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)}).click()`)
+  const press = label => evalJS(`[...(modalEl || settingsRoot()).querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(label)}).click()`)
   await evalJS(`(() => { const n = modalEl.querySelector('#wizName'); n.value = 'Team plan'; n.dispatchEvent(new Event('input', { bubbles: true })) })()`)
   await press('Next'); await wait(150)
   await evalJS(`(() => { const b = modalEl.querySelector('#wizBuckets'); b.value = 'Work'; b.dispatchEvent(new Event('input', { bubbles: true })) })()`)
@@ -126,12 +126,12 @@ try {
   const profileFile = join(data, 'users', execFileSync('python3', ['-c',
     'import hashlib,sys;print(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:16])', 'jerome@example.com']).toString().trim() + '.profile.md')
   await evalJS(`$('#settingsBtn').click()`); await wait(800)
-  check('Settings is his profile', await evalJS(`!!modalEl && modalEl.textContent.includes('Your profile') && modalEl.querySelector('[data-name]').value === 'Jérôme'`))
+  check('Settings is his profile', await evalJS(`!!settingsRoot() && settingsRoot().textContent.includes('Your profile') && settingsRoot().querySelector('[data-name]').value === 'Jérôme'`))
   check('with his name and address, and no paths', await evalJS(
-    `!!modalEl.querySelector('[data-about="addressing"]') && !modalEl.querySelector('[data-section]') && !modalEl.querySelector('[data-about="facts_file"]')`))
-  check('and none of the server’s settings', await evalJS(`!modalEl.querySelector('[data-memory]') && !modalEl.querySelector('[data-chime]') && !modalEl.querySelector('[data-agent-options]')`))
+    `!!settingsRoot().querySelector('[data-about="addressing"]') && !settingsRoot().querySelector('[data-section]') && !settingsRoot().querySelector('[data-about="facts_file"]')`))
+  check('and none of the server’s settings', await evalJS(`!settingsRoot().querySelector('[data-memory]') && !settingsRoot().querySelector('[data-chime]') && !settingsRoot().querySelector('[data-agent-options]')`))
   await evalJS(`(() => {
-    const set = (sel, v) => { const el = modalEl.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) }
+    const set = (sel, v) => { const el = settingsRoot().querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) }
     set('[data-about="addressing"]', 'Salut Jérôme')
   })()`)
   await press('Save'); await wait(600)
@@ -139,17 +139,17 @@ try {
   check('saved to his own file', /^- Name: Jérôme$/m.test(own) && /^- How to address them: Salut Jérôme$/m.test(own), own.slice(0, 200))
   check('nothing written to the shared profile', !existsSync(join(data, 'profile.md')))
   await evalJS(`$('#settingsBtn').click()`); await wait(800)
-  check('it reads back', await evalJS(`modalEl.querySelector('[data-about="addressing"]').value === 'Salut Jérôme'`))
+  check('it reads back', await evalJS(`settingsRoot().querySelector('[data-about="addressing"]').value === 'Salut Jérôme'`))
 
   // --- the owner changes the sharing from there ----------------------------------
-  await evalJS(`modalEl.querySelector('[data-sharing]').click()`); await wait(500)
+  await evalJS(`settingsRoot().querySelector('[data-sharing]').click()`); await wait(500)
   check('Who sees is a button in it', await evalJS(`!!modalEl && modalEl.textContent.includes('Who sees') && modalEl.querySelector('input[value="shared"]').checked`))
   await evalJS(`modalEl.querySelector('input[value="personal"]').click()`)
   await press('Save'); await wait(500)
   check('saved as personal', JSON.stringify(accessOf('team-plan')) ===
     JSON.stringify({ owner: 'jerome@example.com', people: [], teams: [] }), JSON.stringify(accessOf('team-plan')))
   await evalJS(`$('#settingsBtn').click()`); await wait(800)
-  await evalJS(`modalEl.querySelector('[data-sharing]').click()`); await wait(500)
+  await evalJS(`settingsRoot().querySelector('[data-sharing]').click()`); await wait(500)
   await evalJS(`modalEl.querySelector('input[value="shared"]').click()`)
   await evalJS(`(() => { const t = modalEl.querySelector('#shPeople'); t.value = 'tiago@example.com'; t.dispatchEvent(new Event('input', { bubbles: true })) })()`)
   await press('Save'); await wait(500)

@@ -676,10 +676,10 @@ file says.
 
 ### Schedule
 
-**Spend and schedules** in the Data menu, opening a sheet, with **Run the Plan agent
-now** beside it. Not a tab, because it is about the machinery around the list rather
-than about the list. Both only show when an agent can run on this machine, so not without Claude Code
-or `agents-engine`.
+**Spend** and **Schedules** are two tabs of the Settings page (Data, Settings), beside Memory,
+Settings and Backups, with **Run the Plan agent now** in the Data menu. Not tabs of the board,
+because they are about the machinery around the list rather than about the list. Both only show
+when an agent can run on this machine, so not without Claude Code or `agents-engine`.
 
 Three things here run on a clock rather than when you ask them to: the nightly
 agent's twelve launchd wakes, the desktop banners thread, and the weekly

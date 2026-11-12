@@ -1,5 +1,5 @@
 /**
- * Drives the Spend and schedules sheet in headless Chrome and asserts on the two cards that
+ * Drives the Spend and Schedules tabs of the Settings page in headless Chrome and asserts on the two cards that
  * used to be the Schedule view — "What runs on a clock", its own card
  * stacked under Token Session, and the Token Session chart itself.
  *
@@ -71,7 +71,7 @@ async function evalJS (expr) {
 }
 
 await new Promise(r => setTimeout(r, 2500))
-check('the board loaded', await evalJS(`typeof openRefCards === 'function' && typeof renderSched === 'function'`))
+check('the board loaded', await evalJS(`typeof openSettingsPage === 'function' && typeof renderSched === 'function'`))
 
 /* The modal's tree is React, so a render followed by a read in the same breath
    reads the paint before it. Two frames: React commits in one and the browser
@@ -154,18 +154,25 @@ await evalJS(`state.view = 'board'; renderView()`)
 await new Promise(r => setTimeout(r, 700))
 
 // Neither card is on a view: both are reference rather than decision, so they
-// sit behind the Data menu's Spend and schedules button and draw when it is
-// pressed. Everything below reads them inside that modal.
+// are the Spend and Schedules tabs of the Settings page and draw when it is
+// opened. Everything below reads both together (refCardsShow cleared), after a
+// check that each tab draws one.
 check('neither card is drawn until the button is pressed', await evalJS(`
   !document.querySelector('#schedOut') && !document.querySelector('#usageOut')
 `))
-await evalJS(`document.querySelector('#refCardsBtn').click()`)
+await evalJS(`openSettingsPage('spend')`)
+await new Promise(r => setTimeout(r, 700))
+check('the Spend tab draws Token Session alone', await evalJS(`!!document.querySelector('#usageOut') && !document.querySelector('#schedOut')`))
+await evalJS(`openSettingsPage('schedules')`)
+await new Promise(r => setTimeout(r, 700))
+check('the Schedules tab draws the clock card alone', await evalJS(`!!document.querySelector('#schedOut') && !document.querySelector('#usageOut')`))
+await evalJS(`refCardsShow = undefined; paintRefCards(); renderUsage()`)
 await new Promise(r => setTimeout(r, 700))
 
 check('the clock card is its own column, stacked under Token Session', await evalJS(`
   (() => { const card = document.querySelector('#schedOut').closest('.tenon-column');
     return card && card.parentElement.classList.contains('pvcol') &&
-      card.closest('.tenon-modal') &&
+      card.closest('#lists') &&
       card.querySelector('h3').textContent === 'What runs on a clock' &&
       card.previousElementSibling.querySelector('h3').textContent === 'Token Session' })()
 `))
@@ -354,20 +361,20 @@ await new Promise(r => setTimeout(r, 300))
 
 // Closing and reopening must work: a second opening has to draw both cards as
 // fully as the first.
-await evalJS(`closeModal()`)
+await evalJS(`state.view = 'board'; renderView()`)
 await evalJS(`state.view = 'board'; renderView()`)
 await new Promise(r => setTimeout(r, 300))
 check('there is no Plans tab any more, and an old #plans link lands on the board', await evalJS(`
   ![...document.querySelectorAll('#viewToggle [role=radio]')].some(t => t.textContent.startsWith('Plans')) &&
   (state.view = 'plans', renderView(), state.view === 'board')
 `))
-await evalJS(`document.querySelector('#refCardsBtn').click()`)
+await evalJS(`openSettingsPage('spend'); refCardsShow = undefined; paintRefCards(); renderSched()`)
 await new Promise(r => setTimeout(r, 700))
 check('and coming back redraws both cards', await evalJS(`
   document.querySelectorAll('#schedOut .schedjob').length === 3 &&
   !!document.querySelector('#usageOut .uchart')
 `))
-await evalJS(`closeModal()`)
+await evalJS(`state.view = 'board'; renderView()`)
 
 check('none of it wrote anything', await evalJS(`window.__blocked.length === 0`),
   await evalJS(`window.__blocked.join(', ') || 'no writes attempted'`))

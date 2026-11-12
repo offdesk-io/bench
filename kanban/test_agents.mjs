@@ -261,8 +261,8 @@ check('and no list counts as set up, delegated tasks included', await evalJS(`((
   t.to = 'Plan agent'; const on = agentsSetUp(); t.to = ''; return on === false;
 })()`))
 check('Delegate to offers no agents', await evalJS(`!delegateSelectHTML('', '').includes('Plan agent')`))
-check('the Data menu leaves out Spend and schedules, and Run the Plan agent now', await evalJS(`syncFolderButton();
-  $('#refCardsBtn').classList.contains('hidden') && $('#runAgentBtn').classList.contains('hidden')`))
+check('the Data menu leaves out Run the Plan agent now, and the Settings page leaves out Spend and Schedules', await evalJS(`syncFolderButton();
+  $('#runAgentBtn').classList.contains('hidden') && !settingsTabs().some(t => t[0] === 'spend' || t[0] === 'schedules')`))
 check('Settings leaves out the agent options', await evalJS(`loadSettingsDraft(false).then(d => {
   const html = settingsFormHTML(d.draft, [], false);
   return !html.includes('data-agent-options') && html.includes('Agents are off on this machine');
@@ -273,7 +273,7 @@ check('a hand-over set to start now starts nothing', await evalJS(`(async () => 
 })()`))
 await evalJS(`state.agentsReady = null; state.agentsMissing = ''; syncFolderButton(); state.view = 'board'; renderView()`)
 await wait(300)
-check('with the answer unknown, nothing is hidden', await evalJS(`!$('#refCardsBtn').classList.contains('hidden') && !$('#runAgentBtn').classList.contains('hidden')`))
+check('with the answer unknown, nothing is hidden', await evalJS(`settingsTabs().some(t => t[0] === 'spend') && !$('#runAgentBtn').classList.contains('hidden')`))
 check('Run the Plan agent now asks first', await evalJS(`(() => {
   $('#runAgentBtn').click();
   const asked = !!modalEl && modalEl.textContent.includes('Run the Plan agent now?');

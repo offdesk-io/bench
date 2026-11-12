@@ -188,7 +188,6 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDataMen
 
 /* wiring */
 $('#download').onclick = () => downloadText(serializeDoc(state.doc), state.fileName);
-$('#backupsBtn').onclick = () => { state.view = 'backups'; renderView(); };
 $('#archiveBtn').onclick = archiveOldDone;
 $('#retry').onclick = loadFile;
 $('#q').oninput = e => { state.query = e.target.value; renderBoard(); };
@@ -518,8 +517,11 @@ window.addEventListener('hashchange', () => {
      press would leave two behind and Back would stop moving. */
   restoringHash = true;
   try {
-    if (isKnownView(h.view) && h.view !== state.view) { state.view = h.view; changed = true; }
-    if (h.bucketSlug && state.doc) {
+    const wasTab = settingsTab, wasView = state.view;
+    const onSettings = adoptSettingsRoute(h);
+    if (onSettings) { if (wasView !== 'settings' || wasTab !== settingsTab) changed = true; }
+    else if (isKnownView(h.view) && h.view !== state.view) { state.view = h.view; changed = true; }
+    if (!onSettings && h.bucketSlug && state.doc) {
       const names = bucketFilterFromSlugs(h.bucketSlug);
       const same = names.size === state.bucketFilter.size && [...names].every(n => state.bucketFilter.has(n));
       if (!same) { state.bucketFilter = names; changed = true; }
