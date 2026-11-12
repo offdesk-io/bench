@@ -3,7 +3,6 @@
   "id": "plan-agent",
   "name": "Plan agent",
   "cwd": ".",
-  "wake": ["python3", "run.py", "--wake"],
   "state": ["python3", "run.py", "--state"],
   "apply": ["python3", "run.py", "--apply"],
   "run": ["python3", "run.py", "--run"],

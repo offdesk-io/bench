@@ -4565,6 +4565,8 @@ def main():
             read_text=lambda p: _steady_read(p)[0])
         if NOTIFIER["thread"]:
             print("Desktop banners for due tasks are on.")
+        import bucket_wake  # on-assign bucket agents start within a minute of a handover
+        bucket_wake.start(DATA_ROOT)
 
     url = "http://127.0.0.1:%d/%s" % (PORT, PAGE)
     print("To-do board running at %s" % url)

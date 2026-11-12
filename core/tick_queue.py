@@ -19,18 +19,19 @@ asking. The board applies a tick only when `by` is the agent the sub-task is
 assigned to, so an agent cannot tick a review and approve its own work. Nothing
 is lost when the board is closed: the request waits for the next load.
 
-`type` is the plan's own `type:` (core/plan_types.py), on the Plan agent's tick
-only. For a pre-approved type the board also ticks Review the plan, with the
-note "pre-approved type". That is the board's decision, made from its own list:
-the agent only says what kind of plan it wrote.
+`type` is the plan's own `type:` (core/plan_types.py), written only by the
+retired Plan agent. No type is approved on arrival any more, so the bucket
+agents (agents/bucket-agent/) leave it out and the owner ticks every Review the
+plan.
 
 The other kind of request asks for a handover rather than a tick:
 
     {"id": "7c1d0e4a", "handover": "ab12cd", "to": "Plan agent", "by": "Plan agent",
      "at": "2026-09-26T02:00:03", "note": "tagged with no handover"}
 
-`handover` is the task's own id. The Plan agent leaves one for a task carrying
-`[to::]` an agent with none of the sub-tasks a handover lays out (pick.unhanded()),
+`handover` is the task's own id. A bucket's agent leaves one for a task carrying
+`[to::]` its name with none of the sub-tasks a handover lays out
+(agents/bucket-agent/bucket_work.py unhanded()),
 and the board runs handOver() on it, as Delegate to would. It is applied only
 while the task's `[to::]` still names that agent, and does nothing to a task
 that has since been handed over.
@@ -181,7 +182,7 @@ def main(argv):
     ap = argparse.ArgumentParser(description="Ask the board to tick a sub-task, or move a card.")
     ap.add_argument("action", choices=["tick", "move"])
     ap.add_argument("sub", help="the six-character id on the sub-task's line, or the card's for move")
-    ap.add_argument("--by", required=True, help='who is asking: "Plan agent" or "Implement agent"')
+    ap.add_argument("--by", required=True, help='who is asking: the agent the sub-task is assigned to')
     ap.add_argument("--note", default="")
     ap.add_argument("--plan", default="", help="a plan just written, relative to the plans folder")
     ap.add_argument("--type", default="", help="the plan's type:, on the Plan agent's tick")

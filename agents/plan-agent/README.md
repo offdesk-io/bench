@@ -1,5 +1,7 @@
 # The planning agent
 
+> **Retired.** The bucket agents' runner, [`agents/bucket-agent/`](../bucket-agent/README.md), replaces this agent. Its `agent.json` no longer has a `wake`, so the hourly wake does not reach it, and the folder stays on disk until a later change deletes it. The board's Run now and Schedule view still point here.
+
 Overnight, this reads the to-do list, picks every task Claude could help with,
 and sets one sub-agent per task to work out what doing it would actually involve.
 It writes a plan for each and stops. **Nothing it produces has been done.** In the

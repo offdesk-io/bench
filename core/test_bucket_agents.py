@@ -200,6 +200,25 @@ class BucketAgentsTest(unittest.TestCase):
             else:
                 os.environ["TODOS_DATA_ROOT"] = old
 
+    def test_agent_name(self):
+        name = bucket_agents.agent_name
+        self.assertEqual(name("personal", "family"), "Personal family agent")
+        self.assertEqual(name("work-and-career", "tenon-ds"), "Work and career tenon-ds agent")
+        self.assertEqual(name("personal", "personal-tasks"), "Personal tasks agent")
+        self.assertEqual(name("personal", "personal"), "Personal agent")
+        self.assertEqual(name("personal", "personalia"), "Personal personalia agent")
+        self.write("news", filled())
+        self.assertEqual(self.load("news")["name"], "Demo news agent")
+
+    def test_by_name(self):
+        self.write("news", filled())
+        os.makedirs(os.path.join(self.root, "demo", "buckets", "demo-admin"))
+        self.assertEqual(bucket_agents.by_name("demo", "Demo news agent", self.root), "news")
+        self.assertEqual(bucket_agents.by_name("demo", "  demo  NEWS agent ", self.root), "news")
+        self.assertEqual(bucket_agents.by_name("demo", "Demo admin agent", self.root), "demo-admin")
+        self.assertIsNone(bucket_agents.by_name("demo", "Plan agent", self.root))
+        self.assertIsNone(bucket_agents.by_name("demo", "", self.root))
+
     def test_cli(self):
         self.write("news", filled("free-rein"))
         self.write("admin", template())

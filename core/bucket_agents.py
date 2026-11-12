@@ -40,6 +40,10 @@ about a bucket stays in Bench, and only people, about, context and the profile
 go to the memory folder, so it is never routed through the memory lookup.
 Every reader here goes through definition_path(), so the file's place is said
 once.
+
+Each bucket's agent has a name, agent_name(), which is what a sub-task handed
+to it carries in `[to::]` and what its ticks are queued under. by_name() reads
+one back to its bucket.
 """
 
 import os
@@ -197,10 +201,44 @@ def parse(text):
             "fields": fields, "ready": not missing, "missing": missing}
 
 
+def _words(name):
+    """A list or bucket name as words: hyphens and underscores become spaces."""
+    return " ".join(re.split(r"[-_]+", name)).strip()
+
+
+def agent_name(dataset, bucket):
+    """"[List] [bucket] agent", the name a bucket's agent goes by on the board.
+
+    The list in words with its first letter capitalised, then the bucket as its
+    stream is spelt: `Work and career tenon-ds agent`. A bucket that already
+    starts with the list's name keeps one copy of it, its remainder in words,
+    so `personal-tasks` in `personal` is `Personal tasks agent`."""
+    if bucket == dataset:
+        rest = ""
+    elif bucket.startswith(dataset + "-"):
+        rest = _words(bucket[len(dataset) + 1:])
+    else:
+        rest = bucket
+    head = _words(dataset)
+    head = head[:1].upper() + head[1:]
+    return " ".join(w for w in (head, rest, "agent") if w)
+
+
+def by_name(dataset, name, root=None):
+    """The bucket whose agent_name() is `name` (case and spacing aside), or None."""
+    want = " ".join((name or "").split()).lower()
+    if not want:
+        return None
+    for bucket in bucket_names(dataset, root):
+        if agent_name(dataset, bucket).lower() == want:
+            return bucket
+    return None
+
+
 def load(dataset, bucket, root=None):
     """One bucket's agent definition: `mode`, `start`, `fields` (name -> text),
     `ready` and `missing` (field names, `marker` first when the template's line
-    is still there), plus `bucket`, `path` and `exists`. A bucket with no file
+    is still there), plus `bucket`, `name` (agent_name()), `path` and `exists`. A bucket with no file
     is not ready, with every required field missing. `mode` and `start` are
     None when what is written is not one of MODES or STARTS."""
     path = definition_path(dataset, bucket, root)
@@ -216,7 +254,7 @@ def load(dataset, bucket, root=None):
         out = {"mode": None, "start": DEFAULT_START,
                "fields": {name: "" for name, _ in FIELDS},
                "ready": False, "missing": ["mode"] + list(REQUIRED)}
-    out.update({"bucket": bucket, "path": path, "exists": exists})
+    out.update({"bucket": bucket, "name": agent_name(dataset, bucket), "path": path, "exists": exists})
     return out
 
 

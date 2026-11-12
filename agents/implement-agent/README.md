@@ -1,5 +1,7 @@
 # to-dos/agents/implement-agent
 
+> **Retired.** The bucket agents' runner, [`agents/bucket-agent/`](../bucket-agent/README.md), replaces this agent. Its `agent.json` no longer has a `wake`, so the hourly wake does not reach it, and the folder stays on disk until a later change deletes it. The `do` skill and its `implement-agent.md` definition, run with the owner in the room, still live here.
+
 The acting half. `agents/plan-agent/` researches a task overnight and proposes;
 this is what happens after the owner reads one of those plans and says yes.
 

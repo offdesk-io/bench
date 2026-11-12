@@ -1694,8 +1694,8 @@ def test_runner_root():
     check("and a bare wake to the runner's wake", '--wake' in sh, True)
     import json as _json
     desc = _json.load(open(os.path.join(HERE, "agent.json"), encoding="utf-8"))
-    check("the shared hourly wake reaches this agent through agent.json",
-          desc.get("wake"), ["python3", "run.py", "--wake"])
+    # Retired: the bucket agents (agents/bucket-agent/) are woken instead.
+    check("the shared hourly wake no longer reaches this agent", "wake" in desc, False)
 
 
 def test_carry_over():
