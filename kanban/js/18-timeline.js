@@ -730,11 +730,12 @@ function renderSections(viewId){
       bigRocks: Object.assign(bigRocksSection(items), { open: overviewOpen('ov:Big rocks') }),
       thisWeek: Object.assign(weekSection(items), { open: overviewOpen('ov:This week') }),
       quickWins: Object.assign(quickSection(items), { open: overviewOpen('ov:Quick wins') }),
+      // Tasks finished, built in 12-reports.js (see reportsColumnProps there).
+      reports: reportsColumnProps(),
     }));
   } else if (viewId === 'reports') {
-    // Tasks finished and Written reports, built in 12-reports.js (see
-    // reportsColumnProps there). The counted half needs nothing fetched, so the
-    // page paints now and the written column fills in when /reports.json lands.
+    // Written reports, built in 12-reports.js (see reportsColumnProps there).
+    // The page paints now and the column fills in when /reports.json lands.
     // ensureWrittenReports() is a no-op on every render but the first of a visit.
     BoardUI.mountFlushed(host, BoardUI.ReportsView({ reports: reportsColumnProps() }));
     ensureWrittenReports();

@@ -1,11 +1,9 @@
-/* Reports — the counted half and the written half, as two columns the
- * Reports page draws.
+/* Reports — the counted half and the written half, as two columns on two pages.
  *
  * They were a tab of their own until 19 Sep 2026, then the ends of Overview's
- * row, and are a tab again: what got done is read on its own page, and
- * Overview keeps the columns to pick work up from. `ReportsView`
- * (SectionsView.tsx) lists them, Tasks finished first at twice a reference
- * column's width and Written reports beside it.
+ * row, and are split now: Tasks finished leads Overview's row (`OverviewView`
+ * in SectionsView.tsx), at twice a reference column's width, and Written
+ * reports is the Reports tab on its own (`ReportsView`).
  *
  * Both are collapsible here, which they were not as a tab — every column on
  * Overview is, for the same reason: columns of prose open at once are a lot of

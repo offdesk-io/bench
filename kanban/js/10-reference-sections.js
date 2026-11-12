@@ -1,8 +1,8 @@
 'use strict';
 
 /* =========================================================================
-   4b. Reference sections. Overview is three columns — Big rocks, This week and Quick
-       wins. delegateSection() below is still built but no longer drawn.
+   4b. Reference sections. Overview is Tasks finished (12-reports.js) then three columns — Big rocks, This
+       week and Quick wins. delegateSection() below is still built but no longer drawn.
        Dependency chain sits on Matrix, beside the nine cells.
 
    These used to be rendered as prose straight out of the markdown, which meant

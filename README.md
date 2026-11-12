@@ -525,11 +525,10 @@ reports** answer what got done, which is what a one-to-one or an end-of-quarter
 write-up actually asks for and which nothing here could tell you without
 counting ticks by hand.
 
-They have a page of their own, the Reports tab right after Overview, with
-Tasks finished at twice a reference column's width and Written reports beside
-it. Overview holds three columns, Big rocks, This week and Quick wins, so it
-reads as the list of what to pick up. Both report columns fold like the ones on
-Overview, and an old `#reports` link opens the tab.
+Tasks finished leads Overview's row at twice a reference column's width, ahead
+of Big rocks, This week and Quick wins, so what got done is read before picking
+anything up. Written reports has the Reports tab, right after Overview, to
+itself. Both fold like every other column, and `#reports` opens the tab.
 
 The first report is **Counted from the list**, broken down by bucket. It leads
 with the total, set large enough to read from across the desk, because that
