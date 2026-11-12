@@ -129,7 +129,7 @@ plan, a `Project:` note pointing at the folder you created, a note recording wha
 was done. The `pa` skill makes the change, asks the owner, and handles the board.
 
 Never ask for a change the plan you were given did not name. Which bucket or column
-a task sits in, `done:` stamps, the `## Context` section and any other task are not
+a task sits in, `done:` stamps, `context.md` (read through the memory lookup, no longer a section of `todo.md`) and any other task are not
 yours to request either. Moving a task to Doing or Waiting for review is a statement of
 fact only the owner can make, and `CONVENTIONS.md` says so directly.
 
