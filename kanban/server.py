@@ -2148,6 +2148,8 @@ def start_planning_agent_run():
     import subprocess
     if planning_agent_pick is None:
         return None, {"error": "no planning agent in this checkout"}
+    if not settings.agents_on(current_dataset(), DATA_ROOT):
+        return None, {"error": "agents are off for this board in Settings"}
     if SCRATCH:
         # A test server over a throwaway data root: a real run would spend
         # money and plan against whatever run.sh resolves, not this folder.

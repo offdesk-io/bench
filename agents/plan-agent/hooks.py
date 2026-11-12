@@ -21,6 +21,10 @@ functions as before:
 
 One target per list, and `PLANNING_DATASET` is set for whichever list a hook is
 answering about, so `paths.py` resolves every path against it as before.
+
+A list whose `agents` is false in settings.json's `boards` (core/settings.py)
+gets nothing: no briefings or reports on a wake, no plans, no handover
+requests, and one line in its plan-agent.log saying why.
 """
 
 import datetime as dt
@@ -63,6 +67,13 @@ _skipped = {}
 
 def _use(target_id):
     os.environ["PLANNING_DATASET"] = target_id
+
+
+OFF = "agents are off for this board in Settings"
+
+
+def _off(target):
+    return not settings.agents_on(target["id"], paths.DATA_ROOT)
 
 
 # --------------------------------------------------------------------------
@@ -141,6 +152,8 @@ def eligible(item, target):
 
 def on_wake(target):
     """Once per scheduled wake, due or not: briefings, reports, a usage reading."""
+    if _off(target):
+        return
     _use(target["id"])
     env = dict(os.environ, PLANNING_DATASET=target["id"])
     for script in ("brief.py", "report.py"):
@@ -152,6 +165,8 @@ def on_wake(target):
 
 def before(target, todo_, dry):
     _use(target["id"])
+    if _off(target):
+        return {"note": OFF} if dry else {"skip": OFF}
     if dry:
         missing = sorted({t["task"].bucket for t in todo_
                           if not plan.agent_on_disk(plan.bucket_agent(t["task"].bucket))})
@@ -179,6 +194,9 @@ def should_stop(target, run):
 
 def after(target, run):
     _use(target["id"])
+    if _off(target):
+        plan.log("skipped: %s" % OFF)
+        return
     _queue_handovers()
     night = _night.pop(target["id"], None)
     skipped = [(l["title"], l["why"]) for l in run["left"]]
@@ -335,6 +353,10 @@ def land(item, result, target):
 
 # --------------------------------------------------------------------------
 # the dashboard, beyond what the runner draws
+
+
+def problems(target):
+    return ["Agents are off for this board in Bench's Settings, so nothing runs on it."] if _off(target) else []
 
 
 def card(target, card):

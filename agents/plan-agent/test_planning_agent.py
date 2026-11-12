@@ -1225,6 +1225,19 @@ def test_queue_routes():
                     check("nor one with no runner to start", bool(err), True)
                 finally:
                     server.ROOT = real_root
+
+                # A board whose agents are off in settings.json refuses first.
+                conf = os.path.join(tmp, "settings.json")
+                with open(conf, "w", encoding="utf-8") as fh:
+                    json.dump({"boards": {"test": {"agents": False}}}, fh)
+                real_data = server.DATA_ROOT
+                server.DATA_ROOT = tmp
+                try:
+                    _, err = server.start_planning_agent_run()
+                    check("nor one on a board with its agents off",
+                          (err or {}).get("error"), "agents are off for this board in Settings")
+                finally:
+                    server.DATA_ROOT = real_data
             finally:
                 server.agents_missing, server.SCRATCH = real_missing, real_scratch
         finally:
@@ -1369,6 +1382,41 @@ def test_runner():
         head = open(os.path.join(planners, p),
                     encoding="utf-8").read()[:400]
         check("%s claims no Bash either" % p, "Bash" in head, False)
+
+
+def test_agents_off():
+    """A board whose `agents` is false in settings.json's `boards` gets no run:
+    no briefings on a wake, a refusal before the batch, no handover requests
+    after it, and one line in its log."""
+    import hooks
+    target = {"id": "work"}
+    conf = os.path.join(paths.DATA_ROOT, "settings.json")
+    log = os.path.join(paths.DATA_ROOT, "work", "plans", "plan-agent.log")
+    calls = []
+    real_call, real_handovers = hooks.subprocess.call, hooks._queue_handovers
+    hooks.subprocess.call = lambda *a, **k: calls.append(a) or 0
+    hooks._queue_handovers = lambda: calls.append("handovers")
+    try:
+        check("agents on: no problem on the card", hooks.problems(target), [])
+        with open(conf, "w", encoding="utf-8") as fh:
+            fh.write('{"boards": {"work": {"agents": false}}}')
+        before = open(log, encoding="utf-8").read() if os.path.exists(log) else ""
+        hooks.on_wake(target)
+        check("agents off: a wake runs no briefings or reports", calls, [])
+        check("agents off: the batch is refused", hooks.before(target, [{"task": None}], False),
+              {"skip": hooks.OFF})
+        check("agents off: a dry run says why", hooks.before(target, [{"task": None}], True), {"note": hooks.OFF})
+        hooks.after(target, {"left": [], "did": [], "stopped": hooks.OFF, "cost": 0.0})
+        check("agents off: no handover requests", calls, [])
+        added = open(log, encoding="utf-8").read()[len(before):].splitlines()
+        check("agents off: one line in the board's log", [l.split("  ", 1)[1] for l in added],
+              ["skipped: agents are off for this board in Settings"])
+        check("agents off: the card says so", len(hooks.problems(target)), 1)
+        check("another board is not touched", hooks.problems({"id": "home"}), [])
+    finally:
+        hooks.subprocess.call, hooks._queue_handovers = real_call, real_handovers
+        if os.path.exists(conf):
+            os.remove(conf)
 
 
 def test_fallback_planner():
@@ -1867,6 +1915,7 @@ def main():
     test_queue_routes()
     test_usage_chart()
     test_runner()
+    test_agents_off()
     test_fallback_planner()
     test_runner_root()
     test_carry_over()

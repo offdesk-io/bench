@@ -27,7 +27,9 @@ plan, which is what `do` has the driving session do. Where the run stands is
 kept in `agent-runs.json` (core/agent_runs.py) for the status line on the card.
 
 Off until the owner sets its hours on the agents dashboard: the runner treats a list it
-has no settings for as off.
+has no settings for as off. A list whose `agents` is false in settings.json's
+`boards` (core/settings.py) is skipped whole, with the runner's one log line
+saying why.
 """
 
 import datetime as dt
@@ -115,6 +117,24 @@ _runs = {}
 
 def _use(target_id):
     os.environ["PLANNING_DATASET"] = target_id
+
+
+OFF = "agents are off for this board in Settings"
+
+
+def _off(target):
+    return not settings.agents_on(target["id"], paths.DATA_ROOT)
+
+
+def before(target, todo_, dry):
+    """Only ever a refusal: a list with its agents off runs nothing."""
+    if _off(target):
+        return {"note": OFF} if dry else {"skip": OFF}
+    return None
+
+
+def problems(target):
+    return ["Agents are off for this board in Bench's Settings, so nothing runs on it."] if _off(target) else []
 
 
 # --------------------------------------------------------------------------

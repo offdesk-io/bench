@@ -345,6 +345,39 @@ class SettingsTest(unittest.TestCase):
         # Banners alone leave the memory folder inherited.
         self.assertTrue(settings.inherits_memory("work", self.root))
 
+    def test_agents_on_unless_a_board_says_false(self):
+        self.assertTrue(settings.agents_on("work", self.root))
+        self.write({"agents": {"plan": {"start": "now"}},
+                    "boards": {"work": {"agents": False}, "home": {"agents": 0}}})
+        self.assertFalse(settings.agents_on("work", self.root))
+        self.assertTrue(settings.agents_on("home", self.root))
+        self.assertEqual(settings.start_for("plan", self.root), "now")
+
+    def test_boards_md_marks_agents_off(self):
+        previous = ("- work (current, agents off, frozen): `bench/data/work/`, the live list\n"
+                    "- home: `bench/data/home/`\n")
+        text = settings.boards_md(["work", "home"], "home", "/C/bench/data", "/C/MEMORY", previous, ["home"])
+        self.assertEqual(text.split("\n\n", 2)[2].splitlines(), [
+            "- work (frozen): `bench/data/work/`, the live list",
+            "- home (current, agents off): `bench/data/home/`"])
+
+    def test_write_boards_marks_agents_off_from_the_setting(self):
+        data = os.path.join(self.root, "data")
+        os.makedirs(data)
+        mem = self.memory()
+        with open(os.path.join(data, "settings.json"), "w") as fh:
+            json.dump({"memory_root": mem, "boards": {"demo": {"agents": False}}}, fh)
+        settings.write_boards(["work", "demo"], "work", data)
+        with open(os.path.join(mem, "boards.md")) as fh:
+            got = fh.read()
+        self.assertIn("- demo (agents off): `data/demo/`", got)
+        self.assertIn("- work (current): `data/work/`", got)
+        with open(os.path.join(data, "settings.json"), "w") as fh:
+            json.dump({"memory_root": mem}, fh)
+        settings.write_boards(["work", "demo"], "work", data)
+        with open(os.path.join(mem, "boards.md")) as fh:
+            self.assertIn("- demo: `data/demo/`", fh.read())
+
     def test_write_boards_stays_in_the_global_folder(self):
         data = os.path.join(self.root, "data")
         os.makedirs(data)

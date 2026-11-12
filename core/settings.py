@@ -52,9 +52,12 @@ nothing raises.
   from what load() returns and nothing changes. `banners` false keeps the
   list quiet: no due banners, catch-ups included, and the lines agents queue
   for it are dropped rather than posted (core/notify_due.py,
-  companion/notify.py). True, or absent, is today's behaviour.
+  companion/notify.py). `agents` false keeps the Plan and Implement agents
+  off the list: their runs skip it with one log line, the board's Run now
+  refuses, and boards.md marks it `agents off`. True, or absent, is today's
+  behaviour for both.
 
-    "boards": {"demo": {"memory_root": null, "banners": false}}
+    "boards": {"demo": {"memory_root": null, "banners": false, "agents": false}}
 
 Daily budgets are kept out of this file, in the agents engine's fences file
 (`data/agents/fences.json`, `$AGENTS_FENCES`), because the engine reads them
@@ -113,7 +116,8 @@ def _memory_value(value):
 
 # The keys a list's entry in `boards` may hold beyond `memory_root`, each a
 # true-or-false that defaults to true.
-BOARD_FLAGS = ("banners",)
+BOARD_FLAGS = ("banners", "agents")
+AGENTS_OFF = "agents off"
 
 
 def _board_entry(entry):
@@ -213,6 +217,11 @@ def _flag(dataset, key, root=None):
 def banners_on(dataset, root=None):
     """False when `boards` switches the list's desktop banners off."""
     return _flag(dataset, "banners", root)
+
+
+def agents_on(dataset, root=None):
+    """False when `boards` keeps the agents off the list."""
+    return _flag(dataset, "agents", root)
 
 
 def projects_root(dataset, root=None):
@@ -331,9 +340,10 @@ def people_path(dataset, root=None, write=False):
 # With a memory folder set, Bench keeps `<memory_root>/boards.md` saying which
 # lists exist, so an agent outside Bench can know without reading data/. Bench
 # is its writer. It has no notion of what a list is for or of a list being
-# frozen, so a line's marks other than `current` and the text after its folder
-# are carried over from the file's last version: a description or a `frozen`
-# written there survives, and a list new to the file gets neither.
+# frozen, so a line's marks other than `current` and `agents off` and the text
+# after its folder are carried over from the file's last version: a
+# description or a `frozen` written there survives, and a list new to the file
+# gets neither. `agents off` is the `boards` setting's, written fresh each time.
 
 BOARDS_HEADER = (
     "# Boards\n\n"
@@ -345,9 +355,10 @@ BOARDS_HEADER = (
 _BOARD_LINE = re.compile(r"^- ([^\s(:]+)(?: \(([^)]*)\))?: `[^`]*`(?:, (.*))?$")
 
 
-def boards_md(names, current, root=None, memory=None, previous=""):
-    """The text of boards.md for the lists `names`, `current` marked, keeping
-    each surviving list's place, marks and description from `previous`."""
+def boards_md(names, current, root=None, memory=None, previous="", agents_off=()):
+    """The text of boards.md for the lists `names`, `current` marked and each
+    of `agents_off` marked `agents off`, keeping each surviving list's place,
+    other marks and description from `previous`."""
     root = os.path.abspath(root or data_root())
     base = os.path.dirname(os.path.abspath(memory)) if memory else None
     kept, order = {}, []
@@ -356,14 +367,16 @@ def boards_md(names, current, root=None, memory=None, previous=""):
         if not m or m.group(1) in kept:
             continue
         marks = [x.strip() for x in (m.group(2) or "").split(",")]
-        kept[m.group(1)] = ([x for x in marks if x and x != "current"], (m.group(3) or "").strip())
+        kept[m.group(1)] = ([x for x in marks if x and x not in ("current", AGENTS_OFF)],
+                            (m.group(3) or "").strip())
         order.append(m.group(1))
     names = list(names)
     ordered = [n for n in order if n in names] + sorted(n for n in names if n not in kept)
     lines = []
     for name in ordered:
         marks, about = kept.get(name, ([], ""))
-        marks = (["current"] if name == current else []) + marks
+        marks = ((["current"] if name == current else [])
+                 + ([AGENTS_OFF] if name in agents_off else []) + marks)
         folder = os.path.join(root, name)
         if base and (folder + os.sep).startswith(base + os.sep):
             folder = os.path.relpath(folder, base)
@@ -387,7 +400,9 @@ def write_boards(names, current, root=None):
             previous = fh.read()
     except OSError:
         previous = ""
-    text = boards_md(names, current, root, memory, previous)
+    own = load(root).get("boards", {})
+    off = [n for n in names if (own.get(n) or {}).get("agents") is False]
+    text = boards_md(names, current, root, memory, previous, off)
     if text == previous:
         return target
     fd, tmp = tempfile.mkstemp(dir=memory, prefix=".boards-")
