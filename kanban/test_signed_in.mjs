@@ -127,24 +127,19 @@ try {
     'import hashlib,sys;print(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:16])', 'jerome@example.com']).toString().trim() + '.profile.md')
   await evalJS(`$('#settingsBtn').click()`); await wait(800)
   check('Settings is his profile', await evalJS(`!!modalEl && modalEl.textContent.includes('Your profile') && modalEl.querySelector('[data-name]').value === 'Jérôme'`))
-  check('with every section but the paths', await evalJS(
-    `['writing', 'recorder', 'habits'].every(k => !!modalEl.querySelector('[data-section="' + k + '"]')) && !!modalEl.querySelector('[data-about="addressing"]')` +
-    ` && !modalEl.querySelector('[data-section="setup"]') && !modalEl.querySelector('[data-about="facts_file"]')`))
+  check('with his name and address, and no paths', await evalJS(
+    `!!modalEl.querySelector('[data-about="addressing"]') && !modalEl.querySelector('[data-section]') && !modalEl.querySelector('[data-about="facts_file"]')`))
   check('and none of the server’s settings', await evalJS(`!modalEl.querySelector('[data-memory]') && !modalEl.querySelector('[data-chime]') && !modalEl.querySelector('[data-agent-options]')`))
-  check('the sections are open', await evalJS(`modalEl.querySelector('[data-profile-sections]').open`))
-  check('an empty box shows the template as its hint', await evalJS(`modalEl.querySelector('[data-section="habits"]').placeholder.includes('Deferring')`))
   await evalJS(`(() => {
     const set = (sel, v) => { const el = modalEl.querySelector(sel); el.value = v; el.dispatchEvent(new Event('input', { bubbles: true })) }
     set('[data-about="addressing"]', 'Salut Jérôme')
-    set('[data-section="habits"]', '- Deferring: builds straight away')
   })()`)
   await press('Save'); await wait(600)
   const own = existsSync(profileFile) ? readFileSync(profileFile, 'utf8') : ''
-  check('saved to his own file', /^- Name: Jérôme$/m.test(own) && /^- How to address them: Salut Jérôme$/m.test(own)
-    && /^- Deferring: builds straight away$/m.test(own), own.slice(0, 200))
+  check('saved to his own file', /^- Name: Jérôme$/m.test(own) && /^- How to address them: Salut Jérôme$/m.test(own), own.slice(0, 200))
   check('nothing written to the shared profile', !existsSync(join(data, 'profile.md')))
   await evalJS(`$('#settingsBtn').click()`); await wait(800)
-  check('it reads back', await evalJS(`modalEl.querySelector('[data-section="habits"]').value === '- Deferring: builds straight away'`))
+  check('it reads back', await evalJS(`modalEl.querySelector('[data-about="addressing"]').value === 'Salut Jérôme'`))
 
   // --- the owner changes the sharing from there ----------------------------------
   await evalJS(`modalEl.querySelector('[data-sharing]').click()`); await wait(500)

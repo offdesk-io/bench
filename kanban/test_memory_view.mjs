@@ -90,10 +90,24 @@ try {
     const s = document.querySelector('[data-mem=context] .memtext');
     return !!s && s.textContent.length > 20;
   })()`))
-  check('Your profile is read-only with a link to Settings', await evalJS(`(() => {
-    const s = document.querySelector('[data-mem=profile]');
-    return !!s.querySelector('[data-mem-profile]') && !s.querySelector('textarea, input');
-  })()`))
+  check('Your profile has an Edit button', await evalJS(`!!document.querySelector('[data-mem=profile] [data-mem-edit=profile]')`))
+
+  // --- The profile edits here and saves through PUT /profile-basics.json -------
+  await click('[data-mem-edit=profile]')
+  check('Edit opens the facts file and the four sections', await evalJS(
+    `!!document.querySelector('[data-mem-profile-about=facts_file]') && ['setup', 'writing', 'recorder', 'habits'].every(k => !!document.querySelector('[data-mem-profile-section=' + k + ']'))`))
+  await evalJS(`${$q('[data-mem-profile-section=writing]')}.value = '## Writing\\n- Spelling: British English'`)
+  await click('[data-mem-save=profile]')
+  check('a ## heading blocks the save with a message', await evalJS(`!!${$q('[data-mem=profile] .memerr')} && memEditing === 'profile'`))
+  await evalJS(`${$q('[data-mem-profile-section=writing]')}.value = '- Spelling: British English'`)
+  await evalJS(`${$q('[data-mem-profile-section=habits]')}.value = '- Deferring: logs ideas first'`)
+  await evalJS(`${$q('[data-mem-profile-about=facts_file]')}.value = 'facts.md'`)
+  await click('[data-mem-save=profile]')
+  await wait(800)
+  const prof = await evalJS(`fetch('/profile-basics.json').then(r => r.json())`)
+  check('the sections and facts file are saved', /Spelling: British English/.test(prof.sections.writing) && /Deferring: logs ideas first/.test(prof.sections.habits)
+    && prof.about.facts_file === 'facts.md', JSON.stringify(prof).slice(0, 300))
+  check('and the view shows them', await evalJS(`/Deferring: logs ideas first/.test(${$q('[data-mem=profile]')}.textContent) && memEditing === null`))
 
   // --- Edit and Cancel; one section at a time ------------------------------
   await click('[data-mem-edit=about]')

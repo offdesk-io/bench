@@ -19,8 +19,8 @@
                                       until the first save, which moves it out
                                       through state.doc + autosave)
 
-   The profile is read-only here. It already has a form, in Settings, and a
-   second one would be a second writer.
+   The profile (facts file and its four sections) saves through
+   PUT /profile-basics.json, the route Settings uses for the rest of it.
 
    Drawn as plain markup into #lists, like Agents and Backups, with one click
    handler on the host. Drafts live in the DOM while a form is open and are read
@@ -197,13 +197,37 @@ function memContextHTML(){
   return memSection('context', 'Context', text ? memRender(text) : memEmpty('No context yet. Note who is away and what is live this week.'), memEditBtn('context'));
 }
 
+/* The profile's editable parts: the facts file and the four sections, the same
+   fields Settings used to hold, saved through PUT /profile-basics.json. Name,
+   address and holidays stay in Settings. */
+function memProfileFields(p){
+  const about = SETTINGS_ABOUT.filter(([k]) => k === 'facts_file' && k in (p.about || {}));
+  const sections = SETTINGS_SECTIONS.filter(([k]) => k in (p.sections || {}));
+  return { about, sections };
+}
+
+function memProfileForm(p){
+  const f = memProfileFields(p);
+  return f.about.map(([k, name, help]) =>
+    '<label class="field"><span>' + esc(name) + '</span><input type="text" data-mem-profile-about="' + k + '" value="' + escAttr((p.about || {})[k] || '') + '" placeholder="Not set">' +
+    '<span class="help">' + esc(help) + '</span></label>').join('') +
+    f.sections.map(([k, name, help]) =>
+    '<label class="field"><span>' + esc(name) + '</span>' +
+    '<textarea class="memarea" rows="4" data-mem-profile-section="' + k + '" placeholder="' + escAttr((p.hints || {})[k] || '') + '" spellcheck="true">' + esc(p.sections[k]) + '</textarea>' +
+    '<span class="help">' + esc(help) + '</span></label>').join('') +
+    memFormButtons('profile');
+}
+
 function memProfileHTML(){
   const p = memData.profile || {};
   const about = Object.entries(p.about || {}).filter(([, v]) => String(v || '').trim());
   const sections = Object.entries(p.sections || {}).filter(([, v]) => String(v || '').trim());
-  const edit = '<button class="btn small outline" data-mem-profile>Edit in Settings</button>';
+  const f = memProfileFields(p);
+  const editable = f.about.length + f.sections.length > 0;
+  if (memEditing === 'profile' && editable) return memSection('profile', 'Your profile', memProfileForm(p));
+  const edit = memEditBtn('profile', !editable);
   if (!(p.name || '').trim() && !about.length && !sections.length) {
-    return memSection('profile', 'Your profile', memEmpty('No profile yet. Fill it in from Settings.'), edit);
+    return memSection('profile', 'Your profile', memEmpty('No profile yet. Edit it here, or set your name in Settings.'), edit);
   }
   const body =
     ((p.name || '').trim() ? '<p><strong>' + esc(p.name) + '</strong></p>' : '') +
@@ -211,6 +235,21 @@ function memProfileHTML(){
       '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>' : '') +
     sections.map(([k, v]) => '<h4 id="' + esc(memUniqueId('mem-profile-' + memSlug(k))) + '" data-mem-sub>' + esc(k) + '</h4>' + mdBlocks(String(v))).join('');
   return memSection('profile', 'Your profile', '<div class="repdoc memtext">' + body + '</div>', edit);
+}
+
+/* What the open profile form holds, or an error message. The same two rules
+   the server holds: no < > or backticks in a field, no # or ## heading in a box. */
+function memReadProfile(){
+  const about = {}, sections = {};
+  for (const el of document.querySelectorAll('#memView [data-mem-profile-about]')) {
+    if (/[<>`]/.test(el.value)) return { error: 'Leave out < > and backticks in the facts file.' };
+    about[el.dataset.memProfileAbout] = el.value.trim();
+  }
+  for (const el of document.querySelectorAll('#memView [data-mem-profile-section]')) {
+    if (/^##?(\s|$)/m.test(el.value)) return { error: 'A # or ## heading would split the profile. Use ### or none.' };
+    sections[el.dataset.memProfileSection] = el.value;
+  }
+  return { about, sections };
 }
 
 /* ---- The index: one link per section, one nested per subsection ---- */
@@ -326,6 +365,10 @@ async function memSave(which){
     } else if (which === 'people') {
       const people = memReadPeople().filter(p => MEM_PEOPLE_COLS.some(c => p[c.key]));
       await putJSON('/people', { people });
+    } else if (which === 'profile') {
+      const got = memReadProfile();
+      if (got.error) throw new Error(got.error);
+      await putJSON('/profile-basics.json', { about: got.about, sections: got.sections });
     } else if (which === 'context') {
       const box = document.querySelector('#memView [data-mem-context]');
       await putJSON('/context', { text: box.value });
@@ -389,7 +432,6 @@ function memClick(e){
   if (t.dataset.memRemove !== undefined) {
     memPeopleDraft = memReadPeople(); memPeopleDraft.splice(+t.dataset.memRemove, 1); memDraw(); return;
   }
-  if (t.hasAttribute('data-mem-profile')) { openSettings(false); }
 }
 
 async function memLoad(){

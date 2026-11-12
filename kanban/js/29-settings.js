@@ -10,14 +10,13 @@
    set but no list exists.
 
    Name, Country and Region live in data/profile.md, behind /profile-basics.json,
-   and so does the rest of the profile Settings offers (not the welcome): How to
-   address you and the facts file as fields, then Setup, Writing, Meeting
-   recorder and Working habits as one text box each, a box left as the template
-   has it reading empty with the template as its hint. Signed in (state.who),
-   the profile is the person's own, data/users/<hash>.profile.md, and the form
-   is that profile alone, less the two parts that name a path on the server;
-   the server's settings are not theirs to change, and the list's sharing is a
-   button beside it.
+   and so does How to address you, which Settings offers beside them (not the
+   welcome). The facts file and the profile's four sections, Setup, Writing,
+   Meeting recorder and Working habits, are edited on the Memory page and go
+   through the same route. Signed in (state.who), the profile is the person's
+   own, data/users/<hash>.profile.md, and the form is that profile's name and
+   address alone; the server's settings are not theirs to change, and the
+   list's sharing is a button beside it.
    The model per job, when each agent starts, the memory folder and each list's
    projects folder live in data/settings.json, behind /settings.json. The
    folders are offered in Settings only, not the welcome, the projects folder
@@ -116,18 +115,6 @@ function settingsAboutField(draft, key){
     '<span class="help">' + esc(f[2]) + '</span><span class="help fielderr" data-err="about-' + key + '" hidden></span></label>';
 }
 
-/* The sections the server sent, as text boxes. Open signed in, where they are
-   most of the form. */
-function settingsSectionsHTML(draft){
-  const boxes = SETTINGS_SECTIONS.filter(([k]) => k in draft.sections).map(([k, name, help]) =>
-    '<label class="field"><span>' + esc(name) + '</span>' +
-    '<textarea rows="4" data-section="' + k + '" placeholder="' + escAttr(draft.hints[k] || '') + '">' + esc(draft.sections[k]) + '</textarea>' +
-    '<span class="help">' + esc(help) + '</span><span class="help fielderr" data-err="section-' + k + '" hidden></span></label>').join('');
-  if (!boxes) return '';
-  return '<details class="agentopts" data-profile-sections' + (draft.signedIn ? ' open' : '') + '><summary>Your profile for the PA</summary>' +
-    '<div class="agentopts__body">' + boxes + '</div></details>';
-}
-
 /* "This board": the open list's own memory folder, banners and agents, kept
    under boards.<list> in settings.json. Not offered in the welcome or signed in,
    where the server's settings are not the visitor's. */
@@ -176,8 +163,6 @@ function settingsFormHTML(draft, choices, first){
     '<span class="help fielderr" data-err="country" hidden></span></label>' +
     '<label class="field" data-region-field' + (draft.regions.length ? '' : ' hidden') + '><span>Region</span>' +
     '<select data-region>' + settingsRegionOptions(draft) + '</select></label>' +
-    (first ? '' : settingsAboutField(draft, 'facts_file')) +
-    (first ? '' : settingsSectionsHTML(draft)) +
     (draft.signedIn ? (draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '') + '</div>' :
     (first ? '' : '<label class="field"><span>Memory folder</span><input type="text" data-memory value="' + escAttr(draft.memoryRoot) + '" placeholder="Not set">' +
       '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.</span></label>') +
@@ -250,8 +235,7 @@ function settingsErrors(draft, first){
   const err = {};
   if (!draft.name.trim()) err.name = 'Add your name.';
   if (first && !draft.country) err.country = 'Choose a country.';
-  for (const k in draft.about) if (/[<>`]/.test(draft.about[k])) err['about-' + k] = 'Leave out < > and backticks.';
-  for (const k in draft.sections) if (/^##?(\s|$)/m.test(draft.sections[k])) err['section-' + k] = 'A # or ## heading would split the profile. Use ### or none.';
+  if (/[<>`]/.test(draft.about.addressing || '')) err['about-addressing'] = 'Leave out < > and backticks.';
   if (!draft.signedIn && draft.board && draft.board.mode === 'own' && !draft.board.path.trim()) err['board-memory'] = 'Enter the folder’s full path.';
   const badDollars = v => v.trim() && !(Number(v) >= 0);
   if (badDollars(draft.budget)) err.budget = 'Enter an amount in dollars, or leave it empty.';
@@ -302,10 +286,6 @@ function trackSettingsForm(draft, first){
     modalEl.querySelectorAll('[data-about]').forEach(i => {
       draft.about[i.dataset.about] = i.value;
       if (e && e.target === i) draft.touched['about-' + i.dataset.about] = true;
-    });
-    modalEl.querySelectorAll('[data-section]').forEach(t => {
-      draft.sections[t.dataset.section] = t.value;
-      if (e && e.target === t) draft.touched['section-' + t.dataset.section] = true;
     });
     const c = modalEl.querySelector('[data-country]');
     const r = modalEl.querySelector('[data-region]');
@@ -385,7 +365,7 @@ async function saveSettingsDraft(draft, first){
   const basics = { name: draft.name };
   /* Every field and box the server sent, so the welcome, which shows none,
      sends none. */
-  if (!first) { basics.about = draft.about; basics.sections = draft.sections; }
+  if (!first && 'addressing' in draft.about) basics.about = { addressing: draft.about.addressing };
   /* Holidays are sent only when the owner changed them: saving a name alone must not
      rewrite a profile that still has the old Holidays: line. */
   if (draft.country && (draft.country !== draft.was.country || draft.region !== draft.was.region)) {
