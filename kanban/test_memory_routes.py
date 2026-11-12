@@ -257,6 +257,36 @@ def in_process(root):
         code, got = request(base, "GET", "/memory.json")
         ok("memory.json reads both from the memory folder",
            got["about"]["text"] == "Moved." and [p["name"] for p in got["people"]] == ["Ana", "Anu", "Bo"], str(got))
+
+        # --- a board with a memory folder of its own, then none ------------------
+        os.makedirs(os.path.join(memory, "me"))
+        with open(os.path.join(memory, "me", "profile.md"), "w", encoding="utf-8") as fh:
+            fh.write("# PA profile\n\n## About\n\n- Name: Owner\n")
+        code, got = request(base, "GET", "/memory.json")
+        ok("an inheriting board shows the owner's profile", got["profile"]["name"] == "Owner", str(got["profile"]))
+        own = os.path.join(root, "OWN")
+        os.makedirs(own)
+        with open(os.path.join(root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"memory_root": memory, "boards": {"memory-test": {"memory_root": own}}}, fh)
+        code, got = request(base, "GET", "/memory.json")
+        ok("a board with its own folder reads nothing from the owner's",
+           got["about"]["text"] == "A studio of four.\n\nWe build things." and got["profile"]["name"] == ""
+           and got["profile"]["needs_setup"] is True, str(got))
+        code, got = request(base, "PUT", "/about", {"text": "Own."}, FROM_BOARD)
+        with open(os.path.join(own, "bench", "memory-test", "about.md"), encoding="utf-8") as fh:
+            ok("and saves into its own folder", code == 200 and fh.read() == "Own.")
+        with open(os.path.join(there, "about.md"), encoding="utf-8") as fh:
+            ok("leaving the owner's folder as it was", fh.read() == "Moved.")
+        with open(os.path.join(root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"memory_root": memory, "boards": {"memory-test": {"memory_root": None}}}, fh)
+        code, got = request(base, "GET", "/memory.json")
+        ok("a board with none reads data/ only",
+           got["about"]["text"] == "A studio of four.\n\nWe build things." and got["profile"]["name"] == "", str(got))
+        code, got = request(base, "PUT", "/profile-basics.json", {"name": "Demo"}, FROM_BOARD)
+        ok("its profile saves beside the list", code == 200 and got["name"] == "Demo"
+           and os.path.isfile(os.path.join(tmp, "profile.md")), "%s %s" % (code, got))
+        with open(os.path.join(memory, "me", "profile.md"), encoding="utf-8") as fh:
+            ok("and the owner's profile is not written", "Demo" not in fh.read())
         os.remove(os.path.join(root, "settings.json"))
     finally:
         httpd.shutdown()

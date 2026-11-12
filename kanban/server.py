@@ -529,7 +529,7 @@ def append_activity(ds, changes, who=None, name=None):
     at = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     email = who if who is not None else (person["email"] if person else "")
     if name is None:
-        name = person["name"] if person else owner_profile.owner_name(DATA_ROOT)
+        name = person["name"] if person else owner_profile.owner_name(DATA_ROOT, board=ds)
     with open(activity_path(ds), "a", encoding="utf-8") as fh:
         for c in changes:
             fh.write(json.dumps(dict({"at": at, "who": email, "name": name}, **c), ensure_ascii=False) + "\n")
@@ -2739,16 +2739,16 @@ def needs_board(method, path):
     return path not in BOARDLESS_POST
 
 
-def _holiday_place_json(address=None):
+def _holiday_place_json(address=None, board=None):
     """The profile's holiday country and region, "" for neither."""
     import owner_profile
-    country, region = owner_profile.holiday_place(DATA_ROOT, address)
-    prof = owner_profile.read(DATA_ROOT, address)
+    country, region = owner_profile.holiday_place(DATA_ROOT, address, board)
+    prof = owner_profile.read(DATA_ROOT, address, board)
     # An old `Holidays:` line with no `Country:` beside it: the calendars it
     # names, so Settings can offer to keep them rather than rewrite them.
     legacy = []
     if "holidays" in prof and not re.fullmatch(r"[A-Za-z]{2}", prof.get("country", "")):
-        legacy = list(owner_profile.holiday_regions(DATA_ROOT, address))
+        legacy = list(owner_profile.holiday_regions(DATA_ROOT, address, board))
     return {"country": country or "", "region": region, "legacy_holidays": legacy}
 
 
@@ -2761,16 +2761,20 @@ def profile_reply():
     """The profile as Settings shows it: on the Mac the owner's, signed in the
     person's own, read from the shared profile until they save one. Signed
     in there is nothing to set up, and until they save, the shared profile's
-    Name is not theirs, so the name is the one they signed in with."""
+    Name is not theirs, so the name is the one they signed in with. The
+    profile is the board's on screen (owner_profile.profile_path), which is
+    the owner's unless settings.json gives the board a memory folder of its
+    own or none."""
     import owner_profile
     who = requester()
     address = who["email"] if who else None
-    about = owner_profile.about_fields(DATA_ROOT, address)
-    texts = owner_profile.section_texts(DATA_ROOT, address)
+    board = current_dataset()
+    about = owner_profile.about_fields(DATA_ROOT, address, board)
+    texts = owner_profile.section_texts(DATA_ROOT, address, board)
     hints = owner_profile.section_hints()
     if who:
         own = os.path.isfile(owner_profile.own_profile_path(address, DATA_ROOT))
-        name = (owner_profile.read(DATA_ROOT, address).get("name") if own else None) or who["name"]
+        name = (owner_profile.read(DATA_ROOT, address, board).get("name") if own else None) or who["name"]
         for key in SHARED_HIDES["about"]:
             about.pop(key, None)
         for key in SHARED_HIDES["sections"]:
@@ -2778,9 +2782,9 @@ def profile_reply():
             hints.pop(key, None)
         setup = False
     else:
-        setup = owner_profile.needs_setup(DATA_ROOT)
-        name = "" if setup else owner_profile.owner_name(DATA_ROOT)
-    return {"name": name, **_holiday_place_json(address), "about": about,
+        setup = owner_profile.needs_setup(DATA_ROOT, board=board)
+        name = "" if setup else owner_profile.owner_name(DATA_ROOT, board=board)
+    return {"name": name, **_holiday_place_json(address, board), "about": about,
             "sections": texts, "hints": hints, "needs_setup": setup}
 
 
@@ -3112,7 +3116,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             import holidays as nager
             import owner_profile
             who = requester()
-            country = owner_profile.holiday_place(DATA_ROOT, who["email"] if who else None)[0]
+            country = owner_profile.holiday_place(DATA_ROOT, who["email"] if who else None,
+                                                  current_dataset())[0]
             return self._json(200, {
                 "countries": _all_countries(),
                 "regions": {country: nager.regions(country, DATA_ROOT)} if country and _nager_has(country) else {}})
@@ -3139,7 +3144,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # in 02-state.js can read it. A page with no server falls back to "Me".
             import owner_profile
             # Signed in, "me" is whoever is signed in, by first name.
-            owner = (requester()["name"].split() or [""])[0] if AUTH else owner_profile.owner_name(DATA_ROOT)
+            owner = ((requester()["name"].split() or [""])[0] if AUTH
+                     else owner_profile.owner_name(DATA_ROOT, board=current_dataset()))
             body = ("window.OWNER_NAME = %s;\n" % json.dumps(owner)).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")
@@ -4163,7 +4169,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # nginx's header, never anything in the body.
         err = owner_profile.write_basics(DATA_ROOT, body.get("name"), country=country, region=region,
                                          about=about, sections=sections,
-                                         address=who["email"] if who else None)
+                                         address=who["email"] if who else None,
+                                         board=current_dataset())
         if err:
             return self._json(400, {"error": err})
         return self._json(200, profile_reply())

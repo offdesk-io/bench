@@ -27,6 +27,15 @@ With `memory_root` set in data/settings.json (core/settings.py), the profile is
 `<memory_root>/me/profile.md` when that file is there, and data/profile.md when
 it is not. Reads and writes both go to whichever profile_path() names.
 
+Every reader also takes a `board`, the list it is asked about, since each list
+can have a memory folder of its own in settings.json's `boards`. Given one, the
+profile is that list's memory folder's `me/profile.md`, then
+data/<board>/profile.md, then data/profile.md, the last only for a list that
+inherits the global memory folder. A list with a folder of its own, or none,
+never reads the owner's data/profile.md, and a write with no file there yet
+starts data/<board>/profile.md from the template. No board is the global
+profile, as before.
+
 On a shared board (BENCH_AUTH=header, core/board_access.py) each signed-in
 person has a profile of their own, `data/users/<hash>.profile.md` beside their
 user record, in the same format. Every reader takes an `address`: given one,
@@ -58,15 +67,36 @@ def own_profile_path(address, root=None):
     return board_access.profile_path(root or data_root(), address)
 
 
-def profile_path(root=None, address=None):
+def _board(board):
+    """A list name fit to join under data/, else None, the global profile."""
+    if isinstance(board, str) and board and not board.startswith(".") and os.sep not in board:
+        return board
+    return None
+
+
+def profile_path(root=None, address=None, board=None):
     """The profile in force: for a signed-in person their own file when they
     have one, else the memory folder's `me/profile.md` when the setting names
-    one and the file is there, else data/profile.md."""
+    one and the file is there, else data/profile.md. With a `board`, the
+    memory folder is that list's, and data/<board>/profile.md comes before
+    data/profile.md, which a list with a memory setting of its own never
+    reaches."""
     root = root or data_root()
     if address:
         own = own_profile_path(address, root)
         if os.path.isfile(own):
             return own
+    board = _board(board)
+    if board:
+        memory = settings.board_memory_root(board, root)
+        if memory:
+            path = os.path.join(memory, "me", "profile.md")
+            if os.path.isfile(path):
+                return path
+        here = os.path.join(root, board, "profile.md")
+        if os.path.isfile(here) or not settings.inherits_memory(board, root):
+            return here
+        return os.path.join(root, "profile.md")
     memory = settings.memory_root(root)
     if memory:
         path = os.path.join(memory, "me", "profile.md")
@@ -88,10 +118,10 @@ def _unset(value):
     return not value or value.lower() == "none" or bool(re.search(r"<[^>]*>", value))
 
 
-def read(root=None, address=None):
+def read(root=None, address=None, board=None):
     """Every `- Key: value` line in the profile, keys lower-cased."""
     out = {}
-    for line in (_text(profile_path(root, address)) or "").split("\n"):
+    for line in (_text(profile_path(root, address, board)) or "").split("\n"):
         m = re.match(r"\s*[-*]\s+([^:]+):\s*(.*?)\s*$", line)
         if not m or _unset(m.group(2)):
             continue
@@ -99,15 +129,15 @@ def read(root=None, address=None):
     return out
 
 
-def owner_name(root=None, address=None):
-    return read(root, address).get("name", DEFAULT_OWNER)
+def owner_name(root=None, address=None, board=None):
+    return read(root, address, board).get("name", DEFAULT_OWNER)
 
 
-def holiday_place(root=None, address=None):
+def holiday_place(root=None, address=None, board=None):
     """(country, region) the profile names, region "" when none; (None, "") when
     it names neither. An old `Holidays:` line reads as GB + GB-ENG for UK, and
     PT for PT; UK wins when both are listed."""
-    prof = read(root, address)
+    prof = read(root, address, board)
     country = prof.get("country", "").strip().upper()
     if re.fullmatch(r"[A-Z]{2}", country):
         region = prof.get("region", "").strip().upper()
@@ -120,16 +150,16 @@ def holiday_place(root=None, address=None):
     return None, ""
 
 
-def holiday_regions(root=None, address=None):
+def holiday_regions(root=None, address=None, board=None):
     """The holiday calendars the profile names, as a tuple of keys for todo.py.
 
     `Country:` gives one key, "CC:REGION". Otherwise the `Holidays:` line gives
     todo.py's built-in "UK" and "PT", both when the line is missing or names
     none it knows. Unknown entries are skipped, so `UK, FR` is just `UK`."""
     import todo  # sits beside this file; imported here so todo can import this one later
-    prof = read(root, address)
+    prof = read(root, address, board)
     if re.fullmatch(r"[A-Za-z]{2}", prof.get("country", "")):
-        country, region = holiday_place(root, address)
+        country, region = holiday_place(root, address, board)
         return ("%s:%s" % (country, region),)
     wanted = re.split(r"[,\s/&]+", prof.get("holidays", "").upper())
     picked = tuple(r for r in todo.REGIONS if r in wanted)
@@ -150,13 +180,15 @@ def calendar_address(board_dir):
 
 
 def board_holiday_regions(board_dir, root=None):
-    """holiday_regions() for one board, by its owner's profile when signed in."""
-    return holiday_regions(root, calendar_address(board_dir))
+    """holiday_regions() for one board, by its owner's profile when signed in,
+    else by the board's own profile."""
+    return holiday_regions(root, calendar_address(board_dir),
+                           os.path.basename(os.path.normpath(board_dir)))
 
 
-def facts_file(root=None, address=None):
+def facts_file(root=None, address=None, board=None):
     """The owner's facts file as an absolute path, or None when unset or missing."""
-    value = read(root, address).get("facts file")
+    value = read(root, address, board).get("facts file")
     if not value:
         return None
     path = os.path.expanduser(value)
@@ -182,9 +214,9 @@ TEMPLATE = os.path.join(ROOT, "agents", "pa_agent", "profile.example.md")
 REGION_ORDER = ("UK", "PT")
 
 
-def needs_setup(root=None, address=None):
+def needs_setup(root=None, address=None, board=None):
     """True when there is no profile or its Name is missing or still the placeholder."""
-    return "name" not in read(root, address)
+    return "name" not in read(root, address, board)
 
 
 # The About lines Settings edits as fields, beyond Name, Country and Region,
@@ -213,17 +245,17 @@ def _body(text, heading):
     return "\n".join(lines[got[0]:got[1]]).strip("\n") if got else ""
 
 
-def about_fields(root=None, address=None):
+def about_fields(root=None, address=None, board=None):
     """The ABOUT fields as the board sends them, "" for unset."""
-    prof = read(root, address)
+    prof = read(root, address, board)
     return {key: prof.get(label.lower(), "") for key, label in ABOUT}
 
 
-def section_texts(root=None, address=None):
+def section_texts(root=None, address=None, board=None):
     """Each of SECTIONS as Settings shows it, as written. A section still as
     the template has it reads as "", so the box is empty and shows the
     template as its hint, and saving it empty puts the template back."""
-    text, tmpl = _text(profile_path(root, address)) or "", _text(TEMPLATE) or ""
+    text, tmpl = _text(profile_path(root, address, board)) or "", _text(TEMPLATE) or ""
     out = {}
     for key, heading in SECTIONS:
         got = _body(text, heading)
@@ -292,7 +324,7 @@ def _drop_line(text, key):
 
 
 def write_basics(root=None, name=None, holidays=None, country=None, region=None,
-                 about=None, sections=None, address=None):
+                 about=None, sections=None, address=None, board=None):
     """Write the `Name:` line, the holiday lines, and whatever else Settings sent.
 
     `country` and `region` write `Country:` and `Region:` (an empty region
@@ -305,8 +337,9 @@ def write_basics(root=None, name=None, holidays=None, country=None, region=None,
 
     With an `address` the write is that person's own file. Their first write
     starts from the profile they were reading until then, the shared one, so
-    nothing they saw is lost by saving something else. Returns an error
-    message, or None."""
+    nothing they saw is lost by saving something else. With a `board`, the
+    write is that list's profile (profile_path). Returns an error message, or
+    None."""
     root = root or data_root()
     about = about or {}
     sections = sections or {}
@@ -337,8 +370,8 @@ def write_basics(root=None, name=None, holidays=None, country=None, region=None,
             return "country must be a two-letter code"
         if region and not re.fullmatch(r"%s-[A-Z0-9]{1,3}" % country, region):
             return "region must look like %s-XX" % country
-    path = own_profile_path(address, root) if address else profile_path(root)
-    text = _text(profile_path(root, address))
+    path = own_profile_path(address, root) if address else profile_path(root, board=board)
+    text = _text(profile_path(root, address, board))
     if text is None:
         text = _text(TEMPLATE) or "# PA profile\n\n## About\n\n"
     if name is not None:

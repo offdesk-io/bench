@@ -293,6 +293,72 @@ class SettingsTest(unittest.TestCase):
                 settings.memory_file("work", bad, self.root)
         self.assertFalse(os.path.exists(os.path.join(mem, "bench")))
 
+    # ---- boards: a list's own memory folder ----------------------------
+
+    def test_boards_absent_changes_nothing(self):
+        self.board("work")
+        mem = self.memory()
+        self.write({"memory_root": mem})
+        self.assertNotIn("boards", settings.load(self.root))
+        self.assertEqual(settings.board("work", self.root), {})
+        self.assertTrue(settings.inherits_memory("work", self.root))
+        self.assertEqual(settings.board_memory_root("work", self.root), mem)
+        self.write({"memory_root": mem, "boards": "nope"})
+        self.assertNotIn("boards", settings.load(self.root))
+        self.write({"memory_root": mem, "boards": {"work": {}, "home": 3}})
+        self.assertNotIn("boards", settings.load(self.root))
+
+    def test_board_memory_root_inherit_own_or_none(self):
+        self.board("work")
+        mem, own = self.memory(), os.path.join(self.root, "OWN")
+        os.makedirs(own)
+        self.write({"memory_root": mem, "boards": {"work": {"memory_root": own}}})
+        self.assertEqual(settings.board_memory_root("work", self.root), own)
+        self.assertFalse(settings.inherits_memory("work", self.root))
+        self.assertEqual(settings.board_memory_root("home", self.root), mem)
+        self.assertEqual(settings.memory_file("work", "about", self.root, write=True),
+                         os.path.join(own, "bench", "work", "about.md"))
+        self.write({"memory_root": mem, "boards": {"work": {"memory_root": None}}})
+        self.assertEqual(settings.load(self.root)["boards"], {"work": {"memory_root": None}})
+        self.assertIsNone(settings.board_memory_root("work", self.root))
+        self.assertFalse(settings.inherits_memory("work", self.root))
+        self.assertEqual(settings.memory_file("work", "about", self.root, write=True),
+                         os.path.join(self.root, "work", "about.md"))
+        # Anything there that is not a folder path reads as none, never as inherit.
+        for bad in ("", "  ", 3, [mem]):
+            self.write({"memory_root": mem, "boards": {"work": {"memory_root": bad}}})
+            self.assertIsNone(settings.board_memory_root("work", self.root), repr(bad))
+        # Its own folder gone is none too.
+        self.write({"memory_root": mem, "boards": {"work": {"memory_root": os.path.join(self.root, "gone")}}})
+        self.assertIsNone(settings.board_memory_root("work", self.root))
+        # With no global folder, inheriting is none.
+        self.write({"boards": {"home": {"memory_root": own}}})
+        self.assertIsNone(settings.board_memory_root("work", self.root))
+
+    def test_write_boards_stays_in_the_global_folder(self):
+        data = os.path.join(self.root, "data")
+        os.makedirs(data)
+        mem, own = self.memory(), os.path.join(self.root, "OWN")
+        os.makedirs(own)
+        with open(os.path.join(data, "settings.json"), "w") as fh:
+            json.dump({"memory_root": mem, "boards": {"work": {"memory_root": own}}}, fh)
+        self.assertEqual(settings.write_boards(["work"], "work", data), os.path.join(mem, "boards.md"))
+        self.assertEqual(os.listdir(own), [])
+        with open(os.path.join(data, "settings.json"), "w") as fh:
+            json.dump({"boards": {"work": {"memory_root": own}}}, fh)
+        self.assertIsNone(settings.write_boards(["work"], "work", data))
+        self.assertEqual(os.listdir(own), [])
+
+    def test_for_boards_keeps_a_lists_own_folder_as_its_name(self):
+        own = os.path.join(self.root, "OWN")
+        os.makedirs(own)
+        self.write({"boards": {"work": {"memory_root": own}, "demo": {"memory_root": None},
+                               "secret": {"memory_root": None}}})
+        got = settings.for_boards(settings.load(self.root), ["work", "demo"])
+        self.assertEqual(got["boards"], {"work": {"memory_root": "OWN"}, "demo": {"memory_root": None}})
+        self.assertNotIn("boards", settings.for_boards(settings.load(self.root), []))
+        self.assertEqual(settings.load(self.root)["boards"]["work"]["memory_root"], own)
+
     def test_boards_md_lists_and_marks(self):
         text = settings.boards_md(["work", "home"], "work", "/C/bench/data", "/C/MEMORY")
         self.assertTrue(text.startswith(settings.BOARDS_HEADER))
@@ -579,6 +645,80 @@ class ProfileTest(unittest.TestCase):
         # A board nobody owns falls back to the shared profile.
         self.assertEqual(self.op.board_holiday_regions(os.path.join(self.root, "none"), self.root),
                          ("GB:GB-SCT",))
+
+    # ---- a board's own profile -----------------------------------------
+
+    def settings(self, data):
+        with open(os.path.join(self.root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+
+    def put(self, path, name):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("# PA profile\n\n## About\n\n- Name: %s\n" % name)
+        return path
+
+    def test_no_boards_setting_reads_the_shared_profile_for_every_board(self):
+        self.assertEqual(self.op.profile_path(self.root, board="work"), self.shared)
+        mem = os.path.join(self.root, "MEMORY")
+        mine = self.put(os.path.join(mem, "me", "profile.md"), "Memory")
+        self.settings({"memory_root": mem})
+        self.assertEqual(self.op.profile_path(self.root, board="work"), mine)
+        self.assertEqual(self.op.profile_path(self.root), mine)
+        # Not a list name: the global profile.
+        for bad in ("", None, "..", "../x", ".current"):
+            self.assertEqual(self.op.profile_path(self.root, board=bad), mine, repr(bad))
+
+    def test_an_inheriting_board_reads_its_own_file_before_the_shared_one(self):
+        own = self.put(os.path.join(self.root, "work", "profile.md"), "Board")
+        self.assertEqual(self.op.profile_path(self.root, board="work"), own)
+        self.assertEqual(self.op.owner_name(self.root, board="work"), "Board")
+        self.assertEqual(self.op.owner_name(self.root, board="home"), "Tiago/Jerome")
+        self.assertEqual(self.op.owner_name(self.root), "Tiago/Jerome")
+        # The memory folder's comes first.
+        mem = os.path.join(self.root, "MEMORY")
+        self.put(os.path.join(mem, "me", "profile.md"), "Memory")
+        self.settings({"memory_root": mem})
+        self.assertEqual(self.op.owner_name(self.root, board="work"), "Memory")
+
+    def test_a_board_with_no_memory_never_reads_the_owners_profile(self):
+        mem = os.path.join(self.root, "MEMORY")
+        self.put(os.path.join(mem, "me", "profile.md"), "Memory")
+        self.settings({"memory_root": mem, "boards": {"demo": {"memory_root": None}}})
+        here = os.path.join(self.root, "demo", "profile.md")
+        self.assertEqual(self.op.profile_path(self.root, board="demo"), here)
+        self.assertEqual(self.op.owner_name(self.root, board="demo"), self.op.DEFAULT_OWNER)
+        self.assertTrue(self.op.needs_setup(self.root, board="demo"))
+        self.assertEqual(self.op.section_texts(self.root, board="demo")["writing"], "")
+        # Its first write starts from the template and lands beside the list.
+        self.assertIsNone(self.op.write_basics(self.root, "Demo", board="demo"))
+        self.assertEqual(self.op.owner_name(self.root, board="demo"), "Demo")
+        text = self.text(here)
+        self.assertNotIn("- Spelling: British English", text)
+        self.assertIn("## Working habits", text)
+        self.assertNotIn("Demo", self.text(self.shared))
+        self.assertEqual(self.op.owner_name(self.root), "Memory")
+
+    def test_a_board_with_its_own_folder_reads_its_profile(self):
+        own = os.path.join(self.root, "OWN")
+        os.makedirs(own)
+        self.settings({"boards": {"demo": {"memory_root": own}}})
+        here = os.path.join(self.root, "demo", "profile.md")
+        self.assertEqual(self.op.profile_path(self.root, board="demo"), here)
+        theirs = self.put(os.path.join(own, "me", "profile.md"), "Own")
+        self.assertEqual(self.op.profile_path(self.root, board="demo"), theirs)
+        self.op.write_basics(self.root, country="PT", region="", board="demo")
+        self.assertEqual(self.op.holiday_regions(self.root, board="demo"), ("PT:",))
+        self.assertEqual(self.op.holiday_regions(self.root), ("GB:GB-SCT",))
+        self.assertEqual(self.op.board_holiday_regions(os.path.join(self.root, "demo"), self.root), ("PT:",))
+
+    def test_a_signed_in_persons_own_file_still_comes_first(self):
+        self.settings({"boards": {"demo": {"memory_root": None}}})
+        self.op.write_basics(self.root, "Jerome", address=self.JEROME, board="demo")
+        own = self.op.own_profile_path(self.JEROME, self.root)
+        self.assertEqual(self.op.profile_path(self.root, self.JEROME, "demo"), own)
+        self.assertNotIn("- Spelling: British English", self.text(own))
+        self.assertEqual(self.op.owner_name(self.root, self.JEROME, "work"), "Jerome")
 
 
 if __name__ == "__main__":
