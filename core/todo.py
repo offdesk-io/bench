@@ -79,17 +79,22 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 INLINE_KEYS = {"impact", "effort", "due", "time", "start", "done", "to", "theme"}
 
-# The two agents a task can be handed to, spelt the way `[to::]` writes them.
-# Anything else in `[to::]` is a person. `ai:` is retired and is
+# The two old agents a task can be handed to, spelt the way `[to::]` writes them.
+# A bucket's agent is any other name ending in " agent" (agent_of). Anything else is a person. `ai:` is retired and is
 # dropped on read, the same as the board does. See AGENT_NAMES in core/todo.js.
 AGENT_NAMES = ("Plan agent", "Implement agent")
 PLAN_AGENT, IMPLEMENT_AGENT = AGENT_NAMES
 
 
 def agent_of(to):
-    """The agent `to` names, spelt canonically, or "" for a person or nobody."""
-    v = (to or "").strip().lower()
-    return next((a for a in AGENT_NAMES if a.lower() == v), "")
+    """The agent `to` names, or "" for a person or nobody. The two old agents
+    are spelt canonically; a bucket's agent ("Personal family agent") is any
+    other name ending in " agent", as written."""
+    v = (to or "").strip()
+    old = next((a for a in AGENT_NAMES if a.lower() == v.lower()), "")
+    if old:
+        return old
+    return v if re.search(r"\S\s+agent$", v, re.I) else ""
 
 
 class Task:

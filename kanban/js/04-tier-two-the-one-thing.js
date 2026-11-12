@@ -451,10 +451,8 @@ function locate(id){
    are not always the same word. Loaded with each list; empty where there is no
    server, and then nothing can be handed over.
 
-   agentOf() in core/todo.js knows the two old agents only. It is wrapped here
-   so a bucket agent's name reads as an agent too, which is what a tick, a
-   card's face and the Delegate to filter ask it. core/todo.js is the format's
-   authority and is left alone for now. */
+   agentOf() in core/todo.js reads any `[to::]` ending in " agent" as an agent,
+   which is what a tick, a card's face and the Delegate to filter ask it. */
 let bucketAgentData = { list: null, buckets: [], columns: {} };
 let bucketAgentLoad = null;
 function loadBucketAgents(){
@@ -497,15 +495,8 @@ const BUCKET_AGENT_MISSING = {
 function bucketAgentMissingText(a){
   return (a.missing || []).map(m => BUCKET_AGENT_MISSING[m] || m).join(', ');
 }
-const coreAgentOf = agentOf;
-agentOf = function(to){
-  const core = coreAgentOf(to);
-  if (core) return core;
-  const hit = bucketAgentNamed(to);
-  return hit ? hit.name : '';
-};
 const LEGACY_AGENTS = ['Plan agent', 'Implement agent'];
-function legacyAgent(to){ return LEGACY_AGENTS.indexOf(coreAgentOf(to)) > -1 ? coreAgentOf(to) : ''; }
+function legacyAgent(to){ return LEGACY_AGENTS.indexOf(agentOf(to)) > -1 ? agentOf(to) : ''; }
 
 /* ---- Handing a task to an agent, and the two reviews that follow ----
    Handing a task over is the owner's act, and it becomes sub-tasks on the card rather than
