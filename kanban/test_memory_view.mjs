@@ -191,6 +191,25 @@ try {
   await evalJS(`state.locked = false; memEditing = 'about'; memDraw()`)
   check('an open edit form adds no index entries', await evalJS(`!!document.querySelector('#memView textarea')`) && await evalJS(links) === linksBefore)
   await evalJS(`memEditing = null; memDraw()`)
+  // the index stays put while the page scrolls
+  await evalJS(`(() => { const sp = document.createElement('div'); sp.id = 'memSpacer'; sp.style.height = '4000px'; document.querySelector('.memcontent').appendChild(sp); })()`)
+  await evalJS(`scrollTo(0, 0)`)
+  await wait(300)
+  const navTop = () => evalJS(`document.querySelector('.memindex').getBoundingClientRect().top`)
+  await evalJS(`document.scrollingElement.scrollTo(0, 800)`)
+  await wait(400)
+  const navTopStart = await navTop()
+  await evalJS(`document.scrollingElement.scrollTo(0, document.scrollingElement.scrollHeight)`)
+  await wait(500)
+  const navTopEnd = await navTop()
+  const scrolled = await evalJS(`document.scrollingElement.scrollTop`)
+  const hdrBottom = await evalJS(`document.getElementById('hdr').getBoundingClientRect().bottom`)
+  check('the page really scrolled', scrolled > 500, String(scrolled))
+  check('the index is in the same place at the bottom as part way down', Math.abs(navTopEnd - navTopStart) < 1.5,
+    `${navTopStart} -> ${navTopEnd}`)
+  check('and sits inside the viewport, below the header', navTopEnd >= hdrBottom - 1 && navTopEnd < await evalJS(`innerHeight`), `top ${navTopEnd}, header bottom ${hdrBottom}`)
+  await evalJS(`document.getElementById('memSpacer').remove(); scrollTo(0, 0)`)
+
   // two bucket headings that slug the same
   await evalJS(`memData.buckets = [
     { heading: 'Foo Bar', name: 'Foo Bar', exists: true, filled: true, text: '# Foo Bar\\n\\nOne.' },
@@ -199,6 +218,19 @@ try {
   check('buckets that slug alike get distinct ids', await evalJS(`(() => { const ids = [...document.querySelectorAll('.membucket')].map(a => a.id); return ids.length === 2 && ids[0] !== ids[1] })()`),
     await evalJS(`[...document.querySelectorAll('.membucket')].map(a => a.id).join(',')`))
   check('and both have a working index link', await evalJS(`(() => { const l = [...document.querySelectorAll('[data-mem-jump^="mem-bucket-foo-bar"]')]; return l.length === 2 && l[0].dataset.memJump !== l[1].dataset.memJump && l.every(a => document.getElementById(a.dataset.memJump)) })()`))
+  await evalJS(`memLoad()`)
+  await wait(600)
+
+  // every section empty: each still renders, with a placeholder and an index entry
+  await evalJS(`(() => {
+    memData.about = { text: '' }; memData.people = []; memData.buckets = []; memData.profile = {};
+    const span = memContextSpan(); if (span) span.arr.splice(span.at, span.end - span.at);
+    memDraw();
+  })()`)
+  check('with everything empty every section still renders', await evalJS(sections) === 'about,people,buckets,context,profile', await evalJS(sections))
+  check('each carries a placeholder', await evalJS(`[...document.querySelectorAll('#memView .memsec')].every(s => s.querySelector('.memempty'))`))
+  check('and keeps its index entry', await evalJS(`[...document.querySelectorAll('#memView .memsec')].every(s => document.querySelector('.memindex a[data-mem-jump="' + s.id + '"]'))`))
+  check('Edit still works from an empty section', await evalJS(`!!document.querySelector('[data-mem=about] [data-mem-edit=about]') && !!document.querySelector('[data-mem=people] [data-mem-edit=people]')`))
   await evalJS(`memLoad()`)
   await wait(600)
   check('the observer is running in the view', await evalJS(`memObserver !== null`))

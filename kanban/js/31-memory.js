@@ -82,6 +82,8 @@ function memRender(md, isBrief){
     .filter(l => l.trim() !== BRIEF_MARKER && !(isBrief && /^>/.test(l.trim()))).join('\n');
   return '<div class="repdoc memtext">' + mdBlocks(clean, { keepH1: false }) + '</div>';
 }
+/* The placeholder a section shows when it holds nothing: a quiet dashed box
+   saying what goes there. The section, its index entry and its Edit button stay. */
 function memEmpty(line){ return '<p class="memempty">' + esc(line) + '</p>'; }
 function memEditBtn(which, hidden){
   const off = memEditing && memEditing !== which;
@@ -121,7 +123,7 @@ function memAboutHTML(){
       memFormButtons('about'));
   }
   return memSection('about', 'Company',
-    a.text.trim() ? memRender(a.text) : memEmpty('No company description yet.'), memEditBtn('about'));
+    a.text.trim() ? memRender(a.text) : memEmpty('No company description yet. Say here what the company does.'), memEditBtn('about'));
 }
 
 function memPeopleHTML(){
@@ -140,7 +142,7 @@ function memPeopleHTML(){
       '<div class="memactions"><button class="btn small outline" data-mem-add>Add a person</button></div>' +
       memFormButtons('people'));
   }
-  if (!people.length) return memSection('people', 'Team', memEmpty('No team yet.'), memEditBtn('people'));
+  if (!people.length) return memSection('people', 'Team', memEmpty('No team yet. Add the people you work with.'), memEditBtn('people'));
   const table = '<div class="memscroll"><table class="memtable"><thead><tr>' +
     MEM_PEOPLE_COLS.map(c => '<th>' + esc(c.label) + '</th>').join('') + '</tr></thead><tbody>' +
     people.map(p => '<tr>' + MEM_PEOPLE_COLS.map(c =>
@@ -152,7 +154,7 @@ function memPeopleHTML(){
 function memBucketsHTML(){
   const list = memData.buckets;
   if (!list.length) return '<section class="memsec" id="mem-buckets" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' +
-    memEmpty('No buckets yet.') + '</section>';
+    memEmpty('No buckets yet. Each bucket of the board gets its brief here.') + '</section>';
   return '<section class="memsec" id="mem-buckets" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' +
     list.map(b => {
       const which = 'bucket:' + b.heading;
@@ -183,10 +185,10 @@ function memContextHTML(){
       memFormButtons('context'));
   }
   if (state.locked) {
-    return memSection('context', 'Context', text ? memRender(text) : memEmpty('No context yet.'), '',
+    return memSection('context', 'Context', text ? memRender(text) : memEmpty('No context yet. Note who is away and what is live this week.'), '',
       '<p class="help">This tab is read-only.</p>');
   }
-  return memSection('context', 'Context', text ? memRender(text) : memEmpty('No context yet.'), memEditBtn('context'));
+  return memSection('context', 'Context', text ? memRender(text) : memEmpty('No context yet. Note who is away and what is live this week.'), memEditBtn('context'));
 }
 
 function memProfileHTML(){
@@ -195,7 +197,7 @@ function memProfileHTML(){
   const sections = Object.entries(p.sections || {}).filter(([, v]) => String(v || '').trim());
   const edit = '<button class="btn small outline" data-mem-profile>Edit in Settings</button>';
   if (!(p.name || '').trim() && !about.length && !sections.length) {
-    return memSection('profile', 'Your profile', memEmpty('No profile yet.'), edit);
+    return memSection('profile', 'Your profile', memEmpty('No profile yet. Fill it in from Settings.'), edit);
   }
   const body =
     ((p.name || '').trim() ? '<p><strong>' + esc(p.name) + '</strong></p>' : '') +
@@ -224,6 +226,18 @@ function memIndexHTML(host){
   });
   return '<nav class="memindex" aria-label="On this page"><ul>' + out + '</ul></nav>';
 }
+
+/* The index sticks just under the header, whose height changes (it wraps, and a
+   backup preview adds a bar above it), so the offset is measured, not fixed. */
+function memPlaceIndex(){
+  const host = document.getElementById('memView');
+  const hdr = document.getElementById('hdr');
+  if (!host) return;
+  const cs = hdr && getComputedStyle(hdr);
+  const top = cs && cs.position === 'sticky' && hdr.offsetHeight ? (parseFloat(cs.top) || 0) + hdr.offsetHeight : 0;
+  host.style.setProperty('--mem-top', (top + 12) + 'px');
+}
+let memResizeBound = false;
 
 function memStopObserving(){
   if (memObserver) { memObserver.disconnect(); memObserver = null; }
@@ -280,6 +294,8 @@ function memDraw(){
   const host = lists.querySelector('#memView');
   host.insertAdjacentHTML('afterbegin', memIndexHTML(host));
   host.onclick = memClick;
+  memPlaceIndex();
+  if (!memResizeBound) { memResizeBound = true; window.addEventListener('resize', memPlaceIndex); }
   memObserve(host);
 }
 

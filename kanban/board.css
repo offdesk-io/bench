@@ -3223,7 +3223,10 @@ body.signed-in #runAgentBtn{display:none !important}
    so this spans both. */
 .memview{column-span:all; max-width:1000px; margin:0 auto; padding:8px 0 40px; display:grid; grid-template-columns:200px minmax(0, 1fr); gap:32px; align-items:start}
 .memcontent{display:flex; flex-direction:column; gap:40px; max-width:760px; min-width:0}
-.memindex{position:sticky; top:12px; max-height:calc(100vh - 24px); overflow-y:auto; font-size:var(--tenon-typography-size-sm)}
+/* main is overflow-x:auto for the board, which makes it the scroller sticky measures
+   against even though it never scrolls. Drop that here so the index sticks to the page. */
+main:has(#memView){overflow-x:visible}
+.memindex{position:sticky; top:var(--mem-top, 72px); max-height:calc(100vh - var(--mem-top, 72px) - 12px); overflow-y:auto; font-size:var(--tenon-typography-size-sm)}
 .memindex ul{list-style:none; margin:0; padding:0}
 .memindex ul ul{margin:2px 0 8px 10px}
 .memindex a{display:block; padding:3px 8px; border-left:2px solid transparent; color:var(--tenon-text-subtle); text-decoration:none}
@@ -3236,7 +3239,7 @@ body.signed-in #runAgentBtn{display:none !important}
 .memhead h4, .memtext h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:600; color:var(--tenon-text-subtle)}
 .membucket{display:flex; flex-direction:column; gap:8px; padding:12px 0; border-top:1px solid var(--tenon-stroke-default)}
 .memtext{max-width:68ch}
-.memempty{margin:0; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-faint)}
+.memempty{margin:0; padding:14px 16px; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-faint); border:1px dashed var(--tenon-stroke-default); border-radius:var(--tenon-radius-md)}
 .memerr{margin:0; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-error)}
 .memactions{display:flex; align-items:center; flex-wrap:wrap; gap:8px}
 .memarea{
