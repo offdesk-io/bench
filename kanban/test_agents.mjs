@@ -286,7 +286,7 @@ check('Run the Plan agent now asks first', await evalJS(`(() => {
 const status = await evalJS(`window.__real('/agents-status.json').then(r => r.json()).then(j => JSON.stringify(j))`)
 check('the server says whether agents can run here', /"ready": ?(true|false)/.test(status) && /"claude": ?(true|false)/.test(status), status)
 const real = await evalJS(`window.__real('/agents-api/state.json').then(r => r.json()).then(j => (j.agents || []).map(a => a.id).sort().join(','))`)
-check('the server lists only this repo agents', real === 'implement-agent,plan-agent', real)
+check('the server lists only this repo agents', real === 'bucket-agent,implement-agent,plan-agent', real)
 const refused = await evalJS(`window.__real('/agents-api/run', { method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } }).then(r => r.status)`)
 check('a POST naming no agent is refused', refused === 404, String(refused))
 
