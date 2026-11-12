@@ -181,7 +181,7 @@ try {
   check('the index has one link per section and subsection', await evalJS(links) === await evalJS(want) && await evalJS(links) >= 5,
     `${await evalJS(links)} links, ${await evalJS(want)} targets`)
   check('every link points at an element with that id', await evalJS(`[...document.querySelectorAll('[data-mem-jump]')].every(a => document.getElementById(a.dataset.memJump) && a.getAttribute('href') === '#' + a.dataset.memJump)`))
-  check('exactly one entry is current', await evalJS(`document.querySelectorAll('.memindex a[aria-current="true"]').length`) >= 1)
+  check('at least one entry is current (a subsection and its section may both be)', await evalJS(`document.querySelectorAll('.memindex a[aria-current="true"]').length`) >= 1)
   const hashBefore = await evalJS(`location.hash`)
   await evalJS(`document.querySelector('[data-mem-jump="mem-profile"]').click()`)
   await wait(800)
@@ -191,6 +191,16 @@ try {
   await evalJS(`state.locked = false; memEditing = 'about'; memDraw()`)
   check('an open edit form adds no index entries', await evalJS(`!!document.querySelector('#memView textarea')`) && await evalJS(links) === linksBefore)
   await evalJS(`memEditing = null; memDraw()`)
+  // two bucket headings that slug the same
+  await evalJS(`memData.buckets = [
+    { heading: 'Foo Bar', name: 'Foo Bar', exists: true, filled: true, text: '# Foo Bar\\n\\nOne.' },
+    { heading: 'foo-bar', name: 'foo-bar', exists: true, filled: true, text: '# foo-bar\\n\\nTwo.' }
+  ]; memDraw()`)
+  check('buckets that slug alike get distinct ids', await evalJS(`(() => { const ids = [...document.querySelectorAll('.membucket')].map(a => a.id); return ids.length === 2 && ids[0] !== ids[1] })()`),
+    await evalJS(`[...document.querySelectorAll('.membucket')].map(a => a.id).join(',')`))
+  check('and both have a working index link', await evalJS(`(() => { const l = [...document.querySelectorAll('[data-mem-jump^="mem-bucket-foo-bar"]')]; return l.length === 2 && l[0].dataset.memJump !== l[1].dataset.memJump && l.every(a => document.getElementById(a.dataset.memJump)) })()`))
+  await evalJS(`memLoad()`)
+  await wait(600)
   check('the observer is running in the view', await evalJS(`memObserver !== null`))
   await evalJS(`state.view = 'board'; renderView()`)
   await wait(600)

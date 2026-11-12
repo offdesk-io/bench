@@ -99,8 +99,15 @@ function memFormButtons(which){
 function memSlug(text){
   return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
 }
+let memIds = new Set();   // ids issued during this render, so two headings that slug alike stay apart
+function memUniqueId(base){
+  let id = base, n = 1;
+  while (memIds.has(id)) id = base + '-' + (++n);
+  memIds.add(id);
+  return id;
+}
 function memSection(id, title, bodyHTML, edit, extra){
-  return '<section class="memsec" id="mem-' + esc(memSlug(id)) + '" data-mem="' + esc(id) + '">' +
+  return '<section class="memsec" id="' + esc(memUniqueId('mem-' + memSlug(id))) + '" data-mem="' + esc(id) + '">' +
     '<div class="memhead"><h3>' + esc(title) + '</h3>' + (edit || '') + '</div>' +
     (extra || '') + bodyHTML +
   '</section>';
@@ -161,7 +168,7 @@ function memBucketsHTML(){
       } else if (!b.exists) body = memEmpty('No brief yet.');
       else if (!b.filled) body = memEmpty('The brief is still the empty template.');
       else body = memRender(b.text, true);
-      return '<article class="membucket" id="mem-bucket-' + esc(memSlug(b.heading)) + '" data-mem-bucket="' + esc(b.heading) + '">' +
+      return '<article class="membucket" id="' + esc(memUniqueId('mem-bucket-' + memSlug(b.heading))) + '" data-mem-bucket="' + esc(b.heading) + '">' +
         '<div class="memhead"><h4>' + esc(b.name) + '</h4>' + memEditBtn(which, memEditing === which) + '</div>' + body +
       '</article>';
     }).join('') +
@@ -194,7 +201,7 @@ function memProfileHTML(){
     ((p.name || '').trim() ? '<p><strong>' + esc(p.name) + '</strong></p>' : '') +
     (about.length ? '<dl class="memdl">' + about.map(([k, v]) =>
       '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>' : '') +
-    sections.map(([k, v]) => '<h4 id="mem-profile-' + esc(memSlug(k)) + '" data-mem-sub>' + esc(k) + '</h4>' + mdBlocks(String(v))).join('');
+    sections.map(([k, v]) => '<h4 id="' + esc(memUniqueId('mem-profile-' + memSlug(k))) + '" data-mem-sub>' + esc(k) + '</h4>' + mdBlocks(String(v))).join('');
   return memSection('profile', 'Your profile', '<div class="repdoc memtext">' + body + '</div>', edit);
 }
 
@@ -266,6 +273,7 @@ function memDraw(){
     return;
   }
   if (!memData) { lists.innerHTML = '<div class="memview"><p class="memempty">Reading what Bench keeps…</p></div>'; return; }
+  memIds = new Set();
   lists.innerHTML = '<div class="memview" id="memView"><div class="memcontent">' +
     memAboutHTML() + memPeopleHTML() + memBucketsHTML() + memContextHTML() + memProfileHTML() +
   '</div></div>';
