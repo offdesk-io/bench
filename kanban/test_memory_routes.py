@@ -207,6 +207,23 @@ def in_process(root):
         with open(os.path.join(tmp, "about.md"), "w", encoding="utf-8") as fh:
             fh.write("A studio of four.\n\nWe build things.")
 
+        # --- context -----------------------------------------------------------
+        code, got = request(base, "GET", "/context.json")
+        ok("a board with no context.md reads as empty text", code == 200 and got["text"] == "" and got["exists"] is False,
+           "%s %s" % (code, got))
+        code, got = request(base, "PUT", "/context", {"text": "Ana is away.\n"}, FROM_BOARD)
+        ok("the context can be saved", code == 200 and got.get("ok") is True, "%s %s" % (code, got))
+        code, got = request(base, "GET", "/context.json")
+        ok("and reads back", got["text"] == "Ana is away.\n" and got["exists"] is True, str(got))
+        ok("in context.md beside the list", os.path.isfile(os.path.join(tmp, "context.md")))
+        code, _ = request(base, "PUT", "/context", {"text": "x"}, {"Content-Type": "application/json"})
+        ok("a context write not from the board is refused", code == 403, "got %s" % code)
+        code, _ = request(base, "PUT", "/context", {"nope": 1}, FROM_BOARD)
+        ok("a context write with no text is refused", code == 400, "got %s" % code)
+        code, got = request(base, "GET", "/memory.json")
+        ok("memory.json carries it", got["context"] == {"text": "Ana is away.\n", "exists": True}, str(got.get("context")))
+        os.remove(os.path.join(tmp, "context.md"))
+
         # --- memory.json --------------------------------------------------------
         code, got = request(base, "GET", "/memory.json")
         ok("memory.json answers", code == 200, "%s %s" % (code, got))
@@ -257,6 +274,13 @@ def in_process(root):
         code, got = request(base, "GET", "/memory.json")
         ok("memory.json reads both from the memory folder",
            got["about"]["text"] == "Moved." and [p["name"] for p in got["people"]] == ["Ana", "Anu", "Bo"], str(got))
+        code, got = request(base, "PUT", "/context", {"text": "Moved context."}, FROM_BOARD)
+        ok("a context save with a memory folder answers", code == 200, "%s %s" % (code, got))
+        with open(os.path.join(there, "context.md"), encoding="utf-8") as fh:
+            ok("and lands in the memory folder", fh.read() == "Moved context.")
+        ok("leaving the list's own folder without one", not os.path.exists(os.path.join(tmp, "context.md")))
+        code, got = request(base, "GET", "/context.json")
+        ok("the memory folder's copy is read from then on", got["text"] == "Moved context.", str(got))
         os.remove(os.path.join(root, "settings.json"))
     finally:
         httpd.shutdown()

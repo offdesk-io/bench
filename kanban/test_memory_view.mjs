@@ -5,7 +5,8 @@
  *
  * About and Team save for real (the server is the test runner's own, over a
  * temporary data folder), so the round trip is read back from /memory.json.
- * Context never touches a route: it edits state.doc, which the autosave writes.
+ * Context saves through PUT /context; a list still holding a `## Context`
+ * section shows it until the first save, which moves it out of state.doc.
  * SHOT_DESKTOP and SHOT_PHONE name PNG files to leave screenshots in.
  */
 import { spawn } from 'node:child_process'
@@ -147,30 +148,24 @@ try {
   const brief = await evalJS(`fetch('/memory.json').then(r => r.json()).then(j => j.buckets[0])`)
   check('and saves it through PUT /bucket-brief', /From the Memory page\./.test(brief.text) && brief.exists, JSON.stringify(brief).slice(0, 200))
 
-  // --- Context goes through the document ------------------------------------
-  const before = await evalJS(`serializeDoc(state.doc)`)
+  // --- Context: the old section shows, the first save moves it to context.md ---
+  check('Context starts from the todo.md section when there is no context.md',
+    await evalJS(`memData.context.exists === false && /./.test(memContextText()) && !!memContextSpan()`))
   await click('[data-mem-edit=context]')
   check('Context opens a form holding its own text', await evalJS(`${$q('[data-mem-context]')}.value === memContextText()`))
   await evalJS(`${$q('[data-mem-context]')}.value = 'Ana is away until Friday.'`)
   await click('[data-mem-save=context]')
+  await wait(600)
   const after = await evalJS(`serializeDoc(state.doc)`)
-  check('Save changes the document', before !== after && /## Context\n\nAna is away until Friday\.\n?$/.test(after),
-    JSON.stringify(after.slice(Math.max(0, after.indexOf('## Context') - 20), after.indexOf('## Context') + 120)))
-  check('marks it unsaved for the normal autosave', await evalJS(`state.dirty === true || $('#status').textContent !== 'unsaved changes' `))
+  const saved = await evalJS(`getJSON('/context.json')`)
+  check('Save writes context.md through the route', saved.exists && saved.text === 'Ana is away until Friday.', JSON.stringify(saved))
+  check('and removes the section from the document', !/## Context/.test(after) && await evalJS(`memContextSpan() === null`))
+  check('marks the document unsaved for the normal autosave', await evalJS(`state.dirty === true || $('#status').textContent !== 'unsaved changes' `))
   check('and the view shows the new text', await evalJS(`/Ana is away until Friday/.test(${$q('[data-mem=context]')}.textContent)`))
   check('the document keeps its buckets', after.includes('## 1. People') && after.includes('## 4. Strategic'))
-
-  // --- No Context section: Edit adds one -----------------------------------
-  await evalJS(`(() => {
-    const span = memContextSpan();
-    span.arr.splice(span.at, span.end - span.at);
-    memDraw();
-  })()`)
-  check('without the section it says so', await evalJS(`/No context yet/.test(${$q('[data-mem=context]')}.textContent)`))
-  await click('[data-mem-edit=context]')
-  await evalJS(`${$q('[data-mem-context]')}.value = 'Added fresh.'`)
-  await click('[data-mem-save=context]')
-  check('Edit adds the section', /## Context\n\nAdded fresh\.\n?$/.test(await evalJS(`serializeDoc(state.doc)`)))
+  await evalJS(`memLoad()`)
+  await wait(600)
+  check('a reload reads it back from context.md', await evalJS(`/Ana is away until Friday/.test(${$q('[data-mem=context]')}.textContent)`))
 
   // --- the index -----------------------------------------------------------
   await evalJS(`state.locked = true; renderMemoryView()`)
@@ -237,6 +232,7 @@ try {
   // every section empty: each still renders, with a placeholder and an index entry
   await evalJS(`(() => {
     memData.about = { text: '' }; memData.people = []; memData.buckets = []; memData.profile = {};
+    memData.context = { text: '', exists: false };
     const span = memContextSpan(); if (span) span.arr.splice(span.at, span.end - span.at);
     memDraw();
   })()`)

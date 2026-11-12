@@ -2,7 +2,7 @@
 
 /* =========================================================================
    4d. Memory — everything Bench keeps about the current board, on one page:
-   the company, the team, each bucket's brief, the Context section of the list,
+   the company, the team, each bucket's brief, its Context,
    and the owner's profile.
 
    Each of the first four is read as rendered text and has its own Edit button
@@ -14,9 +14,10 @@
      Team      PUT /people           (one table in people.md)
      Buckets   PUT /bucket-brief     (the route the bucket editor already uses,
                                       with the section form it already has)
-     Context   state.doc + autosave  (it is part of todo.md, so it goes through
-                                      the board's own save and never a route of
-                                      its own)
+     Context   PUT /context          (context.md; a list that still keeps a
+                                      `## Context` section in todo.md shows that
+                                      until the first save, which moves it out
+                                      through state.doc + autosave)
 
    The profile is read-only here. It already has a form, in Settings, and a
    second one would be a second writer.
@@ -40,7 +41,7 @@ const MEM_PEOPLE_COLS = [
   { key: 'reports_to', label: 'Reports to' }, { key: 'notes', label: 'Notes' }
 ];
 
-/* ---- Context, read and written through the document ---- */
+/* ---- Context: context.md, or the old todo.md section until the first save ---- */
 
 /* Where the `## Context` section sits: which of the document's two loose
    arrays (before the first bucket, after the last) holds it, and the line range
@@ -57,21 +58,17 @@ function memContextSpan(){
   return null;
 }
 function memContextText(){
+  if (memData && memData.context && memData.context.exists) return String(memData.context.text || '').trim();
   const span = memContextSpan();
   return span ? span.arr.slice(span.at + 1, span.end).join('\n').trim() : '';
 }
-function memSetContext(text){
-  const body = String(text || '').replace(/\s+$/, '').split('\n');
+/* Drops the old section, body and heading, from the document. */
+function memRemoveContextSection(){
   const span = memContextSpan();
-  if (span) {
-    const more = span.end < span.arr.length;
-    const lines = [''].concat(body, more ? [''] : []);
-    span.arr.splice(span.at + 1, span.end - span.at - 1, ...lines);
-  } else {
-    const post = state.doc.post;
-    if (post.length && post[post.length - 1].trim() !== '') post.push('');
-    post.push('## Context', '', ...body, '');
-  }
+  if (!span) return;
+  let end = span.end;
+  while (span.at > 0 && span.arr[span.at - 1].trim() === '' && end >= span.arr.length) span.at--;
+  span.arr.splice(span.at, end - span.at);
   markDirty();
 }
 
@@ -331,7 +328,10 @@ async function memSave(which){
       await putJSON('/people', { people });
     } else if (which === 'context') {
       const box = document.querySelector('#memView [data-mem-context]');
-      memSetContext(box.value);
+      await putJSON('/context', { text: box.value });
+      if (!memData) memData = {};
+      memData.context = { text: box.value, exists: true };
+      memRemoveContextSection();
     } else if (which.indexOf('bucket:') === 0) {
       const heading = which.slice(7);
       const b = memData.buckets.find(x => x.heading === heading);
