@@ -1,17 +1,15 @@
-/* Reports — the counted half and the written half, as two columns Overview
- * draws at the end of its own row.
+/* Reports — the counted half and the written half, as two columns the
+ * Reports page draws.
  *
- * They were a tab of their own until 19 Sep 2026, `ReportsView` here and a
- * `.lists.rview` grid of two. The tab is gone: what got done and what to do
- * next are the same question asked at two ends, and reading one meant leaving
- * the other. So the file keeps the two columns and drops the view around them,
- * and `OverviewView` (SectionsView.tsx) lists them at the two ends of its row —
- * Tasks finished first, at twice a reference column's width, and Written
- * reports last.
+ * They were a tab of their own until 19 Sep 2026, then the ends of Overview's
+ * row, and are a tab again: what got done is read on its own page, and
+ * Overview keeps the columns to pick work up from. `ReportsView`
+ * (SectionsView.tsx) lists them, Tasks finished first at twice a reference
+ * column's width and Written reports beside it.
  *
  * Both are collapsible here, which they were not as a tab — every column on
- * Overview is, for the same reason Overview's own five are: seven columns of
- * prose open at once is a lot of scrolling.
+ * Overview is, for the same reason: columns of prose open at once are a lot of
+ * scrolling.
  *
  * Both heads are the column head every other column on the row carries, using
  * the same slots for the same things. The count is how many tasks the window

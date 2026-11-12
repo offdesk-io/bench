@@ -114,33 +114,33 @@ check('the tab is locked', await evalJS(`state.locked === true`))
    and the point of the check is that it stays safe. */
 await evalJS(`state.view = 'overview'; renderView()`)
 
-/* ---- the shell: seven columns, in reading order ---- */
+/* ---- the shell: three columns, in reading order ---- */
 
-check('all seven columns are drawn, in reading order', await evalJS(`
+check('the three columns are drawn, in reading order', await evalJS(`
   [...document.querySelectorAll('.lists.split .tenon-column h3')].map(h => h.textContent).join('|')
-`) === 'Tasks finished|Big rocks|This week|Quick wins|Delegate to Claude|Context|Written reports',
+`) === 'Big rocks|This week|Quick wins',
   await evalJS(`[...document.querySelectorAll('.lists.split .tenon-column h3')].map(h => h.textContent).join('|')`))
 
-check('the split grid carries seven tracks', await evalJS(`
+check('the split grid carries three tracks', await evalJS(`
   (document.querySelector('.lists.split').style.gridTemplateColumns.match(/minmax/g) || []).length
-`) === 7, await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
+`) === 3, await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
 
-/* The two report columns are wider than the four reference ones, and the row's
-   own floor has to add up to what it is actually holding rather than to a
-   count times one width. */
-check('and the row is as wide as the seven tracks it holds', await evalJS(`
+check('and the row is as wide as the three tracks it holds', await evalJS(`
   document.querySelector('.lists.split').style.minWidth
-`) === (394 * 4 + 554 + 788 + 434) + 'px', await evalJS(`document.querySelector('.lists.split').style.minWidth`))
+`) === (394 * 3) + 'px', await evalJS(`document.querySelector('.lists.split').style.minWidth`))
 
-/* Two reference columns and the gap between them, so the wide column lines up
-   with the pair beside it rather than being merely bigger than them. */
-check('Tasks finished leads the row at exactly two reference columns wide', await evalJS(`
-  document.querySelector('.lists.split').style.gridTemplateColumns.split(') ')[0] + ')'
-`) === 'minmax(774px, 2fr)', await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
+/* Context lives on the Memory page and Delegate to Claude is not drawn. */
+check('Overview has no Context column and no Delegate to Claude panel', await evalJS(`
+  !/Context|Delegate to Claude/.test([...document.querySelectorAll('#lists h3')].map(h => h.textContent).join('|')) &&
+  !document.querySelector('#lists .ctxgroup, #lists .ref.ctx')
+`))
+check('and no report columns either, they have their own page', await evalJS(`
+  !/Tasks finished|Written reports/.test(document.querySelector('#lists').textContent)
+`))
 
 check('a hint with a tag in it renders the tag as code, not literal backticks', await evalJS(`
-  document.querySelector('.lists.split .tenon-column:nth-child(3) .tenon-column__desc code')?.textContent
-`) === 'week', await evalJS(`document.querySelector('.lists.split .tenon-column:nth-child(3) .tenon-column__desc')?.innerHTML`))
+  document.querySelector('.lists.split .tenon-column:nth-child(2) .tenon-column__desc code')?.textContent
+`) === 'week', await evalJS(`document.querySelector('.lists.split .tenon-column:nth-child(2) .tenon-column__desc')?.innerHTML`))
 
 /* ---- each section counts what it holds ---- */
 
@@ -154,9 +154,22 @@ check('This week counts the one week-tagged task', await countOf('This week') ==
 /* The S task with nobody named is the owner's, so it counts beside the message task.
    Until 21 Sep 2026 an untagged task was skipped for having no `ai:`. */
 check('Quick wins counts the message task and the small one', await countOf('Quick wins') === '2')
-check('Delegate to Claude counts the one Implement agent task', await countOf('Delegate to Claude') === '1')
 
-/* ---- the two report columns, at the end of the same row ---- */
+/* ---- the two report columns, on the Reports page ---- */
+
+await evalJS(`state.view = 'reports'; renderView()`)
+check('Reports is a tab right after Overview and #reports opens it', await evalJS(`
+  [...document.querySelectorAll('#viewTabs [role=radio], [data-view]')].map(r => r.dataset.value || r.dataset.view).filter(Boolean).slice(0, 2).join() === 'overview,reports' &&
+  state.view === 'reports' && /reports/.test(location.hash)
+`), await evalJS(`location.hash`))
+check('the Reports page draws Tasks finished then Written reports on two tracks', await evalJS(`
+  [...document.querySelectorAll('.lists.split .tenon-column h3')].map(h => h.textContent).join('|') + '/' +
+  (document.querySelector('.lists.split').style.gridTemplateColumns.match(/minmax/g) || []).length
+`) === 'Tasks finished|Written reports/2', await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
+check('Tasks finished leads at exactly two reference columns wide', await evalJS(`
+  document.querySelector('.lists.split').style.gridTemplateColumns.split(') ')[0] + ')'
+`) === 'minmax(774px, 2fr)', await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
+
 
 check('Tasks finished carries the window picker in its head', await evalJS(`(() => {
   const c = [...document.querySelectorAll('.lists.split .tenon-column')].find(c => c.querySelector('h3')?.textContent === 'Tasks finished');
@@ -167,12 +180,12 @@ check('Tasks finished carries the window picker in its head', await evalJS(`(() 
    the column became a <details> with a <summary> for one: 12.5px type and a
    second chevron on a line of its own. They are scoped under `.tenon-column__body` now,
    so the head is the same object as any other column's. */
-check('and its head is drawn exactly like a reference column\'s', await evalJS(`(() => {
+check('and its head is drawn exactly like its neighbour\'s', await evalJS(`(() => {
   const at = t => [...document.querySelectorAll('.lists.split .tenon-column')].find(c => c.querySelector('h3')?.textContent === t);
   const shape = el => { const s = el.querySelector('summary'), cs = getComputedStyle(s);
     return [cs.fontSize, cs.padding, getComputedStyle(s, '::before').content,
             s.querySelectorAll('.tenon-column__chevron').length].join('/') };
-  return shape(at('Tasks finished')) === shape(at('Big rocks')) ? 'same' : shape(at('Tasks finished')) + ' vs ' + shape(at('Big rocks'));
+  return shape(at('Tasks finished')) === shape(at('Written reports')) ? 'same' : shape(at('Tasks finished')) + ' vs ' + shape(at('Written reports'));
 })()`) === 'same', await evalJS(`(() => {
   const at = t => [...document.querySelectorAll('.lists.split .tenon-column')].find(c => c.querySelector('h3')?.textContent === t);
   const s = at('Tasks finished').querySelector('summary'), cs = getComputedStyle(s);
@@ -194,12 +207,7 @@ check('Written reports folds on the same key the other six use', await evalJS(`(
   return c?.tagName === 'DETAILS' && c.dataset.columnCollapse === 'ov:Written reports';
 })()`))
 
-/* ---- the section with nothing to count ---- */
-
-check('Context carries no count, since it is prose rather than a list', await evalJS(`(() => {
-  const h = [...document.querySelectorAll('.lists.split .tenon-column h3')].find(h => h.textContent === 'Context');
-  return h.closest('.tenon-column').querySelector('.tenon-column__head-end .tenon-column__count');
-})()`) == null)
+await evalJS(`state.view = 'overview'; renderView()`)
 
 /* ---- capMsgCards() against real, painted layout ---- */
 
@@ -238,11 +246,8 @@ await evalJS(`localStorage.removeItem('bench-overview-closed')`)
 /* ---- Quick wins' own sort control, and Delegate to Claude's ranked rows ---- */
 
 check('Quick wins carries its own sort toggle, not the board\'s', await evalJS(`
-  !!document.querySelector('.lists.split .tenon-column:nth-child(4) [data-quicksort]')
+  !!document.querySelector('.lists.split .tenon-column:nth-child(3) [data-quicksort]')
 `))
-check('Delegate to Claude numbers its rows', await evalJS(`
-  document.querySelector('.lists.split .tenon-column:nth-child(5) .refnum')?.textContent
-`) === '1')
 
 /* ---- the cards: Tenon's Card, with the attributes the delegated listener reads ---- */
 
@@ -287,10 +292,6 @@ await new Promise(r => setTimeout(r, 150))
 check('and Show them again puts it back', await evalJS(`
   !document.querySelector('.lists.split [data-quickrestore]') && !!document.querySelector('.lists.split [data-quickdismiss]')
 `))
-check('the Context column draws its standing facts as cards', await evalJS(`
-  document.querySelector('.lists.split .ref.ctx .ctxtext')?.textContent
-`) === 'The team runs a fortnightly retro.')
-
 /* A sub-step is a card of its own, and its line is what the tick and Not this
    week send back. Line zero is a real line, so it must not be dropped as empty. */
 await evalJS(`(() => {
@@ -316,22 +317,6 @@ check('clicking a card opens it, the same #lists delegation every other view use
   !!document.querySelector('#drawer:not(.hidden)')
 `))
 await evalJS(`closeDrawer()`)
-
-/* ---- a plan whose task has gone ---- */
-
-await evalJS(`window.__plans = [
-  { name: 'kept.md', title: 'Has its task', about: 'task:' + state.doc.buckets.flatMap(b => b.tiers.flatMap(t => t.tasks.map(k => k.stableId)))[0], state: '' },
-  { name: 'orphan.md', title: 'Lost its task', about: 'task:zz9999', state: 'review' },
-  { name: 'old.md', title: 'Finished long ago', about: 'task:zz8888', state: 'done' }
-]`)
-await evalJS(`state.view = 'board'; renderView(); state.view = 'overview'; renderView()`)
-await new Promise(r => setTimeout(r, 500))
-check('a plan with no task on the list gets a line in Context', await evalJS(`
-  /Lost its task/.test(([...document.querySelectorAll('.ctxgroup')].find(g => g.querySelector('summary').textContent === 'Plans with no task') || {}).textContent || '')
-`))
-check('and a plan that has its task, or is finished, does not', await evalJS(`
-  !/Has its task|Finished long ago/.test([...document.querySelectorAll('.ctxgroup')].find(g => g.querySelector('summary').textContent === 'Plans with no task').textContent)
-`))
 
 /* ---- the point of the guard ---- */
 

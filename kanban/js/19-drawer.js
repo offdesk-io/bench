@@ -2270,8 +2270,8 @@ function setSectionCollapsed(key, collapsed){
   if (collapsed) all[key] = true; else if (DEFAULT_CLOSED[key]) all[key] = false; else delete all[key];
   try { localStorage.setItem(SECTION_KEY, JSON.stringify(all)); } catch (e) {}
 }
-/* Overview's own sections — Big rocks, This week, Quick wins, Delegate to
-   Claude, Context — default open: an overview is meant to be skimmed in one
+/* Overview's own sections — Big rocks, This week, Quick wins — and the two
+   Reports columns (`ov:` keys too) default open: an overview is meant to be skimmed in one
    glance, not clicked open section by section. Remembers which ones the owner has
    shut, per section, the same way the drawer's are. A separate key from the
    drawer's, so a section name the two happen to share cannot cross-wire

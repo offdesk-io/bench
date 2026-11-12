@@ -315,100 +315,6 @@ function agendaHTML(ag, when, opts){
     '</div>' +
   '</div>';
 }
-/* ---- Context: standing facts, not tasks ----
-   Who is away, whose contract runs out when, how names are spelt. It is the one
-   part of the file that is not work and cannot be worked out from the tasks, so
-   it is read straight out of the markdown rather than derived. Dates tagged
-   on: or until: get a live countdown, since a leave date nobody is counting is
-   how a plan ends up depending on somebody who is not there. */
-const CTX_DATE = /`(on|until):(\d{4}-\d{2}-\d{2})`/;
-
-function contextBlock(){
-  const lines = state.doc.pre.concat(state.doc.post);
-  let inside = false;
-  const out = [];
-  lines.forEach(l => {
-    const h = /^##\s+(.*)$/.exec(l);
-    if (h) { inside = /^context\b/i.test(h[1].trim()); return; }
-    if (inside) out.push(l);
-  });
-  return out;
-}
-
-/* Plans whose task has gone. A plan is read from the review behind it on its
-   task's card, so one whose task was deleted or never got an id has nowhere to be
-   read, and gets a line here instead: its title and where the file is. Finished
-   plans (the old `state: done`) are history and are left out. Read from
-   /plans.json when Overview is arrived at, and drawn again only if the answer
-   changed. */
-let orphanPlans = [];
-async function refreshOrphanPlans(){
-  let got = [];
-  try {
-    const res = await fetch('/plans.json?t=' + Date.now(), { cache: 'no-store' });
-    if (res.ok) {
-      const ids = new Set();
-      if (state.doc) state.doc.buckets.forEach(b => b.tiers.forEach(t => t.tasks.forEach(k => { if (k.stableId) ids.add(k.stableId); })));
-      got = ((await res.json()).plans || [])
-        .filter(p => /^task:/.test(p.about || '') && !ids.has(p.about.slice(5)) && p.state !== 'done')
-        .map(p => ({ title: p.title || p.name, name: p.name }));
-    }
-  } catch (err) { /* no server, or no plans folder: nothing to say */ }
-  const was = JSON.stringify(orphanPlans);
-  orphanPlans = got;
-  if (JSON.stringify(got) !== was && state.view === 'overview') renderView();
-}
-
-function contextSection(){
-  const lines = contextBlock();
-  if (!lines.length && !orphanPlans.length) return null;
-
-  const groups = [];
-  let group = '', items = [];
-  // Grouped facts collapse behind their heading — a dozen `###` sections is
-  // most of the column's length, and only one is usually the one being read.
-  // Anything before the first heading has no title to collapse behind, so it
-  // stays open, plain, the way it always has.
-  const flush = () => {
-    if (!items.length) return;
-    groups.push({ title: group || null, items });
-    items = [];
-  };
-
-  lines.forEach(l => {
-    const s = l.trim();
-    if (!s || /^---+$/.test(s)) return;
-    const h = /^###\s+(.*)$/.exec(s);
-    if (h) { flush(); group = h[1]; return; }
-    const b = /^[-*]\s+(.*)$/.exec(s);
-    if (!b) return;
-
-    const dm = CTX_DATE.exec(b[1]);
-    let chip = null;
-    if (dm) {
-      const di = dueInfo(dm[2]);
-      const past = di.days < 0;
-      chip = { tone: DUE_TONE[past ? '' : di.cls] || 'neutral',
-               text: (dm[1] === 'until' ? 'until ' : '') + di.label + ' \u00b7 ' +
-                     (past ? Math.abs(di.days) + 'd ago' : 'in ' + di.days + 'd') };
-    }
-    items.push({
-      // Lifting the date out leaves "back on ." behind, so close the gap it left.
-      textHTML: mdInline(b[1].replace(CTX_DATE, '').replace(/\s+([.,])/g, '$1').replace(/\s{2,}/g, ' ').trim()),
-      chip
-    });
-  });
-  flush();
-  if (orphanPlans.length) groups.push({
-    title: 'Plans with no task',
-    items: orphanPlans.map(p => ({
-      textHTML: mdInline(p.title) + ' — <code>plans/' + esc(p.name) + '</code>. Its task is not on the list any more.',
-      chip: null
-    }))
-  });
-  return { body: BoardUI.h(BoardUI.ContextBody, { groups }) };
-}
-
 /* The tabs, in reading order. Plans and Execution are the two agent boards and
    sit together: the first proposes, the second carries out, and a card crosses
    from one to the other when the owner accepts a plan. Each reference section is
@@ -419,10 +325,11 @@ function contextSection(){
    same tasks under three renderers, and three peers between separators spent a
    third of the strip on that. The registry stays flat — the ids, isKnownView(),
    the #matrix and #timeline fragments and syncHash() all carry on unchanged. The
-   order is the strip's: Overview, the three renderings, then Agents. */
+   order is the strip's: Overview, Reports, the three renderings, then Agents. */
 function viewDefs(){
   const defs = [
     { id:'overview', label:'Overview' },
+    { id:'reports',  label:'Reports' },
     { id:'sep0', sep:true },
     { id:'board',    label:'Board' },
     { id:'timeline', label:'Timeline' },
@@ -441,14 +348,11 @@ function viewDefs(){
    #settings URL (the tab after a slash) and a renderView() case of its own. An
    old #memory or #backups link opens that tab (adoptSettingsRoute(), 29-settings.js).
 
-   'reports' is here for a different reason: it used to be a tab and
-   its two columns are the end of Overview's row now, so a #reports link is
-   still a link somebody may have, and renderView() sends it to Overview. 'plans'
-   is here the same way: it used to be a tab, and renderView() sends an
+   'plans' is here for a different reason: it used to be a tab, and renderView() sends an
    old #plans link to the board. 'projects' is a view with no tab: the list of
    project folders is still drawn for a #projects link, and the project drawer
    is reached from a task's drawer. */
 function isKnownView(id){
-  return id === 'settings' || id === 'reports' || id === 'plans' || id === 'projects' || viewDefs().some(d => d.id === id);
+  return id === 'settings' || id === 'plans' || id === 'projects' || viewDefs().some(d => d.id === id);
 }
 

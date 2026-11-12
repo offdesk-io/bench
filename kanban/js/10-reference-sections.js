@@ -1,9 +1,9 @@
 'use strict';
 
 /* =========================================================================
-   4b. Reference sections. Overview is four columns — Big rocks, This week, Quick
-       wins, Delegate to Claude — plus Context. Dependency chain sits on Matrix,
-       beside the nine cells.
+   4b. Reference sections. Overview is three columns — Big rocks, This week and Quick
+       wins. delegateSection() below is still built but no longer drawn.
+       Dependency chain sits on Matrix, beside the nine cells.
 
    These used to be rendered as prose straight out of the markdown, which meant
    an entry was a sentence that happened to look like a task. Nothing connected
@@ -379,10 +379,9 @@ function weekSection(items){
    start — so it is left out. The count of what was held back is shown, because
    a section that quietly shrinks looks like a section with nothing in it.
 
-   Anything delegated to the Implement agent is left out too. Delegate to
-   Claude already lists every one of them, ranked, and the two columns sit side by side on Overview —
-   the same card in both reads as two jobs when it is one. Quick wins is what is
-   left for the owner to do themself.
+   Anything delegated to the Implement agent is left out too, as when Delegate to
+   Claude listed it beside this column and the same card in both read as two jobs
+   when it is one. Quick wins is what is left for the owner to do themself.
 
    Backlog is left out entirely, the same call the matrix makes with HELD_TIER —
    it has been parked on purpose, so however small it is, it is not a real
