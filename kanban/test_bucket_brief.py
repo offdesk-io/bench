@@ -146,6 +146,37 @@ def main():
         code, _ = request(base, "PUT", "/data/people.md", "hello",
                           {"Content-Type": "text/markdown", "X-Board": "1"})
         ok("do_PUT still refuses anything but todo.md", code == 404, "got %d" % code)
+        # --- the bucket agents' route ---------------------------------------
+        was_root = server.DATA_ROOT
+        server.DATA_ROOT = root
+        try:
+            with open(os.path.join(tmp, "todo.md"), "w", encoding="utf-8") as fh:
+                fh.write("# To-do\n\n## 1. People\n\n### To do\n\n## 2. Brief test ops\n\n### To do\n")
+            ready = ("---\nmode: free-rein\nstart: scheduled\n---\n\n# People\n\nWhat lands here.\n\n"
+                     + "".join("## %s\n\nWritten.\n\n" % h for _, h in server.bucket_agents.FIELDS))
+            with open(on_disk, "w", encoding="utf-8") as fh:
+                fh.write(ready)
+            os.makedirs(os.path.join(tmp, "buckets", "brief-test-ops"))
+            code, body = request(base, "GET", "/api/bucket-agents?list=brief-test")
+            ok("the bucket agents route answers 200", code == 200, "got %d: %s" % (code, body))
+            got = json.loads(body)
+            by = {b["bucket"]: b for b in got["buckets"]}
+            ok("it lists each bucket under the list", sorted(by) == ["brief-test-ops", "people"], sorted(by))
+            ok("a filled-in brief is ready, with its mode and start",
+               by["people"]["ready"] is True and by["people"]["mode"] == "free-rein"
+               and by["people"]["start"] == "scheduled", json.dumps(by["people"]))
+            ok("its agent is named for the list and the bucket", by["people"]["name"] == "Brief test people agent", by["people"]["name"])
+            ok("the list's name is said once where the bucket starts with it",
+               by["brief-test-ops"]["name"] == "Brief test ops agent", by["brief-test-ops"]["name"])
+            ok("a bucket with no brief is not ready and says what is missing",
+               by["brief-test-ops"]["ready"] is False and "mode" in by["brief-test-ops"]["missing"], json.dumps(by["brief-test-ops"]))
+            ok("the route maps each column to its bucket", got["columns"].get("People") == "people", json.dumps(got.get("columns")))
+            code, _ = request(base, "GET", "/api/bucket-agents?list=nope")
+            ok("a list that does not exist is a 404", code == 404, "got %d" % code)
+            code, _ = request(base, "GET", "/api/bucket-agents?list=..")
+            ok("and so is a name that climbs out", code == 404, "got %d" % code)
+        finally:
+            server.DATA_ROOT = was_root
     finally:
         httpd.shutdown()
         shutil.rmtree(root, ignore_errors=True)

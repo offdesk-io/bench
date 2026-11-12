@@ -361,7 +361,10 @@ try {
 
   /* ---- delegate to ---- */
 
-  await evalJS(`state.agentsSetup = true; if (!peopleNames.includes('Dev K.')) peopleNames.push('Dev K.'); openDrawer(__t().id)`)
+  await evalJS(`state.agentsSetup = true; if (!peopleNames.includes('Dev K.')) peopleNames.push('Dev K.');
+    bucketAgentData = { list: state.dataset || '', buckets: [{ bucket: 'b', name: 'Test b agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] }],
+      columns: { [locate(__t().id).bucket.name]: 'b' } };
+    openDrawer(__t().id)`)
   await wait(300)
 
   check('Delegate to is a Tenon dropdown over a hidden select that still holds the value', await evalJS(`
@@ -370,9 +373,9 @@ try {
   await wait(100)
   check('its list is grouped, Agents then People under their own headings', await evalJS(`
     [...document.querySelectorAll('#f-to-dd .tenon-dropdown__heading')].map(h => h.textContent).join() === 'Agents,People'`))
-  await evalJS(`document.querySelector('#f-to-dd [data-value="Plan agent"]').click()`)
+  await evalJS(`document.querySelector('#f-to-dd [data-value="Test b agent"]').click()`)
   await wait(300)
-  check('picking an option sets the select and the task', await evalJS(`document.querySelector('#f-to').value === 'Plan agent' && __t().to === 'Plan agent'`))
+  check('picking an option sets the select and the task', await evalJS(`document.querySelector('#f-to').value === 'Test b agent' && __t().to === 'Test b agent'`))
   await evalJS(`document.querySelector('#f-to-dd .tenon-dropdown__button').click(); document.querySelector('#f-to-dd .tenon-dropdown__button').focus()`)
   await wait(100)
   await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 })

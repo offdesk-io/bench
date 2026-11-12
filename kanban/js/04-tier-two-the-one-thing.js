@@ -442,6 +442,71 @@ function locate(id){
   }
   return null;
 }
+/* ---- The bucket agents ----
+   Each bucket has one agent, defined in its brief (core/bucket_agents.py).
+   /api/bucket-agents says, per bucket, its name ("Personal family agent"), its
+   mode (plan-first or free-rein) and whether the brief is filled in enough to
+   run on (`ready`, and `missing` when it is not). `columns` maps the board's
+   column names to their bucket, since a column's name and its bucket's folder
+   are not always the same word. Loaded with each list; empty where there is no
+   server, and then nothing can be handed over.
+
+   agentOf() in core/todo.js knows the two old agents only. It is wrapped here
+   so a bucket agent's name reads as an agent too, which is what a tick, a
+   card's face and the Delegate to filter ask it. core/todo.js is the format's
+   authority and is left alone for now. */
+let bucketAgentData = { list: null, buckets: [], columns: {} };
+let bucketAgentLoad = null;
+function loadBucketAgents(){
+  const list = state.dataset || '';
+  bucketAgentLoad = (async () => {
+    let got = null;
+    try { got = await getJSON('/api/bucket-agents?list=' + encodeURIComponent(list)); } catch (err) { got = null; }
+    const had = bucketAgentData.buckets.length;
+    bucketAgentData = { list, buckets: (got && got.buckets) || [], columns: (got && got.columns) || {} };
+    /* Only a redraw when something on screen can have changed. */
+    if (state.doc && (had || bucketAgentData.buckets.length)) refreshView();
+  })();
+  return bucketAgentLoad;
+}
+/* Resolves once the list's bucket agents have been asked for, so a tick that
+   names one is not read before the names are known. */
+async function bucketAgentsLoaded(){
+  if (!bucketAgentLoad || bucketAgentData.list !== (state.dataset || '')) await loadBucketAgents();
+  else await bucketAgentLoad;
+}
+function bucketAgentNamed(name){
+  const v = String(name || '').trim().toLowerCase();
+  return v ? bucketAgentData.buckets.find(b => String(b.name).toLowerCase() === v) || null : null;
+}
+/* The agent of the bucket a column belongs to, or null. */
+function bucketAgentOfColumn(columnName){
+  const bucket = bucketAgentData.columns[columnName] || columnName;
+  return bucketAgentData.buckets.find(b => b.bucket === bucket) || null;
+}
+function bucketAgentOfTask(t){
+  const loc = t && locate(t.id);
+  return loc ? bucketAgentOfColumn(loc.bucket.name) : null;
+}
+/* What is wrong with an agent that is not ready, in the owner's words. */
+const BUCKET_AGENT_MISSING = {
+  marker: 'the NOT FILLED IN YET line is still in the brief', mode: 'how it works (plan first or free rein)',
+  start: 'a valid start', purpose: 'what it is for', processes: 'its processes', guidelines: 'its guidelines',
+  may_touch: 'what it may touch', never_touch: 'what it must never touch', good: 'what good looks like'
+};
+function bucketAgentMissingText(a){
+  return (a.missing || []).map(m => BUCKET_AGENT_MISSING[m] || m).join(', ');
+}
+const coreAgentOf = agentOf;
+agentOf = function(to){
+  const core = coreAgentOf(to);
+  if (core) return core;
+  const hit = bucketAgentNamed(to);
+  return hit ? hit.name : '';
+};
+const LEGACY_AGENTS = ['Plan agent', 'Implement agent'];
+function legacyAgent(to){ return LEGACY_AGENTS.indexOf(coreAgentOf(to)) > -1 ? coreAgentOf(to) : ''; }
+
 /* ---- Handing a task to an agent, and the two reviews that follow ----
    Handing a task over is the owner's act, and it becomes sub-tasks on the card rather than
    a column of its own. To the Plan agent it is four, each blocked by the one
@@ -505,11 +570,22 @@ function justDoIt(t, line){
   return stepNoteText(t, line).split('\n').some(l => l.trim().toLowerCase() === JUST_DO_IT_NOTE.toLowerCase());
 }
 
+/* Handing a task to its bucket's agent: plan-first lays out Plan (the bucket
+   agent), Review the plan (the owner), Implement (the bucket agent) and Review
+   the work (the owner), each blocked by the one before; free-rein lays out
+   Implement and Review the work. A bucket whose agent is not ready takes
+   nothing. The two old agents still hand over the way they did (see
+   handOverLegacy), for a tag already written or a request already queued. */
 function handOver(t, agent, level){
-  if (state.locked || !agentOf(agent)) return false;
-  agent = agentOf(agent);
-  level = level || handoverLevel(agent);
-  if (level === 'off') return false;
+  if (legacyAgent(agent)) return handOverLegacy(t, agent, level);
+  const a = bucketAgentNamed(agent);
+  if (state.locked || !a || !a.ready) return false;
+  return layOutHandover(t, a.name, a.mode === 'plan-first'
+    ? ['plan', 'plan-review', 'implement', 'work-review']
+    : ['implement', 'work-review'], { plan: a.name, implement: a.name });
+}
+
+function layOutHandover(t, agent, kinds, doers, level){
   t.to = agent;
   t.dirty = true;
   /* Already laid out when a sub-task carries the slug a handover makes. An
@@ -519,16 +595,14 @@ function handOver(t, agent, level){
   if (subSteps(t).some(s => agentOf(s.to) && made.test(s.slug))) return false;
   const taken = idsInDoc(state.doc);
   if (!t.stableId) { t.stableId = mintId(taken); taken.add(t.stableId); }
-  const kinds = agent === 'Plan agent'
-    ? ['plan', 'plan-review', 'implement', 'work-review']
-    : ['implement', 'work-review'];
   const existing = subSteps(t);
   const indent = existing.length ? existing[0].indent : '  ';
   let before = '';
   kinds.forEach(kind => {
     const id = mintId(taken); taken.add(id);
     const slug = t.stableId + '-' + kind;
-    const f = { done: false, bold: false, title: HANDOVER_STEPS[kind].title, to: HANDOVER_STEPS[kind].to,
+    const to = doers[kind] || HANDOVER_STEPS[kind].to;
+    const f = { done: false, bold: false, title: HANDOVER_STEPS[kind].title, to,
                 slug, blockedBy: before ? [before] : [], stableId: id, body: [], dirty: true, extra: [] };
     t.body.push(indent + serializeTask(f)[0]);
     /* Written as the review's own note, the way setStepNoteText() indents one,
@@ -544,6 +618,15 @@ function handOver(t, agent, level){
   return true;
 }
 
+function handOverLegacy(t, agent, level){
+  if (state.locked || !legacyAgent(agent)) return false;
+  agent = legacyAgent(agent);
+  level = level || handoverLevel(agent);
+  if (level === 'off') return false;
+  return layOutHandover(t, agent, agent === 'Plan agent'
+    ? ['plan', 'plan-review', 'implement', 'work-review']
+    : ['implement', 'work-review'], { plan: 'Plan agent', implement: 'Implement agent' }, level);
+}
 /* Where a card goes for the state of its sub-tasks, and only these two ways:
    Implement ticked puts it in Reviewing, and unticked by a send-back puts it
    back in Doing. A ticked Plan leaves it where it is. */
@@ -588,7 +671,7 @@ function sendBack(t, line, why){
     const now = stepNoteText(t, prev.line);
     setStepNoteText(t, prev.line, (now ? now + '\n' : '') + '- feedback: ' + said.replace(/\n+/g, ' '));
   }
-  if (agentOf(back.to) === 'Implement agent') moveCardTo(t, DOING_TIER);
+  if (/-implement$/.test(back.slug || '') || agentOf(back.to) === 'Implement agent') moveCardTo(t, DOING_TIER);
   markDirty();
   return true;
 }
