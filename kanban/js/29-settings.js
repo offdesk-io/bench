@@ -128,6 +128,32 @@ function settingsSectionsHTML(draft){
     '<div class="agentopts__body">' + boxes + '</div></details>';
 }
 
+/* "This board": the open list's own memory folder, banners and agents, kept
+   under boards.<list> in settings.json. Not offered in the welcome or signed in,
+   where the server's settings are not the visitor's. */
+const BOARD_MEMORY_MODES = [['inherit', 'Same as main memory folder'], ['none', 'None, keep everything in Bench'], ['own', 'Its own folder']];
+
+function boardSwitchHTML(attr, on, name, help){
+  return '<label class="field"><span>' + esc(name) + '</span>' +
+    '<button type="button" role="switch" class="tenon-switch' + (on ? ' tenon-switch--on' : '') + '" ' + attr + ' aria-checked="' + on + '"></button>' +
+    '<span class="help">' + esc(help) + '</span></label>';
+}
+
+function boardGroupHTML(draft, first){
+  if (first || draft.signedIn || !draft.list) return '';
+  const b = draft.board;
+  return '<div class="agentopts__group" data-board-group><h4>This board</h4>' +
+    '<label class="field"><span>Memory folder</span><select data-board-memory-mode>' +
+    BOARD_MEMORY_MODES.map(([v, l]) => '<option value="' + v + '"' + (b.mode === v ? ' selected' : '') + '>' + esc(l) + '</option>').join('') +
+    '</select>' +
+    '<input type="text" data-board-memory value="' + escAttr(b.path) + '" placeholder="/absolute/path/to/folder"' + (b.mode === 'own' ? '' : ' hidden') + '>' +
+    '<span class="help">Where facts about you and this list’s people are kept. Same as main uses the memory folder above, None keeps everything in data/' + esc(draft.list) + '/.</span>' +
+    '<span class="help fielderr" data-err="board-memory" hidden></span></label>' +
+    boardSwitchHTML('data-board-banners', b.banners, 'Desktop banners', 'A banner when a task on this board is due. Off, it sends none.') +
+    boardSwitchHTML('data-board-agents', b.agents, 'Agents', 'Lets the Plan and Implement agents work on this board. Off, they leave it alone.') +
+    '</div>';
+}
+
 function settingsFormHTML(draft, choices, first){
   const agents = SETTINGS_AGENTS.map(([key, name, help]) =>
     '<div class="agentopts__group"><h4>' + agentAvatarHTML(name, 18) + esc(name) + '</h4>' +
@@ -157,6 +183,7 @@ function settingsFormHTML(draft, choices, first){
       '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each list’s people are read from there first, and Bench lists its boards in boards.md inside it. Empty means none.</span></label>') +
     (first || !draft.list ? '' : '<label class="field"><span>Projects folder for ' + esc(draft.list) + '</span><input type="text" data-projects value="' + escAttr(draft.projectsRoot) + '" placeholder="Not set">' +
       '<span class="help">A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + esc(draft.list) + '/projects/.</span></label>') +
+    boardGroupHTML(draft, first) +
     '<label class="field"><span>Reply chime</span>' +
     '<button type="button" role="switch" class="tenon-switch' + (draft.chime ? ' tenon-switch--on' : '') + '" data-chime aria-checked="' + draft.chime + '"></button>' +
     '<span class="help">A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.</span></label>' +
@@ -203,7 +230,13 @@ async function loadSettingsDraft(first){
   const memoryRoot = set.memory_root || '';
   const list = state.dataset || '';
   const projectsRoot = (set.projects_roots || {})[list] || '';
+  const own = (set.boards || {})[list] || {};
+  const board = {
+    mode: !('memory_root' in own) ? 'inherit' : (own.memory_root === null ? 'none' : 'own'),
+    path: typeof own.memory_root === 'string' ? own.memory_root : '',
+    banners: own.banners !== false, agents: own.agents !== false };
   return { setup: prof.needs_setup, set, draft: {
+    board, boardWas: Object.assign({}, board),
     name: prof.name || '', country, region, legacy, memoryRoot, list, projectsRoot, signedIn,
     about: Object.assign({}, prof.about), sections: Object.assign({}, prof.sections), hints: prof.hints || {},
     was: { country, region, memoryRoot, projectsRoot },
@@ -219,6 +252,7 @@ function settingsErrors(draft, first){
   if (first && !draft.country) err.country = 'Choose a country.';
   for (const k in draft.about) if (/[<>`]/.test(draft.about[k])) err['about-' + k] = 'Leave out < > and backticks.';
   for (const k in draft.sections) if (/^##?(\s|$)/m.test(draft.sections[k])) err['section-' + k] = 'A # or ## heading would split the profile. Use ### or none.';
+  if (!draft.signedIn && draft.board && draft.board.mode === 'own' && !draft.board.path.trim()) err['board-memory'] = 'Enter the folder’s full path.';
   const badDollars = v => v.trim() && !(Number(v) >= 0);
   if (badDollars(draft.budget)) err.budget = 'Enter an amount in dollars, or leave it empty.';
   for (const k in draft.agentBudgets) if (badDollars(draft.agentBudgets[k])) err['budget-' + k] = 'Enter an amount in dollars, or leave it empty.';
@@ -281,6 +315,18 @@ function trackSettingsForm(draft, first){
     if (m) draft.memoryRoot = m.value;
     const ch = modalEl.querySelector('[data-chime]');
     if (ch) draft.chime = ch.getAttribute('aria-checked') === 'true';
+    const bm = modalEl.querySelector('[data-board-memory-mode]');
+    if (bm) {
+      draft.board.mode = bm.value;
+      const bp = modalEl.querySelector('[data-board-memory]');
+      bp.hidden = bm.value !== 'own';
+      draft.board.path = bp.value;
+      if (e && e.target === bp) draft.touched['board-memory'] = true;
+    }
+    const bb = modalEl.querySelector('[data-board-banners]');
+    if (bb) draft.board.banners = bb.getAttribute('aria-checked') === 'true';
+    const ba = modalEl.querySelector('[data-board-agents]');
+    if (ba) draft.board.agents = ba.getAttribute('aria-checked') === 'true';
     const pr = modalEl.querySelector('[data-projects]');
     if (pr) draft.projectsRoot = pr.value;
     modalEl.querySelectorAll('[data-model]').forEach(s => { draft.models[s.dataset.model] = s.value || null; });
@@ -302,7 +348,7 @@ function trackSettingsForm(draft, first){
   /* A switch is a button, so it reports a click rather than a change. */
   modalEl.addEventListener('click', e => {
     if (e.target.closest('[data-sharing]')) { openSharing(); return; }
-    const sw = e.target.closest('[data-chime]');
+    const sw = e.target.closest('[data-chime], [data-board-banners], [data-board-agents]');
     if (!sw) return;
     const on = sw.getAttribute('aria-checked') !== 'true';
     sw.setAttribute('aria-checked', String(on));
@@ -357,6 +403,20 @@ async function saveSettingsDraft(draft, first){
   if (draft.list && draft.projectsRoot.trim() !== draft.was.projectsRoot)
     body.projects_roots = { [draft.list]: draft.projectsRoot.trim() || null };
   await put('/settings.json', body);
+  /* Its own request, so a folder the server refuses does not stop the rest saving. */
+  const mine = boardChanges(draft);
+  if (mine) await put('/settings.json', { boards: { [draft.list]: mine } });
+}
+
+/* Only the keys of "This board" that changed, or null when none did. */
+function boardChanges(draft){
+  if (!draft.list || !draft.board) return null;
+  const b = draft.board, was = draft.boardWas, out = {};
+  if (b.mode !== was.mode || (b.mode === 'own' && b.path.trim() !== was.path))
+    out.memory_root = b.mode === 'inherit' ? 'inherit' : b.mode === 'none' ? null : b.path.trim();
+  if (b.banners !== was.banners) out.banners = b.banners;
+  if (b.agents !== was.agents) out.agents = b.agents;
+  return Object.keys(out).length ? out : null;
 }
 
 /* first: the welcome. needsList: step 2 follows step 1 (no list on disk). */
@@ -566,6 +626,8 @@ async function flushAgentStarts(){
   pendingAgentStarts.clear();
   let set;
   try { set = await getJSON('/settings.json'); } catch (err) { return; }
+  /* A board with its agents switched off starts none. */
+  if (((set.boards || {})[state.dataset] || {}).agents === false) return;
   for (const agent of want) {
     if (!set.agents || !set.agents[agent] || set.agents[agent].start !== 'now') continue;
     try {
