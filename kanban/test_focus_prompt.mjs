@@ -73,7 +73,9 @@ const key = async (k, o = {}) => {
 }
 const type = text => send('Input.insertText', { text })
 
-await wait(2500)
+// Poll for the page rather than sleeping: a fixed wait fails when the machine is busy.
+for (let i = 0; i < 120 && !(await evalJS(`document.readyState === 'complete' && typeof state !== 'undefined' && !!state.doc`).catch(() => false)); i++) await new Promise(r => setTimeout(r, 250))
+await new Promise(r => setTimeout(r, 400))
 check('the board loaded', await evalJS(`typeof renderBoard === 'function' && typeof BoardUI.FocusPrompt === 'function'`))
 
 /* ---- nothing docked ---- */

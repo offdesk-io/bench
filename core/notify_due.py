@@ -34,6 +34,17 @@ place, data/<board>/notify-queue.json, is drained as well: it is where lines go
 when there is no notifier folder, and where a throwaway data root (the test
 runner's) keeps its own (queue_file()).
 
+A board whose `banners` is false in settings.json's `boards` (core/settings.py)
+is skipped whole: no due banner, no catch-up, nothing written to its state, and
+whatever its queues hold is taken off unposted, so turning it back on does not
+bring a backlog with it. companion/notify.py queues nothing for it meanwhile.
+
+Each board keeps its own working calendar: `working_for(board)` gives the
+day test for one board, which the server builds from that board's profile
+(owner_profile.board_holiday_regions), so a board with a memory folder of its
+own or none goes by its own profile's holidays. Without it every board uses
+`is_working`.
+
 Everything that needs a clock or a calendar takes it as an argument, so the
 tests run on a fake one. Only `post` and `start` touch the machine.
 """
@@ -54,6 +65,7 @@ except ImportError:          # no flock off a Unix
     fcntl = None
 
 import bench_root
+import settings
 import todo
 
 STATE_FILE = "notify-state.json"
@@ -331,19 +343,30 @@ RETRY_AFTER = dt.timedelta(minutes=10)
 STATUS = {"last_tick": None}
 
 
-def next_banner(data_root, boards, now, is_working, read_text=None):
+def quiet_boards(data_root, boards):
+    """The boards in `boards` whose banners settings.json switches off."""
+    own = settings.load(data_root).get("boards", {})
+    return {b for b in boards if (own.get(b) or {}).get("banners") is False}
+
+
+def next_banner(data_root, boards, now, is_working, read_text=None, working_for=None):
     """When the next due banner goes out: the earliest one still to come today
     across `boards`, else 09:00 on the next working day (the first moment a
-    banner can come out of a new day). A datetime."""
+    banner can come out of a new day), by `is_working`. A datetime.
+    `working_for(board)`, when given, is each board's own day test."""
     read_text = read_text or read_plain
     end = dt.datetime.combine(now.date(), dt.time(23, 59, 59))
     soonest = None
+    quiet = quiet_boards(data_root, boards)
     for board in boards:
+        if board in quiet:
+            continue
         board_dir = os.path.join(data_root, board)
         text = read_text(os.path.join(board_dir, "todo.md"))
         if text is None:
             continue
-        for b in due_banners(todo.parse_doc(text), end, is_working, read_state(board_dir), ""):
+        own = (working_for(board) if working_for else None) or is_working
+        for b in due_banners(todo.parse_doc(text), end, own, read_state(board_dir), ""):
             if b["at"] > now and (soonest is None or b["at"] < soonest):
                 soonest = b["at"]
     if soonest:
@@ -359,13 +382,16 @@ def read_plain(path):
         return None
 
 
-def run_tick(data_root, boards, now, is_working, post, read_text=read_plain, retries=None, log=print):
+def run_tick(data_root, boards, now, is_working, post, read_text=read_plain, retries=None, log=print,
+             working_for=None):
     """Post everything owed across `boards`. `post(title, body, task, view,
     group, board)` returns (ok, detail). A banner that fails is tried again after
     RETRY_AFTER, and only its first failure of the day is logged; `retries` is
     that memory and the caller keeps it between ticks. `read_text(path)` returns
     the file's text, or None when it cannot be trusted this tick (the server
-    passes a read that refuses a half-written file). Returns how many went out."""
+    passes a read that refuses a half-written file). `working_for(board)`, when
+    given, is each board's own day test in place of `is_working`. Returns how
+    many went out."""
     retries = {} if retries is None else retries
     sent = 0
 
@@ -386,13 +412,18 @@ def run_tick(data_root, boards, now, is_working, post, read_text=read_plain, ret
 
     for stale in [k for k in retries if k.split("|", 1)[0] < now.date().isoformat()]:
         del retries[stale]
+    quiet = quiet_boards(data_root, boards)
     for board in boards:
+        if board in quiet:
+            _drop_queues(data_root, board)
+            continue
         board_dir = os.path.join(data_root, board)
         text = read_text(os.path.join(board_dir, "todo.md"))
         tasks = todo.parse_doc(text) if text is not None else []
         fired = read_state(board_dir)
         changed = False
-        for b in due_banners(tasks, now, is_working, fired, board_label(board)):
+        own = (working_for(board) if working_for else None) or is_working
+        for b in due_banners(tasks, now, own, fired, board_label(board)):
             if attempt(b["key"], (b["title"], b["body"], b["task"], None, b["group"], board)):
                 fired.add(b["key"])
                 changed = True
@@ -415,6 +446,16 @@ def run_tick(data_root, boards, now, is_working, post, read_text=read_plain, ret
                         done.append(entry)
                 _remove(qdir, done)
     return sent
+
+
+def _drop_queues(data_root, board):
+    """Take every line off a quiet board's queues, unposted."""
+    for qdir in queue_dirs(data_root, board):
+        path = os.path.join(qdir, QUEUE_FILE)
+        if not os.path.isfile(path):
+            continue
+        with queue_lock(path):
+            _remove(qdir, _read_queue(path))
 
 
 # ---- posting and the thread ---------------------------------------------------------------
@@ -459,11 +500,18 @@ def post(notifier, base_url, title, body, task=None, view=None, group=None, log=
     return rc == 0, "exit %d" % rc
 
 
+def calendars(boards, regions_for):
+    """{board: day test} from `regions_for(board)`, the holiday regions of each
+    board's own profile, read once per tick."""
+    return {b: (lambda regions: lambda d: todo.is_working_day(d, regions))(regions_for(b)) for b in boards}
+
+
 def start(data_root, list_boards, regions_for, base_url, log=print, read_text=read_plain):
     """Start the daemon thread that ticks every minute. Returns it, or None
     when this machine should stay quiet (not a Mac, no terminal-notifier, or
-    BENCH_NOTIFY=0). Banners play a sound unless BENCH_NOTIFY_SOUND says
-    otherwise (see notify_sound)."""
+    BENCH_NOTIFY=0). `regions_for(board)` is that board's holiday regions.
+    Banners play a sound unless BENCH_NOTIFY_SOUND says otherwise (see
+    notify_sound)."""
     if not enabled():
         return None
     notifier = find_notifier()
@@ -476,11 +524,12 @@ def start(data_root, list_boards, regions_for, base_url, log=print, read_text=re
         retries = {}
         while True:
             try:
-                regions = regions_for()
+                boards = list_boards()
+                days = calendars(boards, regions_for)
                 STATUS["last_tick"] = dt.datetime.now()
-                run_tick(data_root, list_boards(), dt.datetime.now(),
-                         lambda d: todo.is_working_day(d, regions), poster,
-                         read_text, retries, log)
+                run_tick(data_root, boards, dt.datetime.now(),
+                         lambda d: todo.is_working_day(d, tuple(todo.REGIONS)), poster,
+                         read_text, retries, log, working_for=days.get)
             except Exception as err:   # a bad tick must not end the thread
                 log("notify: tick failed: %r" % err)
             if stop.wait(TICK_SECONDS):

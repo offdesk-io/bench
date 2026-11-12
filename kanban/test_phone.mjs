@@ -94,7 +94,9 @@ async function run (label, width, height) {
   const phone = width < 700
   const at = s => `${label}: ${s}`
 
-  await new Promise(r => setTimeout(r, 2500))
+  // Poll for the page rather than sleeping: a fixed wait fails when the machine is busy.
+  for (let i = 0; i < 120 && !(await evalJS(`document.readyState === 'complete' && typeof state !== 'undefined' && !!state.doc`).catch(() => false)); i++) await new Promise(r => setTimeout(r, 250))
+  await new Promise(r => setTimeout(r, 400))
   check(at('the board loaded'), await evalJS(`typeof renderColTabs === 'function'`))
 
   // LOCK FIRST, then the fixture. Nothing below can write anything.
@@ -289,7 +291,8 @@ async function run (label, width, height) {
     await evalJS(`document.querySelector('#phAvatar').click()`)
     await wait(300)
     check(at('the avatar opens a sheet of the header actions'), await evalJS(`
-      ['undo', 'download', 'backups', 'settings'].every(id => !!document.querySelector('.phonesheet [data-action="' + id + '"]'))`))
+      ['undo', 'download', 'settings'].every(id => !!document.querySelector('.phonesheet [data-action="' + id + '"]')) &&
+      !document.querySelector('.phonesheet [data-action="backups"], .phonesheet [data-action="spend"]')`))
     check(at('with the status line underneath'), await evalJS(`
       document.querySelector('.phonesheet .tenon-modal__subtitle')?.textContent === document.querySelector('#status').textContent`))
     await key('Escape')

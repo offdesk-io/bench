@@ -25,9 +25,9 @@ one line on the five generic skills and where they apply in this bucket.
 ## Who is involved
 
 Names, and what each person owns **in this bucket**. Not their role, not their
-team, not who they report to: `data/<dataset>/people.md` is the one copy of that
+team, not who they report to: `people.md` is the one copy of that, read through the memory lookup
 and a brief that restates it is a second copy waiting to go stale. The list's own
-Context section holds what changes weekly, leave and immovable dates. Surnames are
+`context.md` holds what changes weekly, leave and immovable dates. Surnames are
 one initial.
 
 ## What good looks like here

@@ -3219,29 +3219,27 @@
    these keep the page from offering them. See loadWhoami() in 21-datasets.js. */
 .whoami form{display:contents}
 body.signed-in #projOpenFolder,
-body.signed-in #refCardsBtn,
 body.signed-in #runAgentBtn{display:none !important}
 /* Who sees a list: the wizard's last step, and Settings on the shared board. */
 .sharing .sharekind, .sharing .shareteam{display:block; margin:4px 0}
 .sharing .sharewith{margin-top:8px}
 .sharing .sharewith[hidden]{display:none}
 
-/* Memory view (31-memory.js). An index on the left, one column of sections at
-   a readable width beside it; #lists is a two-column flow for the other views,
-   so this spans both. */
-.memview{column-span:all; max-width:1000px; margin:0 auto; padding:8px 0 40px; display:grid; grid-template-columns:200px minmax(0, 1fr); gap:32px; align-items:start}
-.memcontent{display:flex; flex-direction:column; gap:40px; max-width:760px; min-width:0}
-/* main is overflow-x:auto for the board, which makes it the scroller sticky measures
-   against even though it never scrolls. Drop that here so the index sticks to the page. */
-main:has(#memView){overflow-x:visible}
-.memindex{position:sticky; top:var(--mem-top, 72px); max-height:calc(100vh - var(--mem-top, 72px) - 12px); overflow-y:auto; font-size:var(--tenon-typography-size-sm)}
-.memindex ul{list-style:none; margin:0; padding:0}
-.memindex ul ul{margin:2px 0 8px 10px}
-.memindex a{display:block; padding:3px 8px; border-left:2px solid transparent; color:var(--tenon-text-subtle); text-decoration:none}
-.memindex a:hover{color:var(--tenon-text-default)}
-.memindex a[aria-current="true"]{border-left-color:var(--tenon-stroke-focus); color:var(--tenon-text-default); font-weight:660}
-.memindex a:focus-visible{outline:2px solid var(--tenon-stroke-focus); outline-offset:1px}
-.memsec{display:flex; flex-direction:column; gap:8px}
+/* The Settings page (29-settings.js): its tabs sit in the bucket bar, which
+   drops the controls that only mean something for buckets. #filterChips carries
+   an inline display:contents, hence the !important. Every tab is a left-aligned
+   stack of panels, the same .lists.pview and .tenon-column the Overview and
+   Backups use. */
+.bucketbar--page #editBuckets, .bucketbar--page #editTiers, .bucketbar--page #filterChips,
+.bucketbar--page #agentFilterChip, .bucketbar--page #mineChip,
+.bucketbar--page #q{display:none !important}
+.settingspanel .settingspage{padding:0}
+.settingspage__actions{display:flex; gap:8px; margin-top:16px}
+.lists.pview.memview, .lists.pview.settingsview{max-width:860px}
+.agentsview #refCardsRoot{max-width:860px}
+
+/* Memory (31-memory.js): one panel per section. */
+.memcolbody{display:flex; flex-direction:column; gap:8px}
 .memhead{display:flex; align-items:center; justify-content:space-between; gap:12px}
 .memhead h3{margin:0; font-size:var(--tenon-typography-size-lg); font-weight:660; letter-spacing:-.01em; color:var(--tenon-text-default)}
 .memhead h4, .memtext h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:600; color:var(--tenon-text-subtle)}
@@ -3269,8 +3267,6 @@ main:has(#memView){overflow-x:visible}
 .memdl dt{color:var(--tenon-text-faint)}
 .memdl dd{margin:0; color:var(--tenon-text-subtle)}
 @media (max-width:640px){
-  .memview{grid-template-columns:minmax(0, 1fr); gap:20px}
-  .memindex{position:static; max-height:none; overflow:visible}
   .memrow{grid-template-columns:1fr 1fr}
   .memrow .btn{grid-column:1 / -1; justify-self:start}
   .memtable thead{display:none}

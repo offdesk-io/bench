@@ -7,13 +7,12 @@
    got done", which is the question that comes up in a one-to-one or a quarterly
    review and has never had an answer here that did not mean counting by hand.
 
-   They are the last two columns of Overview, so the two questions are read in one place. What is left in
+   They are the Reports page, the second tab after Overview. What is left in
    this file is everything but the shell: the window picker and its arithmetic,
    the archive read that makes a 90-day count trustworthy, and the four
    build*() functions the components in kanban/ui/ReportsBlocks.tsx draw from.
    reportsColumnProps() near the bottom is the seam — renderSections() in
-   18-timeline.js calls it, and OverviewView lists the two columns after
-   Context.
+   18-timeline.js calls it, and ReportsView lists the two columns.
 
    The counted half reads straight from state.doc, the same as every other
    column on the row: nothing is fetched, nothing is stored, and a report of a
@@ -608,15 +607,14 @@ async function loadReportBody(url){ return loadDocBody(url, reportBodies, 'repor
 
 /* The written half's own state. `written` staying null is what says the fetch
    is still out, which is not the same as the folder being empty. `fetched`
-   is what keeps /reports.json read once per arrival at Overview rather than
+   is what keeps /reports.json read once per arrival at Reports rather than
    once per render of it — a bucket tab or a search term redraws the whole
    row, and neither changes what is in data/reports/. */
 let writtenState = { list: null, error: null, fetched: false };
 
 /* Everything the two report columns draw from, in one object — the shape
    ReportsColumnsProps (kanban/ui/ReportsColumns.tsx) spells out. renderSections()
-   in 18-timeline.js hands it to OverviewView, which lists the two columns
-   after Context.
+   in 18-timeline.js hands it to ReportsView, which lists the two columns.
 
    The counted reports are components — see ReportsBlocks.tsx — so what crosses
    here is the data they draw from, not markup. mdBlocks and mdInline stay
@@ -643,13 +641,13 @@ function reportsColumnProps(){
 /* Redraw whichever view is holding the report columns. Named rather than
    inlined because archiveEntriesSync() calls back into it when the archive
    finishes loading, long after the view was drawn, and the trend's own key and
-   chart-type toggles reach it too. Silent when Overview is not on screen —
+   chart-type toggles reach it too. Silent when Reports is not on screen —
    both of those can land after the owner has moved to another tab. */
 function renderCountedReports(){
-  if (state.view === 'overview') renderSections('overview');
+  if (state.view === 'reports') renderSections('reports');
 }
 
-/* /reports.json, once per arrival at Overview. The counted half needs nothing
+/* /reports.json, once per arrival at Reports. The counted half needs nothing
    fetched — it reads state.doc, the same as every other column on the row — so
    the columns are drawn first and this fills the written one in when it lands.
 
@@ -683,7 +681,7 @@ async function ensureWrittenReports(){
   }
 }
 
-/* Asking for the list again — after an archive run, or on landing on Overview
+/* Asking for the list again — after an archive run, or on landing on Reports
    from another tab. The next ensureWrittenReports() does the fetch. */
 function forgetWrittenReports(){ writtenState = { list: null, error: null, fetched: false }; }
 

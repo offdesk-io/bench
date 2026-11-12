@@ -26,12 +26,15 @@ nothing raises.
   stop. False keeps the board silent. On by default.
 - `memory_root`: optional, a folder outside the repo that holds the owner's
   long-lived facts, shared with agents outside Bench. Set, the owner's profile
-  is read from `<memory_root>/me/profile.md` and each list's people from
-  `<memory_root>/bench/<list>/people.md`, each falling back to its old place
-  under `data/` when the file is not there, and Bench keeps
-  `<memory_root>/boards.md` listing its lists (see write_boards). Boards,
-  queues, locks, history and runs stay under `data/` either way. Unset, the key
-  is absent from what load() returns and nothing changes.
+  is read from `<memory_root>/me/profile.md`, and each list's people, company
+  text and context from `people.md`, `about.md` and `context.md` in
+  `<memory_root>/bench/<list>/` (see memory_file). Each read falls back to its
+  old place under `data/` when the file is not there, and every write of a
+  list's file goes to the memory folder. Bench also keeps
+  `<memory_root>/boards.md` listing its lists (see write_boards). Task lists,
+  buckets, plans, chats, queues, locks, history, backups and runs stay under
+  `data/` either way. Unset, the key is absent from what load() returns and
+  nothing changes.
 - `projects_roots`: optional, a map from a list's name to its projects folder,
   an existing folder that may sit outside the repo, one per list and never
   shared by two. For a list in it, a task's project is looked for at
@@ -39,6 +42,30 @@ nothing raises.
   project started from the board is made there (core/project_folders.py). A
   list not in it keeps `data/<list>/projects/`. Unset, the key is absent from
   what load() returns and nothing changes.
+- `boards`: optional, a map from a list's name to settings of its own, a list
+  not in it taking every default. `memory_root` there is that list's memory
+  folder: absent, it inherits the global `memory_root` above; a folder, the
+  list's people, about and context are in `<folder>/bench/<list>/` and its
+  profile is `<folder>/me/profile.md`; null, it has none and keeps everything
+  in `data/<list>/`. A list with a folder of its own or none never reads the
+  owner's `data/profile.md` (core/owner_profile.py). Unset, the key is absent
+  from what load() returns and nothing changes. `banners` false keeps the
+  list quiet: no due banners, catch-ups included, and the lines agents queue
+  for it are dropped rather than posted (core/notify_due.py,
+  companion/notify.py). `agents` false keeps the Plan and Implement agents
+  off the list: their runs skip it with one log line, the board's Run now
+  refuses, and boards.md marks it `agents off`. True, or absent, is today's
+  behaviour for both.
+
+    "boards": {"demo": {"memory_root": null, "banners": false, "agents": false}}
+
+  A save changes only the keys it sends for a list, and leaves every list it
+  does not name as it was. `memory_root` sent as "inherit" takes the list
+  back to the global folder, and a list sent as null loses its whole entry.
+  Lists are named as on disk, with a todo.md, and any other key is refused.
+  A list's own folder is its own: never the global memory folder, the data
+  root, a list's folder under it or the home folder, and no two lists share
+  one, compared on disk through symlinks.
 
 Daily budgets are kept out of this file, in the agents engine's fences file
 (`data/agents/fences.json`, `$AGENTS_FENCES`), because the engine reads them
@@ -95,9 +122,33 @@ def _memory_value(value):
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
+# The keys a list's entry in `boards` may hold beyond `memory_root`, each a
+# true-or-false that defaults to true.
+BOARD_FLAGS = ("banners", "agents")
+BOARD_KEYS = ("memory_root",) + BOARD_FLAGS
+# What a save takes as "back to the global memory folder", since null there
+# already means none.
+INHERIT = "inherit"
+AGENTS_OFF = "agents off"
+
+
+def _board_entry(entry):
+    """One list's entry in `boards` as load() keeps it, {} when it holds
+    nothing. A `memory_root` that is there but not a folder path reads as null,
+    so a list meant to be kept apart never falls back to the owner's folder."""
+    out = {}
+    if "memory_root" in entry and entry["memory_root"] != INHERIT:
+        out["memory_root"] = _memory_value(entry["memory_root"])
+    for key in BOARD_FLAGS:
+        if isinstance(entry.get(key), bool):
+            out[key] = entry[key]
+    return out
+
+
 def load(root=None):
     """The settings, with defaults filling anything missing or malformed.
-    `memory_root` and `projects_roots` are there only when they are set."""
+    `memory_root`, `projects_roots` and `boards` are there only when they are
+    set."""
     out = copy.deepcopy(DEFAULTS)
     try:
         with open(path(root), encoding="utf-8") as fh:
@@ -128,6 +179,13 @@ def load(root=None):
         roots = {k: _memory_value(v) for k, v in roots.items() if _memory_value(v)}
         if roots:
             out["projects_roots"] = roots
+    boards = raw.get("boards")
+    if isinstance(boards, dict):
+        boards = {k: _board_entry(v) for k, v in boards.items()
+                  if isinstance(k, str) and isinstance(v, dict)}
+        boards = {k: v for k, v in boards.items() if v}
+        if boards:
+            out["boards"] = boards
     return out
 
 
@@ -141,6 +199,58 @@ def _folder(value):
 def memory_root(root=None):
     """The memory folder as an absolute path, or None when unset or not there."""
     return _folder(load(root).get("memory_root"))
+
+
+def board(dataset, root=None):
+    """A list's own entry in `boards`, {} when it has none."""
+    return dict(load(root).get("boards", {}).get(dataset) or {})
+
+
+def _hidden_has_none(dataset, root=None):
+    """True for a hidden list (its name starts with "_") that takes the global
+    memory folder by default, which is set, and has nothing in it yet: such a list has no
+    memory folder, and nothing here ever makes one. Once
+    <global>/bench/<list>/ exists the list keeps using it. An entry in
+    `boards` with a `memory_root` of its own is never this case."""
+    if not str(dataset).startswith("_") or "memory_root" in board(dataset, root):
+        return False
+    memory = memory_root(root)
+    if not memory:
+        return False    # no global folder: nothing to keep out of, the list reads as before
+    return not os.path.isdir(os.path.join(memory, "bench", dataset))
+
+
+def inherits_memory(dataset, root=None):
+    """True when the list takes the global memory folder, which is when its
+    entry in `boards` names no `memory_root` of its own, and it is not a hidden
+    list with nothing in that folder (_hidden_has_none)."""
+    return "memory_root" not in board(dataset, root) and not _hidden_has_none(dataset, root)
+
+
+def board_memory_root(dataset, root=None):
+    """The list's memory folder as an absolute path: its own when `boards`
+    names one, none when that says null, else the global one. A hidden list
+    (name starts with "_") has none by default unless the global folder
+    already holds <memory>/bench/<list>/. None when there is none or the
+    folder is not there."""
+    entry = board(dataset, root)
+    if "memory_root" not in entry:
+        return None if _hidden_has_none(dataset, root) else memory_root(root)
+    return _folder(entry["memory_root"])
+
+
+def _flag(dataset, key, root=None):
+    return board(dataset, root).get(key, True)
+
+
+def banners_on(dataset, root=None):
+    """False when `boards` switches the list's desktop banners off."""
+    return _flag(dataset, "banners", root)
+
+
+def agents_on(dataset, root=None):
+    """False when `boards` keeps the agents off the list."""
+    return _flag(dataset, "agents", root)
 
 
 def projects_root(dataset, root=None):
@@ -175,9 +285,21 @@ def planner_model(root=None, default=None):
 def for_boards(saved, boards):
     """`saved` as one person may read it on the shared board: no board they
     cannot see is named, and no folder is given as a path on the server. The
-    memory folder goes, and each projects folder is its folder name alone."""
+    memory folder goes, and each projects folder and list's own memory folder
+    is its folder name alone. A list's null memory folder stays null."""
     out = copy.deepcopy(saved)
     out.pop("memory_root", None)
+    own = {}
+    for name, entry in (out.get("boards") or {}).items():
+        if name not in boards:
+            continue
+        if entry.get("memory_root"):
+            entry["memory_root"] = os.path.basename(os.path.normpath(entry["memory_root"]))
+        own[name] = entry
+    if own:
+        out["boards"] = own
+    else:
+        out.pop("boards", None)
     roots = {k: os.path.basename(os.path.normpath(v))
              for k, v in (out.get("projects_roots") or {}).items() if k in boards}
     if roots:
@@ -187,17 +309,59 @@ def for_boards(saved, boards):
     return out
 
 
-def people_path(dataset, root=None):
-    """Where a list's people.md is read and written: the memory folder's copy,
-    `<memory_root>/bench/<list>/people.md`, when that file is there, else the
-    one beside the list's todo.md."""
+# ---- a list's memory files --------------------------------------------------
+#
+# A list's people, company text and context are facts that outlive the board,
+# so with a memory folder set they live in `<memory_root>/bench/<list>/`, where
+# agents outside Bench find them. A read takes the data/ copy while the memory
+# folder has none, so a list kept from before the setting loses nothing. A
+# write always lands in the memory folder and the data/ copy is never written
+# again: the first save moves the file in effect, and a later merge can retire
+# the copy left behind. The folder is the list's own (board_memory_root), which
+# is the global one unless `boards` says otherwise.
+
+MEMORY_FILES = ("people", "about", "context")
+
+
+def _known_list(dataset, root):
+    """Refuse a list name that is not a folder under `root` with a todo.md,
+    spelled exactly as on disk. Names arrive from requests, so nothing that
+    could climb out of `root` gets as far as a path."""
+    try:
+        names = os.listdir(root)
+    except OSError:
+        names = []
+    if (not isinstance(dataset, str) or dataset.startswith(".") or dataset not in names
+            or not os.path.isfile(os.path.join(root, dataset, "todo.md"))):
+        raise ValueError("there is no list called %r" % (dataset,))
+
+
+def memory_file(dataset, name, root=None, write=False):
+    """Where a list's `name` file (one of MEMORY_FILES) is read, or with
+    `write` where it is written, by the list's own memory folder
+    (board_memory_root). With no memory folder both are
+    `data/<list>/<name>.md`. With one, a read is `<memory_root>/bench/<list>/
+    <name>.md` when that file is there and the data/ copy when it is not, and
+    a write is always the memory folder's, its folder made here. Raises
+    ValueError for any other `name` or a list that is not under `root`."""
+    if name not in MEMORY_FILES:
+        raise ValueError("no memory file called %r" % (name,))
     root = root or data_root()
-    memory = memory_root(root)
-    if memory:
-        path = os.path.join(memory, "bench", dataset, "people.md")
-        if os.path.isfile(path):
-            return path
-    return os.path.join(root, dataset, "people.md")
+    _known_list(dataset, root)
+    here = os.path.join(root, dataset, name + ".md")
+    memory = board_memory_root(dataset, root)
+    if not memory:
+        return here
+    there = os.path.join(memory, "bench", dataset, name + ".md")
+    if write:
+        os.makedirs(os.path.dirname(there), exist_ok=True)
+        return there
+    return there if os.path.isfile(there) else here
+
+
+def people_path(dataset, root=None, write=False):
+    """A list's people.md, by memory_file()."""
+    return memory_file(dataset, "people", root, write)
 
 
 # ---- boards.md --------------------------------------------------------------
@@ -205,9 +369,10 @@ def people_path(dataset, root=None):
 # With a memory folder set, Bench keeps `<memory_root>/boards.md` saying which
 # lists exist, so an agent outside Bench can know without reading data/. Bench
 # is its writer. It has no notion of what a list is for or of a list being
-# frozen, so a line's marks other than `current` and the text after its folder
-# are carried over from the file's last version: a description or a `frozen`
-# written there survives, and a list new to the file gets neither.
+# frozen, so a line's marks other than `current` and `agents off` and the text
+# after its folder are carried over from the file's last version: a
+# description or a `frozen` written there survives, and a list new to the file
+# gets neither. `agents off` is the `boards` setting's, written fresh each time.
 
 BOARDS_HEADER = (
     "# Boards\n\n"
@@ -219,9 +384,10 @@ BOARDS_HEADER = (
 _BOARD_LINE = re.compile(r"^- ([^\s(:]+)(?: \(([^)]*)\))?: `[^`]*`(?:, (.*))?$")
 
 
-def boards_md(names, current, root=None, memory=None, previous=""):
-    """The text of boards.md for the lists `names`, `current` marked, keeping
-    each surviving list's place, marks and description from `previous`."""
+def boards_md(names, current, root=None, memory=None, previous="", agents_off=()):
+    """The text of boards.md for the lists `names`, `current` marked and each
+    of `agents_off` marked `agents off`, keeping each surviving list's place,
+    other marks and description from `previous`."""
     root = os.path.abspath(root or data_root())
     base = os.path.dirname(os.path.abspath(memory)) if memory else None
     kept, order = {}, []
@@ -230,14 +396,16 @@ def boards_md(names, current, root=None, memory=None, previous=""):
         if not m or m.group(1) in kept:
             continue
         marks = [x.strip() for x in (m.group(2) or "").split(",")]
-        kept[m.group(1)] = ([x for x in marks if x and x != "current"], (m.group(3) or "").strip())
+        kept[m.group(1)] = ([x for x in marks if x and x not in ("current", AGENTS_OFF)],
+                            (m.group(3) or "").strip())
         order.append(m.group(1))
     names = list(names)
     ordered = [n for n in order if n in names] + sorted(n for n in names if n not in kept)
     lines = []
     for name in ordered:
         marks, about = kept.get(name, ([], ""))
-        marks = (["current"] if name == current else []) + marks
+        marks = ((["current"] if name == current else [])
+                 + ([AGENTS_OFF] if name in agents_off else []) + marks)
         folder = os.path.join(root, name)
         if base and (folder + os.sep).startswith(base + os.sep):
             folder = os.path.relpath(folder, base)
@@ -261,7 +429,9 @@ def write_boards(names, current, root=None):
             previous = fh.read()
     except OSError:
         previous = ""
-    text = boards_md(names, current, root, memory, previous)
+    own = load(root).get("boards", {})
+    off = [n for n in names if (own.get(n) or {}).get("agents") is False]
+    text = boards_md(names, current, root, memory, previous, off)
     if text == previous:
         return target
     fd, tmp = tempfile.mkstemp(dir=memory, prefix=".boards-")
@@ -305,6 +475,13 @@ def validate(data, root=None):
     err = _folder_error("memory_root", data.get("memory_root"))
     if err:
         return err
+    err = _boards_error(data.get("boards"), root or data_root())
+    if err:
+        return err
+    if "boards" in data or "memory_root" in data:
+        err = _boards_clash(data, root)
+        if err:
+            return err
     roots = data.get("projects_roots")
     if roots is None:
         return None
@@ -344,6 +521,91 @@ def validate(data, root=None):
         if key in seen:
             return "%s and %s cannot share one projects folder" % (seen[key], name)
         seen[key] = name
+    return None
+
+
+def _boards_error(boards, base):
+    """An error for a `boards` value a save was sent, or None."""
+    if boards is None:
+        return None
+    if not isinstance(boards, dict):
+        return "boards must be an object of list name to its settings"
+    for name, entry in boards.items():
+        if (not name or name.startswith(".") or os.sep in name
+                or not os.path.isfile(os.path.join(base, name, "todo.md"))):
+            return "boards: there is no list called %s" % name
+        if entry is None:
+            continue
+        if not isinstance(entry, dict):
+            return "boards.%s must be an object, or null to clear it" % name
+        for key, value in entry.items():
+            if key not in BOARD_KEYS:
+                return "boards.%s: unknown setting %s" % (name, key)
+            if key in BOARD_FLAGS and not isinstance(value, bool):
+                return "boards.%s.%s must be true or false" % (name, key)
+        value = entry.get("memory_root")
+        if value is None or value == INHERIT:
+            continue
+        if not isinstance(value, str) or not value.strip():
+            return 'boards.%s.memory_root must be a folder path, null for none, or "inherit"' % name
+        err = _folder_error("boards.%s.memory_root" % name, value)
+        if err:
+            return err
+    return None
+
+
+def _identity(value):
+    """A folder's identity on disk, so a symlink, `~` or another spelling of
+    one folder compares equal. A folder that has gone is its real path."""
+    real = os.path.realpath(os.path.expanduser(value))
+    try:
+        st = os.stat(real)
+        return (st.st_dev, st.st_ino)
+    except OSError:
+        return real
+
+
+def _boards_clash(data, root):
+    """Refuse a list's own memory folder that is not a folder of its own: the
+    global memory folder, the data root, a list's folder under it, the home
+    folder, or the folder of another list. Checked against what the save
+    would leave, so a clash with a list that was not sent is caught too."""
+    base = root or data_root()
+    merged = {k: dict(v) for k, v in load(root).get("boards", {}).items()}
+    for name, entry in (data.get("boards") or {}).items():
+        if entry is None:
+            merged.pop(name, None)
+            continue
+        own = merged.setdefault(name, {})
+        if "memory_root" in entry:
+            if entry["memory_root"] == INHERIT:
+                own.pop("memory_root", None)
+            else:
+                own["memory_root"] = _memory_value(entry["memory_root"])
+    if "memory_root" in data:
+        memory = _memory_value(data["memory_root"])
+    else:
+        memory = load(root).get("memory_root")
+    taken = {}
+    if memory:
+        taken[_identity(memory)] = "the global memory folder"
+    taken[_identity(base)] = "the data folder"
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        names = []
+    for name in names:
+        if os.path.isfile(os.path.join(base, name, "todo.md")):
+            taken[_identity(os.path.join(base, name))] = "the %s list's own data folder" % name
+    taken[_identity("~")] = "the home folder"
+    for name in sorted(merged):
+        value = merged[name].get("memory_root")
+        if not value:
+            continue
+        key = _identity(value)
+        if key in taken:
+            return "boards.%s.memory_root cannot be %s" % (name, taken[key])
+        taken[key] = "the %s list's memory folder" % name
     return None
 
 
@@ -410,6 +672,33 @@ def save(root, data):
             merged["projects_roots"] = roots
         else:
             merged.pop("projects_roots", None)
+    # Per list and per key: what is sent changes, what is not stays.
+    if isinstance(data.get("boards"), dict):
+        boards = merged.get("boards")
+        boards = dict(boards) if isinstance(boards, dict) else {}
+        for name, entry in data["boards"].items():
+            if entry is None:
+                boards.pop(name, None)
+                continue
+            own = boards.get(name)
+            own = dict(own) if isinstance(own, dict) else {}
+            for key, value in entry.items():
+                if key == "memory_root" and value == INHERIT:
+                    own.pop(key, None)
+                elif key == "memory_root":
+                    own[key] = _memory_value(value)
+                elif value is True:
+                    own.pop(key, None)      # the default
+                else:
+                    own[key] = value
+            if own:
+                boards[name] = own
+            else:
+                boards.pop(name, None)
+        if boards:
+            merged["boards"] = boards
+        else:
+            merged.pop("boards", None)
     merged["version"] = 1
     target = path(root)
     os.makedirs(os.path.dirname(target), exist_ok=True)

@@ -63,8 +63,9 @@ PARKED_COLUMNS = {"reviewing"}
 
 
 class Digest:
-    def __init__(self, day):
+    def __init__(self, day, path=None):
         self.day = day
+        self.path = path       # the todo.md read, whose list's profile sets the calendar
         self.overdue = []      # deadline gone, still open
         self.today = []        # due today
         self.headline = None   # the one thing, whatever its date
@@ -210,7 +211,7 @@ def minutes(hhmm):
 def build(day=None, path=None, dismissed=()):
     day = day or dt.date.today()
     path = path or todo_path()
-    d = Digest(day)
+    d = Digest(day, path)
     try:
         with open(path, encoding="utf-8") as fh:
             text = fh.read()
@@ -304,11 +305,17 @@ def to_json(d):
         # So the Electron side never needs its own copy of the UK/PT holiday
         # calendar, which core/todo.js deliberately doesn't carry — see
         # todo.is_working_day/holiday_names, the only place this lives.
-        "today_status": {
-            "working": todo.is_working_day(d.day, owner_profile.holiday_regions()),
-            "holidays": list(todo.holiday_names(d.day, owner_profile.holiday_regions())),
-        },
+        "today_status": _today_status(d),
     }
+
+
+def _today_status(d):
+    """Whether the digest's day is a working day, by the calendar of the list's
+    own profile (owner_profile.board_holiday_regions), which is the owner's
+    unless settings.json gives the list a memory folder of its own or none."""
+    regions = owner_profile.list_holiday_regions(d.path) if d.path else owner_profile.holiday_regions()
+    return {"working": todo.is_working_day(d.day, regions),
+            "holidays": list(todo.holiday_names(d.day, regions))}
 
 
 def main():

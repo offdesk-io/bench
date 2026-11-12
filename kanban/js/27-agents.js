@@ -144,18 +144,20 @@ function renderAgentsView(){
     /* Nothing to schedule yet, so the hour tracks wait until there is. */
     leaveAgentsView();
     lists.innerHTML = '<div class="agentsview">' + agentSetupIntroHTML() +
-      '<div id="agentsCards">' + agentCardsHTML() + '</div></div>';
+      '<div id="agentsCards">' + agentCardsHTML() + '</div><div id="refCardsRoot"></div></div>';
     wireAgentSetupButtons(lists);
+    drawRefCards();
     return;
   }
   let host = lists.querySelector('#agentsRoot');
   if (!host) {
     leaveAgentsView();
     lists.innerHTML = '<div class="agentsview"><div id="agentsRoot"></div>' +
-      '<div id="agentsCards"></div><div id="agentsPlanners"></div></div>';
+      '<div id="agentsCards"></div><div id="agentsPlanners"></div><div id="refCardsRoot"></div></div>';
     host = lists.querySelector('#agentsRoot');
     agentsRoot = host;
   }
+  drawRefCards();
   lists.querySelector('#agentsCards').innerHTML = agentCardsHTML() +
     '<p class="agentsetup-more"><button type="button" class="btn small" data-agent-setup>' +
     'Set up an agent for another bucket</button></p>';
@@ -399,6 +401,7 @@ async function refreshBucketPlanners(){
 
 /* Called by renderView() for every view but this one. */
 function leaveAgentsView(){
+  leaveRefCards();
   if (!agentsRoot) return;
   BoardUI.unmount(agentsRoot);
   agentsRoot = null;

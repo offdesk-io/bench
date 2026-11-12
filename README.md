@@ -26,7 +26,7 @@ The board's Settings screen changes your name, country, models and when each age
 
 Models live in one optional file, `data/settings.json`, which git ignores. Copy `core/settings.example.json` to start it. `models` picks `opus`, `sonnet` or `haiku` per job (`plan`, `implement`, `chat`, `brief`) with `default` for the rest. Without the file, or with a null, every job runs on the model it used before. `BENCH_MODEL_<JOB>` in the environment wins over the file, and a list's own `claude.json` still wins for its chat. `agents.plan.start` and `agents.implement.start` are `scheduled` (wait for the agent's hours, the default) or `now` (the board starts a run as soon as a task is handed over, or a plan approved, and saved). The board reads and writes it at `/settings.json`.
 
-The same file can name a memory folder, `memory_root`, for when the facts about you are kept outside Bench so agents elsewhere can share them. The profile and each list's people are facts about you rather than board state, so with it set Bench reads `<memory_root>/me/profile.md` and `<memory_root>/bench/<list>/people.md` first and falls back to `data/` for any that are not there. Boards, queues, locks, history and runs stay in `data/`. Bench also keeps `<memory_root>/boards.md`, one line per list with the current one marked, rewritten when a list is made, when the current list changes and each time the board starts, so an agent outside Bench can see which boards exist without reading `data/`. Bench knows nothing about what a list is for or whether it is frozen, so whatever follows a list's folder on its line, and any mark besides `current`, is carried over from the file as it was. Unset, nothing changes. It is under Settings on the board.
+The same file can name a memory folder, `memory_root`, for when the facts about you are kept outside Bench so agents elsewhere can share them. The profile and each list's people, company text and Context are facts about you rather than board state, so with it set Bench reads `<memory_root>/me/profile.md` and `<memory_root>/bench/<list>/people.md`, `about.md` and `context.md` first and falls back to `data/` for any that are not there. Boards, queues, locks, history and runs stay in `data/`. Bench also keeps `<memory_root>/boards.md`, one line per list with the current one marked, rewritten when a list is made, when the current list changes and each time the board starts, so an agent outside Bench can see which boards exist without reading `data/`. Bench knows nothing about what a list is for or whether it is frozen, so whatever follows a list's folder on its line, and any mark besides `current`, is carried over from the file as it was. Unset, nothing changes. It is under Settings on the board.
 
 Each list can also name its own projects folder, under `projects_roots`, a map from list name to folder, for keeping that list's project folders outside Bench. For a list in it, a task's `data/projects/<name>` note is looked for in that folder first and at `data/<list>/projects/<name>/` after, the board starts new projects there, and the board's chats may write there. The Projects view of a list shows its own folder and its `data/` one, never another list's, which is why two lists cannot name the same folder. A list with none keeps `data/<list>/projects/`, and with the key unset nothing changes. It is under Settings, for the list that is open.
 
@@ -36,9 +36,9 @@ Three sibling folders are optional. Each is looked up as `../PACKAGES/<name>` ne
 | --- | --- |
 | `../PACKAGES/ai_chat_engine` | no chat window, and the Claude buttons on a task are hidden |
 | `../PACKAGES/work-streams` | no work-stream queues (`/streams.json` answers 404) |
-| `../PACKAGES/agents-engine` | the Agents view shows a stub saying it has nothing to show |
+| `../PACKAGES/agents-engine` | the Agents tab of the Settings page shows a stub saying it has nothing to show |
 
-The agents (`agents/plan-agent`, `agents/implement-agent`) need the `claude` command line tool and do nothing until a list is switched on in the Agents view. The tests are in `docs/TESTING.md`: run them with `scripts/test-board.sh --all`.
+The agents (`agents/plan-agent`, `agents/implement-agent`) need the `claude` command line tool and do nothing until a list is switched on in the Agents tab of the Settings page. The tests are in `docs/TESTING.md`: run them with `scripts/test-board.sh --all`.
 
 **Claude Code is optional.** Without it, the board works in full: lists, buckets, columns, editing, backups, reports, the archive and Settings. What needs it: the chat window and the PA, the Plan and Implement agents, and bucket briefs. With no `claude` on the path, the board hides all of those. The Agents tab says what to install, and the run buttons refuse rather than start something that cannot run. Install Claude Code and log in, then reload the board to turn them on.
 
@@ -301,7 +301,7 @@ more than keeping the build.
 
 When there is no server to read a list from, the board falls back to
 `kanban/demo.md`, an invented list committed to the repo, with the messages and
-prompts written out so Quick wins and Delegate to Claude have something in them.
+prompts written out so Quick wins and the other Overview columns have something in them.
 The page is a front end for `server.py`: it fetches `data/todo.md` on load, saves
 with a `PUT` back to the same path, and asks the server for `/backups.json` and
 `/archive`. `data/` is gitignored, so a static copy has no list to read, and the
@@ -514,7 +514,6 @@ Everything else is worked out from tags at render time, never stored twice:
 | Quick wins | `[effort:: S]` grouped by who does it (`[to:: ]`), plus any step with a written message, plus every recurring meeting with an agenda written on it. Anything waiting on an unfinished blocker, or whose `start:` has not arrived, is left out. |
 | Big rocks | `[impact:: high]` and `[effort:: L]` |
 | Dependency chain | `blocked-by:`, resolved against `#slug` |
-| Delegate to Claude | `[to:: Implement agent]`, ordered by `rank:` |
 
 These used to be sections written into the file by hand, which meant they drifted
 from the tasks they described. Deriving them removed that whole class of bug.
@@ -526,13 +525,11 @@ reports** answer what got done, which is what a one-to-one or an end-of-quarter
 write-up actually asks for and which nothing here could tell you without
 counting ticks by hand.
 
-They sit at the two ends of
-Overview's row — Tasks finished leading it at twice a reference column's
-width, Written reports closing it. Reading what got done meant leaving the page
-that says what is next, and the two questions are asked together often enough —
-in a one-to-one, on a Monday, at the end of a quarter — that the trip between
-them was the whole friction. Overview's row scrolls sideways to hold them, and
-both fold like every other column on it.
+They have a page of their own, the Reports tab right after Overview, with
+Tasks finished at twice a reference column's width and Written reports beside
+it. Overview holds three columns, Big rocks, This week and Quick wins, so it
+reads as the list of what to pick up. Both report columns fold like the ones on
+Overview, and an old `#reports` link opens the tab.
 
 The first report is **Counted from the list**, broken down by bucket. It leads
 with the total, set large enough to read from across the desk, because that
@@ -665,8 +662,7 @@ a `feedback:` note under it, which the next night reads as an instruction.
 
 The files are in `data/<dataset>/plans/`, one per task, listed by the server at
 `/plans.json`. Replanning a task rewrites its own file in place, with a `History`
-section keeping the earlier revisions. A plan whose task is no longer on the list
-gets a line in Overview's Context column.
+section keeping the earlier revisions.
 
 The full account of how the planning agent decides what to plan and when it is
 allowed to spend is in [agents/plan-agent/README.md](agents/plan-agent/README.md). The short version
@@ -676,10 +672,10 @@ file says.
 
 ### Schedule
 
-**Spend and schedules** in the Data menu, opening a sheet, with **Run the Plan agent
-now** beside it. Not a tab, because it is about the machinery around the list rather
-than about the list. Both only show when an agent can run on this machine, so not without Claude Code
-or `agents-engine`.
+**Spend** and **Schedules** are two panels of the Agents tab of the Settings page (Data, Settings), beside Memory,
+Settings and Backups, with **Run the Plan agent now** in the Data menu. Not part of the board,
+because they are about the machinery around the list rather than about the list. Both only show
+when an agent can run on this machine, so not without Claude Code or `agents-engine`.
 
 Three things here run on a clock rather than when you ask them to: the nightly
 agent's twelve launchd wakes, the desktop banners thread, and the weekly
@@ -944,7 +940,7 @@ two designs of one list.
 
 #### Where the topics come from
 
-Not the board's business. That lives in `## Context`, under `### Recurring
+Not the board's business. That lives in `context.md`, under `### Recurring
 meeting prep scripts`: one line per meeting in the owner's own words, saying when it
 happens, what it is usually about, and what to check before it. The `pa`
 skill reads that script, pulls the live status of whatever it points at, reads

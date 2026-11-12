@@ -260,13 +260,18 @@ def dataset_dir(name):
     return os.path.join(DATA_ROOT, name or ".no-list")
 
 
-def people_path(name=None):
-    # The memory folder's copy first when settings.json names one (see
-    # core/settings.py), else beside the list's todo.md.
+def memory_path(kind, name=None, write=False):
+    # A list's people, about or context file. With a memory folder in
+    # settings.json a read takes its copy when there is one and a write always
+    # goes there (settings.memory_file); without one, beside the list's todo.md.
     name = name or current_dataset()
     if not name:
-        return os.path.join(dataset_dir(None), "people.md")
-    return settings.people_path(name, DATA_ROOT)
+        return os.path.join(dataset_dir(None), kind + ".md")
+    return settings.memory_file(name, kind, DATA_ROOT, write)
+
+
+def people_path(name=None, write=False):
+    return memory_path("people", name, write)
 
 
 def publish_boards():
@@ -430,9 +435,14 @@ def write_text_file(path, text):
         raise
 
 
-def about_path(name=None):
+def about_path(name=None, write=False):
     """A board's free-text description of its company and team."""
-    return os.path.join(dataset_dir(name or current_dataset()), "about.md")
+    return memory_path("about", name, write)
+
+
+def context_path(name=None, write=False):
+    """A board's Context: what changes week to week, in context.md."""
+    return memory_path("context", name, write)
 
 
 def _read_text(path):
@@ -524,7 +534,7 @@ def append_activity(ds, changes, who=None, name=None):
     at = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
     email = who if who is not None else (person["email"] if person else "")
     if name is None:
-        name = person["name"] if person else owner_profile.owner_name(DATA_ROOT)
+        name = person["name"] if person else owner_profile.owner_name(DATA_ROOT, board=ds)
     with open(activity_path(ds), "a", encoding="utf-8") as fh:
         for c in changes:
             fh.write(json.dumps(dict({"at": at, "who": email, "name": name}, **c), ensure_ascii=False) + "\n")
@@ -1596,6 +1606,13 @@ def _tail(path, n=12):
         return []
 
 
+def board_holiday_regions(board):
+    """A board's holiday regions for its banners, from its own profile
+    (owner_profile.board_holiday_regions)."""
+    import owner_profile
+    return owner_profile.board_holiday_regions(dataset_dir(board), DATA_ROOT)
+
+
 # The thread notify_due.start() returned, or None when banners are off here.
 NOTIFIER = {"thread": None}
 
@@ -1619,12 +1636,14 @@ def _banners_job():
     last = notify_due.STATUS["last_tick"]
     nxt = ""
     if on and todo is not None:
+        boards = list_datasets(everyone=True)
+        days = notify_due.calendars(boards, board_holiday_regions)
         import owner_profile
         regions = owner_profile.holiday_regions(DATA_ROOT)
         nxt = notify_due.next_banner(
-            DATA_ROOT, list_datasets(everyone=True), datetime.datetime.now(),
+            DATA_ROOT, boards, datetime.datetime.now(),
             lambda d: todo.is_working_day(d, regions),
-            lambda p: _steady_read(p)[0]).isoformat(timespec="minutes")
+            lambda p: _steady_read(p)[0], working_for=days.get).isoformat(timespec="minutes")
     return {
         "id": "banners",
         "name": "Desktop banners",
@@ -2143,6 +2162,8 @@ def start_planning_agent_run():
     import subprocess
     if planning_agent_pick is None:
         return None, {"error": "no planning agent in this checkout"}
+    if not settings.agents_on(current_dataset(), DATA_ROOT):
+        return None, {"error": "agents are off for this board in Settings"}
     if SCRATCH:
         # A test server over a throwaway data root: a real run would spend
         # money and plan against whatever run.sh resolves, not this folder.
@@ -2734,16 +2755,16 @@ def needs_board(method, path):
     return path not in BOARDLESS_POST
 
 
-def _holiday_place_json(address=None):
+def _holiday_place_json(address=None, board=None):
     """The profile's holiday country and region, "" for neither."""
     import owner_profile
-    country, region = owner_profile.holiday_place(DATA_ROOT, address)
-    prof = owner_profile.read(DATA_ROOT, address)
+    country, region = owner_profile.holiday_place(DATA_ROOT, address, board)
+    prof = owner_profile.read(DATA_ROOT, address, board)
     # An old `Holidays:` line with no `Country:` beside it: the calendars it
     # names, so Settings can offer to keep them rather than rewrite them.
     legacy = []
     if "holidays" in prof and not re.fullmatch(r"[A-Za-z]{2}", prof.get("country", "")):
-        legacy = list(owner_profile.holiday_regions(DATA_ROOT, address))
+        legacy = list(owner_profile.holiday_regions(DATA_ROOT, address, board))
     return {"country": country or "", "region": region, "legacy_holidays": legacy}
 
 
@@ -2756,16 +2777,20 @@ def profile_reply():
     """The profile as Settings shows it: on the Mac the owner's, signed in the
     person's own, read from the shared profile until they save one. Signed
     in there is nothing to set up, and until they save, the shared profile's
-    Name is not theirs, so the name is the one they signed in with."""
+    Name is not theirs, so the name is the one they signed in with. The
+    profile is the board's on screen (owner_profile.profile_path), which is
+    the owner's unless settings.json gives the board a memory folder of its
+    own or none."""
     import owner_profile
     who = requester()
     address = who["email"] if who else None
-    about = owner_profile.about_fields(DATA_ROOT, address)
-    texts = owner_profile.section_texts(DATA_ROOT, address)
+    board = current_dataset()
+    about = owner_profile.about_fields(DATA_ROOT, address, board)
+    texts = owner_profile.section_texts(DATA_ROOT, address, board)
     hints = owner_profile.section_hints()
     if who:
         own = os.path.isfile(owner_profile.own_profile_path(address, DATA_ROOT))
-        name = (owner_profile.read(DATA_ROOT, address).get("name") if own else None) or who["name"]
+        name = (owner_profile.read(DATA_ROOT, address, board).get("name") if own else None) or who["name"]
         for key in SHARED_HIDES["about"]:
             about.pop(key, None)
         for key in SHARED_HIDES["sections"]:
@@ -2773,9 +2798,9 @@ def profile_reply():
             hints.pop(key, None)
         setup = False
     else:
-        setup = owner_profile.needs_setup(DATA_ROOT)
-        name = "" if setup else owner_profile.owner_name(DATA_ROOT)
-    return {"name": name, **_holiday_place_json(address), "about": about,
+        setup = owner_profile.needs_setup(DATA_ROOT, board=board)
+        name = "" if setup else owner_profile.owner_name(DATA_ROOT, board=board)
+    return {"name": name, **_holiday_place_json(address, board), "about": about,
             "sections": texts, "hints": hints, "needs_setup": setup}
 
 
@@ -2931,6 +2956,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # Two files are written with PUT, so the line says which.
         what = ("a bucket brief" if "/bucket-brief" in first
                 else "the board's about text" if "PUT /about" in first
+                else "the board's context" if "PUT /context" in first
                 else "the board's people" if "PUT /people" in first
                 else "%s/%s/todo.md" % (DATA, current_dataset()))
         sys.stdout.write("saved %s\n" % what)
@@ -3107,7 +3133,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             import holidays as nager
             import owner_profile
             who = requester()
-            country = owner_profile.holiday_place(DATA_ROOT, who["email"] if who else None)[0]
+            country = owner_profile.holiday_place(DATA_ROOT, who["email"] if who else None,
+                                                  current_dataset())[0]
             return self._json(200, {
                 "countries": _all_countries(),
                 "regions": {country: nager.regions(country, DATA_ROOT)} if country and _nager_has(country) else {}})
@@ -3134,7 +3161,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # in 02-state.js can read it. A page with no server falls back to "Me".
             import owner_profile
             # Signed in, "me" is whoever is signed in, by first name.
-            owner = (requester()["name"].split() or [""])[0] if AUTH else owner_profile.owner_name(DATA_ROOT)
+            owner = ((requester()["name"].split() or [""])[0] if AUTH
+                     else owner_profile.owner_name(DATA_ROOT, board=current_dataset()))
             body = ("window.OWNER_NAME = %s;\n" % json.dumps(owner)).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")
@@ -3152,12 +3180,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(200, {"people": []})
         if path == "/about.json":
             ds = current_dataset()
-            text, exists = _read_text(about_path(ds))
+            where = about_path(ds)
+            text, exists = _read_text(where)
+            # Signed in, the file's name alone: no folder on the server is shown.
             return self._json(200, {"text": text, "exists": exists,
-                                    "path": os.path.relpath(about_path(ds), dataset_dir(ds) if AUTH else ROOT)})
+                                    "path": os.path.basename(where) if AUTH else os.path.relpath(where, ROOT)})
+        if path == "/context.json":
+            ds = current_dataset()
+            where = context_path(ds)
+            text, exists = _read_text(where)
+            return self._json(200, {"text": text, "exists": exists,
+                                    "path": os.path.basename(where) if AUTH else os.path.relpath(where, ROOT)})
         if path == "/memory.json":
             ds = current_dataset()
             about, about_exists = _read_text(about_path(ds))
+            context, context_exists = _read_text(context_path(ds))
             people, _ = _read_text(people_path(ds))
             buckets = []
             for heading, label in bucket_headings(ds):
@@ -3171,6 +3208,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 "filled": bool(exists and planning_agent_plan.BRIEF_EMPTY not in text)})
             return self._json(200, {"board": ds,
                                     "about": {"text": about, "exists": about_exists},
+                                    "context": {"text": context, "exists": context_exists},
                                     "people": read_people(people),
                                     "buckets": buckets,
                                     "profile": profile_reply()})
@@ -4069,7 +4107,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         ds = current_dataset()
         if not ds:
             return self._json(404, {"error": "no list you can see"})
-        write_text_file(about_path(ds), text)
+        write_text_file(about_path(ds, write=True), text)
+        return self._json(200, {"ok": True})
+
+    def _put_context(self):
+        """The board's Context, replaced whole in context.md. Same rules as
+        the company text."""
+        payload, refused = self._put_json_from_board()
+        if refused:
+            return
+        text = payload.get("text")
+        if not isinstance(text, str):
+            return self._json(400, {"error": "expected the text"})
+        ds = current_dataset()
+        if not ds:
+            return self._json(404, {"error": "no list you can see"})
+        write_text_file(context_path(ds, write=True), text)
         return self._json(200, {"ok": True})
 
     def _put_people(self):
@@ -4095,12 +4148,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         ds = current_dataset()
         if not ds:
             return self._json(404, {"error": "no list you can see"})
-        path = people_path(ds)
-        text, _ = _read_text(path)
+        # Read from wherever it is now, written to the memory folder when one is set.
+        text, _ = _read_text(people_path(ds))
         try:
             table = write_people_table(text, rows)
         except ValueError:
             return self._json(409, {"error": "people.md has more than one people table; tidy it by hand first"})
+        path = people_path(ds, write=True)
         write_text_file(path, table)
         text, _ = _read_text(path)
         return self._json(200, {"ok": True, "people": read_people(text)})
@@ -4120,7 +4174,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         saved, err = settings.save(DATA_ROOT, body)
         if err:
             return self._json(400, {"error": err})
-        if "memory_root" in body:
+        # boards.md names the memory folder and marks a list with its agents off.
+        if "memory_root" in body or "boards" in body:
             publish_boards()
         return self._json(200, settings_reply(saved))
 
@@ -4155,7 +4210,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # nginx's header, never anything in the body.
         err = owner_profile.write_basics(DATA_ROOT, body.get("name"), country=country, region=region,
                                          about=about, sections=sections,
-                                         address=who["email"] if who else None)
+                                         address=who["email"] if who else None,
+                                         board=current_dataset())
         if err:
             return self._json(400, {"error": err})
         return self._json(200, profile_reply())
@@ -4168,6 +4224,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._put_bucket_brief()
         if self.path.split("?")[0] == "/about":
             return self._put_about()
+        if self.path.split("?")[0] == "/context":
+            return self._put_context()
         if self.path.split("?")[0] == "/people":
             return self._put_people()
         if self.path.split("?")[0] == "/settings.json":
@@ -4502,8 +4560,7 @@ def main():
     import owner_profile
     if todo is not None and not SCRATCH:
         NOTIFIER["thread"] = notify_due.start(
-            DATA_ROOT, lambda: list_datasets(everyone=True),
-            lambda: owner_profile.holiday_regions(DATA_ROOT),
+            DATA_ROOT, lambda: list_datasets(everyone=True), board_holiday_regions,
             "http://127.0.0.1:%d/%s" % (PORT, PAGE),
             read_text=lambda p: _steady_read(p)[0])
         if NOTIFIER["thread"]:

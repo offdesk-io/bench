@@ -30,7 +30,7 @@ ready to send, one decision named, three steps rather than a project.
 
 ## What applies everywhere
 
-- Read the `## Context` section at the bottom of `todo.md`.
+- Read the list's `context.md`, through the memory lookup.
 - Read the task's `Project:` folder if it has one, before proposing anything.
 - Ask whether the task is really a decision, really several tasks, or really
   smaller than it looks. Those three findings are worth more than invented

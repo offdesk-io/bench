@@ -75,7 +75,9 @@ async function evalJS (expr) {
 }
 
 try {
-  await new Promise(r => setTimeout(r, 2500))
+  // Poll for the page rather than sleeping: a fixed wait fails when the machine is busy.
+  for (let i = 0; i < 120 && !(await evalJS(`document.readyState === 'complete' && typeof state !== 'undefined' && !!state.doc`).catch(() => false)); i++) await new Promise(r => setTimeout(r, 250))
+  await new Promise(r => setTimeout(r, 400))
   check('the board loaded', await evalJS(`typeof openBucketEditor === 'function'`))
   check('and the brief sheet with it', await evalJS(`typeof openBucketBrief === 'function'`))
 

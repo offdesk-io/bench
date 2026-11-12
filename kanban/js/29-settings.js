@@ -10,14 +10,13 @@
    set but no list exists.
 
    Name, Country and Region live in data/profile.md, behind /profile-basics.json,
-   and so does the rest of the profile Settings offers (not the welcome): How to
-   address you and the facts file as fields, then Setup, Writing, Meeting
-   recorder and Working habits as one text box each, a box left as the template
-   has it reading empty with the template as its hint. Signed in (state.who),
-   the profile is the person's own, data/users/<hash>.profile.md, and the form
-   is that profile alone, less the two parts that name a path on the server;
-   the server's settings are not theirs to change, and the list's sharing is a
-   button beside it.
+   and so does How to address you, which Settings offers beside them (not the
+   welcome). The facts file and the profile's four sections, Setup, Writing,
+   Meeting recorder and Working habits, are edited on the Memory page and go
+   through the same route. Signed in (state.who), the profile is the person's
+   own, data/users/<hash>.profile.md, and the form is that profile's name and
+   address alone; the server's settings are not theirs to change, and the
+   list's sharing is a button beside it.
    The model per job, when each agent starts, the memory folder and each list's
    projects folder live in data/settings.json, behind /settings.json. The
    folders are offered in Settings only, not the welcome, the projects folder
@@ -116,16 +115,30 @@ function settingsAboutField(draft, key){
     '<span class="help">' + esc(f[2]) + '</span><span class="help fielderr" data-err="about-' + key + '" hidden></span></label>';
 }
 
-/* The sections the server sent, as text boxes. Open signed in, where they are
-   most of the form. */
-function settingsSectionsHTML(draft){
-  const boxes = SETTINGS_SECTIONS.filter(([k]) => k in draft.sections).map(([k, name, help]) =>
-    '<label class="field"><span>' + esc(name) + '</span>' +
-    '<textarea rows="4" data-section="' + k + '" placeholder="' + escAttr(draft.hints[k] || '') + '">' + esc(draft.sections[k]) + '</textarea>' +
-    '<span class="help">' + esc(help) + '</span><span class="help fielderr" data-err="section-' + k + '" hidden></span></label>').join('');
-  if (!boxes) return '';
-  return '<details class="agentopts" data-profile-sections' + (draft.signedIn ? ' open' : '') + '><summary>Your profile for the PA</summary>' +
-    '<div class="agentopts__body">' + boxes + '</div></details>';
+/* "This board": the open list's own memory folder, banners and agents, kept
+   under boards.<list> in settings.json. Not offered in the welcome or signed in,
+   where the server's settings are not the visitor's. */
+const BOARD_MEMORY_MODES = [['inherit', 'Same as main memory folder'], ['none', 'None, keep everything in Bench'], ['own', 'Its own folder']];
+
+function boardSwitchHTML(attr, on, name, help){
+  return '<label class="field"><span>' + esc(name) + '</span>' +
+    '<button type="button" role="switch" class="tenon-switch' + (on ? ' tenon-switch--on' : '') + '" ' + attr + ' aria-checked="' + on + '"></button>' +
+    '<span class="help">' + esc(help) + '</span></label>';
+}
+
+function boardGroupHTML(draft, first){
+  if (first || draft.signedIn || !draft.list) return '';
+  const b = draft.board;
+  return '<div class="agentopts__group" data-board-group><h4>This board</h4>' +
+    '<label class="field"><span>Memory folder</span><select data-board-memory-mode>' +
+    BOARD_MEMORY_MODES.map(([v, l]) => '<option value="' + v + '"' + (b.mode === v ? ' selected' : '') + '>' + esc(l) + '</option>').join('') +
+    '</select>' +
+    '<input type="text" data-board-memory value="' + escAttr(b.path) + '" placeholder="/absolute/path/to/folder"' + (b.mode === 'own' ? '' : ' hidden') + '>' +
+    '<span class="help">Where facts about you and this list’s people are kept. Same as main uses the memory folder above, None keeps everything in data/' + esc(draft.list) + '/.</span>' +
+    '<span class="help fielderr" data-err="board-memory" hidden></span></label>' +
+    boardSwitchHTML('data-board-banners', b.banners, 'Desktop banners', 'A banner when a task on this board is due. Off, it sends none.') +
+    boardSwitchHTML('data-board-agents', b.agents, 'Agents', 'Lets the Plan and Implement agents work on this board. Off, they leave it alone.') +
+    '</div>';
 }
 
 function settingsFormHTML(draft, choices, first){
@@ -150,13 +163,12 @@ function settingsFormHTML(draft, choices, first){
     '<span class="help fielderr" data-err="country" hidden></span></label>' +
     '<label class="field" data-region-field' + (draft.regions.length ? '' : ' hidden') + '><span>Region</span>' +
     '<select data-region>' + settingsRegionOptions(draft) + '</select></label>' +
-    (first ? '' : settingsAboutField(draft, 'facts_file')) +
-    (first ? '' : settingsSectionsHTML(draft)) +
     (draft.signedIn ? (draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '') + '</div>' :
     (first ? '' : '<label class="field"><span>Memory folder</span><input type="text" data-memory value="' + escAttr(draft.memoryRoot) + '" placeholder="Not set">' +
-      '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each list’s people are read from there first, and Bench lists its boards in boards.md inside it. Empty means none.</span></label>') +
+      '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.</span></label>') +
     (first || !draft.list ? '' : '<label class="field"><span>Projects folder for ' + esc(draft.list) + '</span><input type="text" data-projects value="' + escAttr(draft.projectsRoot) + '" placeholder="Not set">' +
       '<span class="help">A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + esc(draft.list) + '/projects/.</span></label>') +
+    boardGroupHTML(draft, first) +
     '<label class="field"><span>Reply chime</span>' +
     '<button type="button" role="switch" class="tenon-switch' + (draft.chime ? ' tenon-switch--on' : '') + '" data-chime aria-checked="' + draft.chime + '"></button>' +
     '<span class="help">A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.</span></label>' +
@@ -203,7 +215,13 @@ async function loadSettingsDraft(first){
   const memoryRoot = set.memory_root || '';
   const list = state.dataset || '';
   const projectsRoot = (set.projects_roots || {})[list] || '';
+  const own = (set.boards || {})[list] || {};
+  const board = {
+    mode: !('memory_root' in own) ? 'inherit' : (own.memory_root === null ? 'none' : 'own'),
+    path: typeof own.memory_root === 'string' ? own.memory_root : '',
+    banners: own.banners !== false, agents: own.agents !== false };
   return { setup: prof.needs_setup, set, draft: {
+    board, boardWas: Object.assign({}, board),
     name: prof.name || '', country, region, legacy, memoryRoot, list, projectsRoot, signedIn,
     about: Object.assign({}, prof.about), sections: Object.assign({}, prof.sections), hints: prof.hints || {},
     was: { country, region, memoryRoot, projectsRoot },
@@ -217,8 +235,8 @@ function settingsErrors(draft, first){
   const err = {};
   if (!draft.name.trim()) err.name = 'Add your name.';
   if (first && !draft.country) err.country = 'Choose a country.';
-  for (const k in draft.about) if (/[<>`]/.test(draft.about[k])) err['about-' + k] = 'Leave out < > and backticks.';
-  for (const k in draft.sections) if (/^##?(\s|$)/m.test(draft.sections[k])) err['section-' + k] = 'A # or ## heading would split the profile. Use ### or none.';
+  if (/[<>`]/.test(draft.about.addressing || '')) err['about-addressing'] = 'Leave out < > and backticks.';
+  if (!draft.signedIn && draft.board && draft.board.mode === 'own' && !draft.board.path.trim()) err['board-memory'] = 'Enter the folder’s full path.';
   const badDollars = v => v.trim() && !(Number(v) >= 0);
   if (badDollars(draft.budget)) err.budget = 'Enter an amount in dollars, or leave it empty.';
   for (const k in draft.agentBudgets) if (badDollars(draft.agentBudgets[k])) err['budget-' + k] = 'Enter an amount in dollars, or leave it empty.';
@@ -228,22 +246,24 @@ function settingsErrors(draft, first){
 /* The Save button follows the form: off while anything required is missing,
    and the message under a field shows once the owner has been in it. */
 function paintSetupErrors(draft, first, attempted){
-  if (!modalEl) return;
+  const root = settingsRoot();
+  if (!root) return;
   const err = settingsErrors(draft, first);
-  modalEl.querySelectorAll('[data-err]').forEach(el => {
+  root.querySelectorAll('[data-err]').forEach(el => {
     const k = el.dataset.err;
     const show = !!err[k] && (draft.touched[k] || attempted);
     el.textContent = show ? err[k] : '';
     el.hidden = !show;
   });
-  const save = modalEl.querySelector('button[data-i="0"]');
+  const save = root.querySelector('button[data-i="0"], [data-settings-save]');
   if (save) save.disabled = Object.keys(err).length > 0;
 }
 
 /* A country Nager.Date has no public holidays for is still saved; the note says
    what that means. */
 function paintCountryNote(draft){
-  const note = modalEl && modalEl.querySelector('[data-nolist]');
+  const root = settingsRoot();
+  const note = root && root.querySelector('[data-nolist]');
   if (!note) return;
   const c = draft.countries.find(x => x.code === draft.country);
   note.hidden = !(c && c.holidays === false);
@@ -252,8 +272,9 @@ function paintCountryNote(draft){
 /* Keeps the empty option of every "Use default" select naming the model it
    resolves to, so changing Default relabels them straight away. */
 function paintModelLabels(draft){
-  if (!modalEl) return;
-  modalEl.querySelectorAll('[data-model]').forEach(sel => {
+  const root = settingsRoot();
+  if (!root) return;
+  root.querySelectorAll('[data-model]').forEach(sel => {
     const empty = sel.querySelector('option[value=""]');
     if (empty) empty.textContent = settingsEmptyLabel(sel.dataset.model, draft.models);
   });
@@ -261,35 +282,44 @@ function paintModelLabels(draft){
 
 /* Updates `draft` from the open form as it changes. */
 function trackSettingsForm(draft, first){
-  if (!modalEl) return;
+  const root = settingsRoot();
+  if (!root) return;
   const sync = e => {
-    const n = modalEl.querySelector('[data-name]');
+    const n = root.querySelector('[data-name]');
     if (n) draft.name = n.value;
-    modalEl.querySelectorAll('[data-about]').forEach(i => {
+    root.querySelectorAll('[data-about]').forEach(i => {
       draft.about[i.dataset.about] = i.value;
       if (e && e.target === i) draft.touched['about-' + i.dataset.about] = true;
     });
-    modalEl.querySelectorAll('[data-section]').forEach(t => {
-      draft.sections[t.dataset.section] = t.value;
-      if (e && e.target === t) draft.touched['section-' + t.dataset.section] = true;
-    });
-    const c = modalEl.querySelector('[data-country]');
-    const r = modalEl.querySelector('[data-region]');
+    const c = root.querySelector('[data-country]');
+    const r = root.querySelector('[data-region]');
     if (c) draft.country = c.value;
     if (r) draft.region = r.value;
-    const m = modalEl.querySelector('[data-memory]');
+    const m = root.querySelector('[data-memory]');
     if (m) draft.memoryRoot = m.value;
-    const ch = modalEl.querySelector('[data-chime]');
+    const ch = root.querySelector('[data-chime]');
     if (ch) draft.chime = ch.getAttribute('aria-checked') === 'true';
-    const pr = modalEl.querySelector('[data-projects]');
+    const bm = root.querySelector('[data-board-memory-mode]');
+    if (bm) {
+      draft.board.mode = bm.value;
+      const bp = root.querySelector('[data-board-memory]');
+      bp.hidden = bm.value !== 'own';
+      draft.board.path = bp.value;
+      if (e && e.target === bp) draft.touched['board-memory'] = true;
+    }
+    const bb = root.querySelector('[data-board-banners]');
+    if (bb) draft.board.banners = bb.getAttribute('aria-checked') === 'true';
+    const ba = root.querySelector('[data-board-agents]');
+    if (ba) draft.board.agents = ba.getAttribute('aria-checked') === 'true';
+    const pr = root.querySelector('[data-projects]');
     if (pr) draft.projectsRoot = pr.value;
-    modalEl.querySelectorAll('[data-model]').forEach(s => { draft.models[s.dataset.model] = s.value || null; });
-    modalEl.querySelectorAll('[data-start]').forEach(s => { draft.agents[s.dataset.start].start = s.value; });
+    root.querySelectorAll('[data-model]').forEach(s => { draft.models[s.dataset.model] = s.value || null; });
+    root.querySelectorAll('[data-start]').forEach(s => { draft.agents[s.dataset.start].start = s.value; });
     if (e && e.target && e.target.matches('[data-name]')) draft.touched.name = true;
     if (e && e.target && e.target.matches('[data-country]')) draft.touched.country = true;
-    const b = modalEl.querySelector('[data-budget]');
+    const b = root.querySelector('[data-budget]');
     if (b) { draft.budget = b.value; if (e && e.target === b) draft.touched.budget = true; }
-    modalEl.querySelectorAll('[data-agent-budget]').forEach(i => {
+    root.querySelectorAll('[data-agent-budget]').forEach(i => {
       draft.agentBudgets[i.dataset.agentBudget] = i.value;
       if (e && e.target === i) draft.touched['budget-' + i.dataset.agentBudget] = true;
     });
@@ -297,25 +327,25 @@ function trackSettingsForm(draft, first){
     paintCountryNote(draft);
     paintSetupErrors(draft, first);
   };
-  modalEl.addEventListener('input', sync);
-  modalEl.addEventListener('change', sync);
+  root.addEventListener('input', sync);
+  root.addEventListener('change', sync);
   /* A switch is a button, so it reports a click rather than a change. */
-  modalEl.addEventListener('click', e => {
+  root.addEventListener('click', e => {
     if (e.target.closest('[data-sharing]')) { openSharing(); return; }
-    const sw = e.target.closest('[data-chime]');
+    const sw = e.target.closest('[data-chime], [data-board-banners], [data-board-agents]');
     if (!sw) return;
     const on = sw.getAttribute('aria-checked') !== 'true';
     sw.setAttribute('aria-checked', String(on));
     sw.classList.toggle('tenon-switch--on', on);
     sync();
   });
-  modalEl.addEventListener('focusout', e => {
+  root.addEventListener('focusout', e => {
     if (e.target.matches('[data-name]')) draft.touched.name = true;
     if (e.target.matches('[data-country]')) draft.touched.country = true;
     paintSetupErrors(draft, first);
   });
   /* A new country has its own regions: fetch them and refill the Region select. */
-  modalEl.addEventListener('change', async e => {
+  root.addEventListener('change', async e => {
     if (!e.target.matches('[data-country]')) return;
     const code = e.target.value;
     draft.region = '';
@@ -325,8 +355,8 @@ function trackSettingsForm(draft, first){
       catch (err) { draft.regions = []; }
       if (!Array.isArray(draft.regions)) draft.regions = [];
     }
-    const field = modalEl.querySelector('[data-region-field]');
-    const sel = modalEl.querySelector('[data-region]');
+    const field = root.querySelector('[data-region-field]');
+    const sel = root.querySelector('[data-region]');
     if (sel) sel.innerHTML = settingsRegionOptions(draft);
     if (field) field.hidden = !draft.regions.length;
   });
@@ -339,7 +369,7 @@ async function saveSettingsDraft(draft, first){
   const basics = { name: draft.name };
   /* Every field and box the server sent, so the welcome, which shows none,
      sends none. */
-  if (!first) { basics.about = draft.about; basics.sections = draft.sections; }
+  if (!first && 'addressing' in draft.about) basics.about = { addressing: draft.about.addressing };
   /* Holidays are sent only when the owner changed them: saving a name alone must not
      rewrite a profile that still has the old Holidays: line. */
   if (draft.country && (draft.country !== draft.was.country || draft.region !== draft.was.region)) {
@@ -357,25 +387,45 @@ async function saveSettingsDraft(draft, first){
   if (draft.list && draft.projectsRoot.trim() !== draft.was.projectsRoot)
     body.projects_roots = { [draft.list]: draft.projectsRoot.trim() || null };
   await put('/settings.json', body);
+  /* Its own request, so a folder the server refuses does not stop the rest saving. */
+  const mine = boardChanges(draft);
+  if (mine) await put('/settings.json', { boards: { [draft.list]: mine } });
 }
 
-/* first: the welcome. needsList: step 2 follows step 1 (no list on disk). */
+/* Only the keys of "This board" that changed, or null when none did. */
+function boardChanges(draft){
+  if (!draft.list || !draft.board) return null;
+  const b = draft.board, was = draft.boardWas, out = {};
+  if (b.mode !== was.mode || (b.mode === 'own' && b.path.trim() !== was.path))
+    out.memory_root = b.mode === 'inherit' ? 'inherit' : b.mode === 'none' ? null : b.path.trim();
+  if (b.banners !== was.banners) out.banners = b.banners;
+  if (b.agents !== was.agents) out.agents = b.agents;
+  return Object.keys(out).length ? out : null;
+}
+
+/* Checks the form and saves it, from the welcome's button or the page's. */
+async function runSettingsSave(draft, first, needsList){
+  if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return; }
+  try { await saveSettingsDraft(draft, first); }
+  catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
+  if (first && needsList) { openFirstList(); return; }
+  /* Signed in, the name on the page is the sign-in's, so nothing to reload. */
+  if (draft.signedIn) { if (!settingsHostEl) closeModal(); showToast('Saved.', 'good'); return; }
+  /* The owner's name is read once, from /owner.js, as the page loads. */
+  location.reload();
+}
+
+/* first: the welcome. needsList: step 2 follows step 1 (no list on disk). The
+   welcome is the one place this form is still a pop-up; Data > Settings opens
+   the same form as a tab of the Settings page (drawSettingsTab). */
 async function openSettings(first, needsList){
   let loaded;
   try { loaded = await loadSettingsDraft(first); }
   catch (err) { showToast('Could not read settings: ' + (err.message || err)); return; }
   const { draft, set } = loaded;
   const choices = (set.choices && set.choices.models) || [];
-  const save = { label: 'Save', primary: true, run: async () => {
-    if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return; }
-    try { await saveSettingsDraft(draft, first); }
-    catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
-    if (first && needsList) { openFirstList(); return; }
-    /* Signed in, the name on the page is the sign-in's, so nothing to reload. */
-    if (draft.signedIn) { closeModal(); showToast('Saved.', 'good'); return; }
-    /* The owner's name is read once, from /owner.js, as the page loads. */
-    location.reload();
-  } };
+  settingsHostEl = null;
+  const save = { label: 'Save', primary: true, run: () => runSettingsSave(draft, first, needsList) };
   const buttons = first ? [save] : [save, { label: 'Cancel', run: closeModal }];
   const note = first
     ? '<p class="help" style="margin-top:14px">Next, run <code>scripts/install.sh</code> to link the skills and set up the hourly wake.</p>'
@@ -548,7 +598,144 @@ async function openSharing(){
   trackSharing(sh);
 }
 
-$('#settingsBtn').onclick = () => openSettings(false);
+/* ---- The Settings page ------------------------------------------------------
+   Data > Settings opens one page in the board's own area, with four tabs drawn
+   in the bucket bar while it is up: Memory (31-memory.js), Settings (this form),
+   Agents (27-agents.js, with Spend and Schedules, the two cards of 14-schedule.js,
+   as panels under it), Backups (15-backups.js).
+   The URL is #settings/<tab>; an old #memory, #agents or #backups link opens its tab. */
+const SETTINGS_TABS = [
+  ['memory', 'Memory', 'what Bench keeps about this board and you'],
+  ['settings', 'Settings', 'your profile, models, folders and agent options'],
+  ['agents', 'Agents', 'when each agent runs, what it does, what it has spent and what runs on a clock'],
+  ['backups', 'Backups', 'every copy of this list the board has kept'],
+];
+let settingsTab = 'settings';
+/* The page's form, when it is drawn there rather than in the pop-up. */
+let settingsHostEl = null;
+const settingsRoot = () => settingsHostEl || modalEl;
+
+/* The tabs on offer: the shared board has no Agents tab, and a folder opened
+   from disk has no backups. */
+function settingsTabs(){
+  return SETTINGS_TABS.filter(([k]) =>
+    !(k === 'agents' && state.who) && !(k === 'backups' && listFolder));
+}
+
+/* Spend and Schedules were tabs of their own; they are two panels of Agents now,
+   so a link or a call that names either lands there. */
+function settingsTabName(tab){
+  return tab === 'spend' || tab === 'schedules' ? 'agents' : tab;
+}
+
+/* One panel in Tenon's column markup, the one the Overview and Backups draw:
+   a title, an optional line under it, an optional action at the head's end. */
+function settingsPanelHTML(id, title, desc, bodyHTML, actionHTML){
+  return '<section class="tenon-column settingspanel" data-panel="' + escAttr(id) + '">' +
+    '<div class="tenon-column__head"><div class="tenon-column__head-row">' +
+      '<div class="tenon-column__head-start"><h3 class="tenon-column__title">' + esc(title) + '</h3></div>' +
+      '<div class="tenon-column__head-end">' + (actionHTML || '') + '</div></div>' +
+      (desc ? '<p class="tenon-column__desc">' + esc(desc) + '</p>' : '') + '</div>' +
+    '<div class="tenon-column__body">' + bodyHTML + '</div></section>';
+}
+
+/* A hash or a stray state.view that names the page, or one of the views that
+   became its tabs. True when it did, with settingsTab and state.view set. */
+function adoptSettingsRoute(h){
+  let tab = null;
+  if (h.view === 'settings') tab = SETTINGS_TABS.some(t => t[0] === settingsTabName(h.bucketSlug)) ? settingsTabName(h.bucketSlug) : settingsTab;
+  else if (h.view === 'memory' || h.view === 'agents' || h.view === 'backups') tab = h.view;
+  if (!tab) return false;
+  settingsTab = tab;
+  state.view = 'settings';
+  return true;
+}
+
+function openSettingsPage(tab){
+  if (tab) settingsTab = settingsTabName(tab);
+  state.view = 'settings';
+  syncHash(true);
+  renderView();
+}
+
+/* The bucket bar, while the page is up: the five tabs where the bucket tabs
+   were, and none of the bucket bar's other controls. */
+function renderSettingsTabs(){
+  const bar = $('#bucketBar'), wrap = $('#bucketFilters');
+  if (!bar || !wrap) return;
+  const tabs = settingsTabs();
+  if (!tabs.some(t => t[0] === settingsTab)) settingsTab = 'settings';
+  bar.classList.remove('hidden');
+  bar.classList.add('bucketbar--page');
+  wrap.classList.remove('hidden');
+  $('#themeBar').classList.add('hidden');
+  BoardUI.mountFlushed(wrap, BoardUI.h(BoardUI.FilterTabs, {
+    tabs: tabs.map(([key, label, title]) => ({ key, label, on: settingsTab === key, title })),
+    label: 'Settings sections',
+    onToggle: key => { if (key !== settingsTab) { settingsTab = key; syncHash(true); renderSettingsPage(); } }
+  }));
+  renderPhoneChrome();
+}
+
+/* The page is being left for a board view: the bucket tabs come back (the view
+   being drawn calls renderTabs), and what the tabs mounted goes. */
+function leaveSettingsPage(){
+  leaveRefCards();
+  settingsHostEl = null;
+  const bar = $('#bucketBar');
+  if (bar) {
+    bar.classList.remove('bucketbar--page');
+    if (!state.doc) bar.classList.add('hidden');
+  }
+}
+
+function renderSettingsPage(){
+  renderSettingsTabs();
+  if (settingsTab !== 'agents') leaveAgentsView();
+  settingsHostEl = null;
+  syncHash();
+  const tab = settingsTab;
+  if (tab === 'memory') renderMemoryView();
+  else if (tab === 'backups') renderBackupsView();
+  else if (tab === 'agents') renderAgentsView();
+  else drawSettingsTab();
+}
+
+/* What refreshView() does while the page is up: the tabs that show the list or
+   its files follow it, and the form is never redrawn under the person typing. */
+function refreshSettingsPage(){
+  if (settingsTab === 'memory') memDraw();
+  else if (settingsTab === 'agents') renderAgentsView();
+  else if (settingsTab === 'backups') renderBackupsView();
+}
+
+/* The Settings tab: the form of the pop-up, drawn in the page. */
+async function drawSettingsTab(){
+  const lists = $('#lists');
+  const panel = body => '<div class="lists pview settingsview" style="--pcols:1">' +
+    settingsPanelHTML('settings', 'Settings', '', '<div class="settingspage" id="settingsPage">' + body + '</div>') + '</div>';
+  lists.innerHTML = panel('<p class="memempty">Reading settings…</p>');
+  let loaded;
+  try { loaded = await loadSettingsDraft(false); }
+  catch (err) {
+    if (state.view === 'settings' && settingsTab === 'settings')
+      lists.innerHTML = panel('<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>');
+    return;
+  }
+  if (state.view !== 'settings' || settingsTab !== 'settings') return;
+  const { draft, set } = loaded;
+  const choices = (set.choices && set.choices.models) || [];
+  const host = $('#settingsPage');
+  const title = lists.querySelector('.tenon-column__title');
+  if (title && draft.signedIn) title.textContent = 'Your profile';
+  host.innerHTML = settingsFormHTML(draft, choices, false) +
+    '<div class="settingspage__actions"><button type="button" class="btn primary" data-settings-save>Save</button></div>';
+  settingsHostEl = host;
+  trackSettingsForm(draft, false);
+  host.querySelector('[data-settings-save]').onclick = () => runSettingsSave(draft, false, false);
+}
+
+$('#settingsBtn').onclick = () => { closeDataMenu(); openSettingsPage('settings'); };
 
 /* ---- Starting an agent straight away ------------------------------------
    Settings > Agent options says, per agent, whether a task handed to it waits
@@ -566,6 +753,8 @@ async function flushAgentStarts(){
   pendingAgentStarts.clear();
   let set;
   try { set = await getJSON('/settings.json'); } catch (err) { return; }
+  /* A board with its agents switched off starts none. */
+  if (((set.boards || {})[state.dataset] || {}).agents === false) return;
   for (const agent of want) {
     if (!set.agents || !set.agents[agent] || set.agents[agent].start !== 'now') continue;
     try {

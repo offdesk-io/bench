@@ -274,7 +274,7 @@ a project folder (in the list's projects folder when set, otherwise
 than deciding.
 
 **The action item is really a fact about a person.** Somebody going on leave, a
-contract ending, who now owns a board. That goes in `## Context` in todo.md, not
+contract ending, who now owns a board. That goes in `context.md`, not
 into a bucket. The test is the same one the other skill uses: would the owner ever tick it.
 
 **A task has a date somebody said in the room.** Trust it, and say in the review

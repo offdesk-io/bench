@@ -148,7 +148,7 @@ in `slipped` and `context_dates` carries the fields below rather than a task's.
 | --- | --- |
 | `checker_flags` | What `check_todo.py` flagged, each carrying `flag` |
 | `slipped` | Dated tasks whose date passed between `Last updated` and today, each carrying `title` and `days` |
-| `context_dates` | Dates in `## Context` that have passed or are close, each carrying `what`, `when` and `days` |
+| `context_dates` | Dates in `context.md` that have passed or are close, each carrying `what`, `when` and `days` |
 
 **These three are not built.** `core/aggregate.py`'s `today_view()` returns
 each as an empty list rather than guessing at one — no desk template asks

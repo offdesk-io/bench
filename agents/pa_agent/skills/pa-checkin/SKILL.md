@@ -27,7 +27,7 @@ On a quiet morning where nothing has changed, moves 2, 3 and 5 are the whole ses
 
 **Ask which board to review before reading or rendering anything.** Read `data/.current`, name it in the question ("Current list is `<name>`, is that the one?") and wait for the owner's answer. Never brief from `data/.current` unconfirmed. If the owner names a different board, use that one for the whole session.
 
-Then read the confirmed dataset's `todo.md`, including the `## Context` section at the bottom. Context holds who is who, who is on leave and whose contract runs out when. It also holds `### How I want messages and prompts written` and `### Recurring meeting prep scripts`, both the owner's own words, and both override anything in the reference files wherever they disagree.
+Then read the confirmed dataset's `todo.md`, and its `context.md` through the memory lookup (`<memory_root>/bench/<dataset>/` when Bench's `memory_root` is set and holds the file, else `data/<dataset>/`). Context is its own file, no longer a section of `todo.md`. It holds who is who, who is on leave and whose contract runs out when. It also holds `### How I want messages and prompts written` and `### Recurring meeting prep scripts`, both the owner's own words, and both override anything in the reference files wherever they disagree.
 
 Then run the checker:
 

@@ -1,17 +1,18 @@
 'use strict';
 
 /* =========================================================================
-   4b2b. The Plan agent's run, and the Spend and clocks sheet.
+   4b2b. The Plan agent's run, and the Spend and Schedules panels.
 
    This file was 13-plans.js, the Plans view. Plans stopped
    being a board of its own when an agent's part of a task became sub-tasks on the
    task's own card: a plan is read from the review sub-task behind it
    (openPlanReader() in 19-drawer.js), and where it stands is the state of those
    sub-tasks. What survives here is the two things that were only ever reached
-   from that view and are not about plans: the sheet with Token Session and the
+   from that view and are not about plans: the tabs with Token Session and the
    jobs that run on a clock, and the button that starts the Plan agent now.
 
-   Both are opened from the Data menu. Nothing here touches todo.md.
+   The tabs are on the Settings page; the button is in the Data menu. Nothing
+   here touches todo.md.
    ========================================================================= */
 
 /* The last read of /planning-agent.json, kept for the run-cost fold in the sheet.
@@ -76,19 +77,21 @@ async function startNightAgentRun(){
 
 /* Token Session and the clock card, both reference rather than decision — the
    chart is a glance at spend, the clock card only changes when the plist does —
-   so they are a press away, from the Data menu.
+   so they are two panels under the Agents tab of the Settings page.
 
    The body is one React tree, painted by paintRefCards(). Each renderer keeps
-   its own slice of what it shows and paints only if the modal is open, so a
-   fetch that lands after it has shut costs nothing. */
-function openRefCards(){
-  /* One React tree in the body, drawn by paintRefCards() in 14-schedule.js. The
-     modal is a sheet the board builds as a string; what goes in it is not. */
-  showModal('Spend, and what runs on a clock',
-    'Both are reference. Nothing on either changes what tonight does.',
-    '<div id="refCardsRoot"></div>',
-    [{ label:'Close', primary:true }],
-    { wide:true, onClose: () => { const host = $('#refCardsRoot'); if (host) BoardUI.unmount(host); } });
+   its own slice of what it shows and paints only if the page is open, so a
+   fetch that lands after it has gone costs nothing. */
+/* True while the panels' React tree is mounted; the board view hides #lists
+   without emptying it, so the host can outlive the tree. */
+let refCardsDrawn = false;
+
+function drawRefCards(){
+  /* One React tree in the Agents tab's #refCardsRoot, drawn by paintRefCards()
+     in 14-schedule.js: Token Session and the clock card, two panels. */
+  if (refCardsDrawn || !$('#refCardsRoot')) return;
+  refCardsDrawn = true;
+  refCardsShow = undefined;
   paintRefCards();
   renderSched();
   renderUsage();
@@ -96,5 +99,10 @@ function openRefCards(){
   readNightAgent();
 }
 
-$('#refCardsBtn').onclick = () => { closeDataMenu(); openRefCards(); };
+function leaveRefCards(){
+  refCardsDrawn = false;
+  const host = $('#refCardsRoot');
+  if (host) BoardUI.unmount(host);
+}
+
 $('#runAgentBtn').onclick = () => { closeDataMenu(); confirmNightAgentRun(); };

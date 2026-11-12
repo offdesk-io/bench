@@ -154,7 +154,7 @@ async function switchDataset(name, hashAfter){
    /auth/ route answers rather than this server. The parts that only work on
    the owner's Mac go: the server refuses them, and body.signed-in hides their
    buttons (board.css) so nothing on the page offers what will fail. The
-   Agents tab goes through viewDefs(), which is why the view is drawn again. */
+   Agents tab goes through settingsTabs(), which is why the view is drawn again. */
 async function loadWhoami(){
   let who;
   try { who = await getJSON('/whoami'); } catch (err) { return; }
@@ -683,10 +683,11 @@ function syncFolderButton(){
   /* In folder mode the Data menu is open for the first time on this page, and
      three of its items only talk to the helper. Off rather than failing. */
   ['#closeFolder'].forEach(id => $(id) && $(id).classList.toggle('hidden', !listFolder));
-  $('#backupsBtn') && $('#backupsBtn').classList.toggle('hidden', !!listFolder);
-  /* Spend and the Plan agent's run are about agents, so they go too where no
-     agent can run (state.agentsReady, 27-agents.js). */
-  ['#refCardsBtn', '#runAgentBtn'].forEach(id => $(id) && $(id).classList.toggle('hidden', !!listFolder || state.agentsReady === false));
+  /* The Plan agent's run is about agents, so it goes too where no agent can run
+     (state.agentsReady, 27-agents.js). The Settings page's tabs follow the same
+     rules in settingsTabs(). */
+  ['#runAgentBtn'].forEach(id => $(id) && $(id).classList.toggle('hidden', !!listFolder || state.agentsReady === false));
+  if (state.view === 'settings' && typeof renderSettingsTabs === 'function') renderSettingsTabs();
 }
 
 /* Last visit's folder. Opened straight away if the browser still grants it;

@@ -147,6 +147,19 @@ def parse_date(s):
     return dt.date.fromisoformat(s)
 
 
+# The calendar in force, set by use_board() for the list being checked. None
+# reads the global profile, as before a list could have one of its own.
+REGIONS = None
+
+
+def use_board(todo_path):
+    """Take the holiday calendar from the profile of the list `todo_path` sits
+    in (data/<list>/todo.md), which is that list's own when settings.json gives
+    it a memory folder of its own or none (owner_profile.list_holiday_regions)."""
+    global REGIONS
+    REGIONS = owner_profile.list_holiday_regions(str(todo_path))
+
+
 def working_day_problem(date):
     """Return a description when a date is not a working day, else None.
 
@@ -154,8 +167,8 @@ def working_day_problem(date):
     board, the companion and this script cannot disagree about a Monday off.
     The profile's `Country:` and `Region:` pick the calendar; with neither,
     UK and Portugal both count, since a deadline is awkward whether the owner is away
-    or the owner's team is."""
-    return todo.non_working_reason(date, owner_profile.holiday_regions())
+    or the owner's team is. The profile is the checked list's (use_board())."""
+    return todo.non_working_reason(date, REGIONS if REGIONS is not None else owner_profile.holiday_regions())
 
 
 def previous_working_day(date):
@@ -1262,6 +1275,7 @@ def main():
 
     today = parse_date(args.today) if args.today else dt.date.today()
     text = Path(args.path).read_text(encoding="utf-8")
+    use_board(args.path)
     lines = text.splitlines()
     tasks = parse_tasks(lines)
     archived = archived_slugs(args.path)

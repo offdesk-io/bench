@@ -298,6 +298,50 @@ with tempfile.TemporaryDirectory() as root:
           [(a[0], a[3], a[5]) for a in got], [("Old place", None, "work"), ("New place", "plans", "work")])
     check("notifier: and empties both", (json.load(open(old_q)), json.load(open(new_q))), ([], []))
 
+    # A board whose banners are off in settings.json: skipped whole.
+    with open(os.path.join(data, "work", "todo.md"), "w") as fh:
+        fh.write(doc("- [ ] **Due now** [due:: 2026-10-27] [time:: 09:30]",
+                     "- [ ] **Overdue** [due:: 2026-10-26]"))
+    os.makedirs(os.path.join(data, "home"))
+    with open(os.path.join(data, "home", "todo.md"), "w") as fh:
+        fh.write(doc("- [ ] **Home task** [due:: 2026-10-27] [time:: 09:30]"))
+    with open(os.path.join(data, "settings.json"), "w") as fh:
+        json.dump({"boards": {"work": {"banners": False}, "home": {"memory_root": None}}}, fh)
+    notify_due._write_queue(old_q, [{"title": "Old place", "body": "o"}])
+    notify_due._write_queue(new_q, [{"title": "New place", "body": "n"}])
+    home_q = os.path.join(data, "home", notify_due.QUEUE_FILE)
+    notify_due._write_queue(home_q, [{"title": "Home line", "body": "h"}])
+    check("quiet board: not counted for the next banner",
+          notify_due.next_banner(data, ["work"], at(TUE, "08:00"), working), at(D(2026, 10, 28), "09:00"))
+    check("quiet board: the others are", notify_due.next_banner(data, ["work", "home"], at(TUE, "08:00"), working),
+          at(TUE, "09:30"))
+    got = []
+    notify_due.run_tick(data, ["work", "home"], at(TUE, "10:00"), working, lambda *a: got.append(a) or (True, ""))
+    check("quiet board: nothing posted for it, its due and catch-up banners included",
+          sorted((a[0], a[5]) for a in got), [("Home line", "home"), ("Home task", "home")])
+    check("quiet board: its queued lines are dropped from both places",
+          (json.load(open(old_q)), json.load(open(new_q))), ([], []))
+    check("quiet board: no state written for it", os.path.exists(os.path.join(data, "work", notify_due.STATE_FILE)), False)
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "companion"))
+    import notify as notify_py  # noqa: E402
+    saved_root = os.environ.get("TODOS_DATA_ROOT")
+    os.environ["TODOS_DATA_ROOT"] = data
+    check("quiet board: notify.py queues nothing for it",
+          (notify_py.queue("T", "b", dataset="work"), notify_py.queue("T", "b", path=old_q), json.load(open(old_q))),
+          (None, None, []))
+    check("quiet board: notify.py says so and exits 0", notify_py.main(["--dataset", "work", "T", "b"]), 0)
+    os.environ["NOTIFY_HOME"] = os.path.join(root, "no-notifier")
+    check("quiet board: a board with banners on still queues",
+          (notify_py.queue("T", "b", dataset="home"), [e["title"] for e in json.load(open(home_q))]),
+          (home_q, ["T"]))
+    os.environ["NOTIFY_HOME"] = home
+    if saved_root is None:
+        os.environ.pop("TODOS_DATA_ROOT")
+    else:
+        os.environ["TODOS_DATA_ROOT"] = saved_root
+    os.remove(os.path.join(data, "settings.json"))
+    os.remove(os.path.join(data, "work", "todo.md"))
+
     # The poster, holding the lock while it posts a line and takes it off:
     # the board waits for it and finds the line gone, so it is posted once.
     notify_due._write_queue(new_q, [{"title": "Once", "body": "only"}])
@@ -321,6 +365,40 @@ with tempfile.TemporaryDirectory() as root:
 os.environ.pop("NOTIFY_HOME", None)
 if saved_home is not None:
     os.environ["NOTIFY_HOME"] = saved_home
+
+# Each board's own calendar: Portugal Day is a working day on a board that
+# inherits the owner's UK calendar, and a holiday on a board kept apart with
+# a Portuguese profile of its own.
+import owner_profile  # noqa: E402
+with tempfile.TemporaryDirectory() as data:
+    portugal_day = D(2026, 6, 10)
+    for name in ("uk", "pt"):
+        os.makedirs(os.path.join(data, name))
+        with open(os.path.join(data, name, "todo.md"), "w") as fh:
+            fh.write(doc("- [ ] **%s task** [due:: 2026-06-10]" % name))
+    with open(os.path.join(data, "profile.md"), "w") as fh:
+        fh.write("# PA profile\n\n## About\n\n- Holidays: UK\n")
+    with open(os.path.join(data, "pt", "profile.md"), "w") as fh:
+        fh.write("# PA profile\n\n## About\n\n- Holidays: PT\n")
+    with open(os.path.join(data, "settings.json"), "w") as fh:
+        json.dump({"boards": {"pt": {"memory_root": None}}}, fh)
+    days = notify_due.calendars(["uk", "pt"], lambda b: owner_profile.board_holiday_regions(os.path.join(data, b), data))
+    check("calendar: each board's day test is its own profile's",
+          (days["uk"](portugal_day), days["pt"](portugal_day)), (True, False))
+    check("calendar: next banner follows each board's calendar",
+          notify_due.next_banner(data, ["pt"], at(portugal_day, "08:00"), lambda d: True,
+                                 working_for=days.get), at(D(2026, 6, 11), "09:00"))
+    check("calendar: without working_for every board uses is_working",
+          notify_due.next_banner(data, ["pt"], at(portugal_day, "08:00"), lambda d: True), at(portugal_day, "09:00"))
+    got = []
+    notify_due.run_tick(data, ["uk", "pt"], at(portugal_day, "10:00"), lambda d: True,
+                        lambda *a: got.append((a[0], a[5])) or (True, ""), working_for=days.get)
+    check("calendar: a board on its own holiday stays quiet", got, [("uk task", "uk")])
+    got = []
+    notify_due.run_tick(data, ["uk", "pt"], at(D(2026, 6, 11), "09:00"), lambda d: True,
+                        lambda *a: got.append((a[0], a[1], a[5])) or (True, ""), working_for=days.get)
+    check("calendar: and goes out the next working day as overdue",
+          [(t, b) for t, _, b in got if b == "pt"], [("pt task", "pt")])
 
 os.environ["BENCH_NOTIFY"] = "0"
 check("BENCH_NOTIFY=0 keeps it off", notify_due.start("/x", list, tuple, "u"), None)

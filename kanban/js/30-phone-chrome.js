@@ -54,9 +54,7 @@ function phoneActions(){
   };
   add('undo', 'Undo', '#undo');
   add('download', 'Download copy', '#download');
-  add('backups', 'Backups', '#backupsBtn');
   add('settings', 'Settings', '#settingsBtn');
-  add('spend', 'Spend and schedules', '#refCardsBtn');
   add('run-agent', 'Run the Plan agent now', '#runAgentBtn');
   add('archive', 'Archive old done tasks', '#archiveBtn');
   if (state.who) {

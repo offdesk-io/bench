@@ -725,26 +725,18 @@ function renderSections(viewId){
   // painted .ref .msg boxes, which is not something a prop could carry — see
   // the note in kanban/ui/index.ts.
   if (viewId === 'overview') {
-    const ctx = contextSection();
     // One section per column, left to right, the same way the board reads.
     BoardUI.mountFlushed(host, BoardUI.OverviewView({
       bigRocks: Object.assign(bigRocksSection(items), { open: overviewOpen('ov:Big rocks') }),
       thisWeek: Object.assign(weekSection(items), { open: overviewOpen('ov:This week') }),
       quickWins: Object.assign(quickSection(items), { open: overviewOpen('ov:Quick wins') }),
-      // Left out until the list has an agent set up — see agentsSetUp().
-      delegate: agentsSetUp() ? Object.assign(delegateSection(items), { open: overviewOpen('ov:Delegate to Claude') }) : null,
-      // The only section with nothing to count — it is standing prose, not a
-      // list of anything — so it is left out entirely rather than drawn empty.
-      context: ctx ? Object.assign(ctx, { open: overviewOpen('ov:Context') }) : null,
-      // Tasks finished and Written reports, the two columns that make up
-      // Reports. Everything they draw from is built in
-      // 12-reports.js, this file's only dealing with them (see
-      // reportsColumnProps there).
-      reports: reportsColumnProps(),
     }));
-    // After the mount, not before it: the counted half needs nothing fetched,
-    // so the row paints now and the written column fills in when /reports.json
-    // lands. It is a no-op on every render but the first of a visit.
+  } else if (viewId === 'reports') {
+    // Tasks finished and Written reports, built in 12-reports.js (see
+    // reportsColumnProps there). The counted half needs nothing fetched, so the
+    // page paints now and the written column fills in when /reports.json lands.
+    // ensureWrittenReports() is a no-op on every render but the first of a visit.
+    BoardUI.mountFlushed(host, BoardUI.ReportsView({ reports: reportsColumnProps() }));
     ensureWrittenReports();
   } else if (viewId === 'matrix') {
     // The chain sits beside the matrix: both answer "what can I actually start",
@@ -805,7 +797,7 @@ function renderViewTabs(defs){
 
 /* Which view the last renderView() drew, so arriving somewhere can be told
    from redrawing where you already are. Only the report list cares: it is
-   re-read on arrival at Overview and not on every filter change there. */
+   re-read on arrival at Reports and not on every filter change there. */
 let lastRenderedView = null;
 
 /* Two views: the board, and the hand-written summaries from the end of the file.
@@ -815,20 +807,22 @@ function renderView(){
   // to the header rather than to any one view.
   updateArchiveChip();
   const defs = viewDefs();
-  // Quick wins and Delegate to Claude are columns of Overview, and so are
-  // the two halves of Reports, so an old #quick, #delegate
-  // or #reports link lands where its content actually lives.
-  if (state.view === 'quick' || state.view === 'delegate' || state.view === 'reports') {
+  // Quick wins is a column of Overview and Delegate to Claude is no longer
+  // drawn, so an old #quick or #delegate link lands on Overview.
+  if (state.view === 'quick' || state.view === 'delegate') {
     state.view = 'overview';
   }
   // Plans was once a view. A plan is read from the review behind it
   // now, on the card, so an old #plans link lands on the board.
   if (state.view === 'plans') state.view = 'board';
-  const isBackups = state.view === 'backups';
+  // Memory and Backups were views of their own: they are tabs of the Settings
+  // page now, and anything that still names them lands there.
+  if (state.view === 'memory' || state.view === 'agents' || state.view === 'backups') { settingsTab = state.view; state.view = 'settings'; }
+  const isSettings = state.view === 'settings';
   // Projects has no tab, but a #projects link still draws its list.
   const isProjects = state.view === 'projects';
-  if (!isBackups && !isProjects && !defs.some(d => d.id === state.view)) state.view = 'board';
-  const def = isBackups ? { id:'backups', label:'Backups' }
+  if (!isSettings && !isProjects && !defs.some(d => d.id === state.view)) state.view = 'board';
+  const def = isSettings ? { id:'settings', label:'Settings' }
     : isProjects ? { id:'projects', label:'Projects' }
     : defs.find(d => d.id === state.view);
   const isBoard = def.id === 'board';
@@ -844,13 +838,14 @@ function renderView(){
   // state.view is finalised above this point, so whichever branch runs next
   // syncs the URL to the right value.
 
-  // Arriving at Overview, rather than redrawing it: ask for the report list
+  // Arriving at Reports, rather than redrawing it: ask for the report list
   // again, since a report Claude wrote while another tab was up would
   // otherwise never show. forgetWrittenReports() only clears the cache — the
   // fetch itself is ensureWrittenReports(), from renderSections().
-  if (def.id === 'overview' && lastRenderedView !== 'overview') { forgetWrittenReports(); refreshOrphanPlans(); }
+  if (def.id === 'reports' && lastRenderedView !== 'reports') forgetWrittenReports();
+  if (lastRenderedView === 'settings' && def.id !== 'settings') leaveSettingsPage();
   lastRenderedView = def.id;
-  if (def.id !== 'agents') leaveAgentsView();
+  if (def.id !== 'settings') leaveAgentsView();
 
   renderViewTabs(defs);
 
@@ -858,7 +853,6 @@ function renderView(){
   $('#lists').classList.toggle('hidden', isBoard);
   // renderColTabs() puts it back; nothing else on any other view wants it.
   if (!isBoard) $('#colTabs').classList.add('hidden');
-  $('#backupsBtn').classList.toggle('on', isBackups);
 
   if (isBoard) { renderBoard(); return; }
   // The one thing bar is a board idea specifically — pinning a card above
@@ -868,9 +862,7 @@ function renderView(){
   // on every tab rather than popping in and out as the owner switches between them.
   $('#headline').classList.add('hidden');
   if (def.id === 'projects') { renderFilterBar(); renderProjectsView(); return; }
-  if (def.id === 'agents') { renderFilterBar(); renderAgentsView(); return; }
-  if (def.id === 'memory') { renderFilterBar(); renderMemoryView(); return; }
-  if (def.id === 'backups') { renderFilterBar(); renderBackupsView(); return; }
+  if (def.id === 'settings') { renderSettingsPage(); return; }
   renderSections(def.id);
 }
 
@@ -880,9 +872,7 @@ function renderView(){
 function refreshView(){
   if (state.view === 'board') renderBoard();
   else if (state.view === 'projects') renderProjectsView();
-  else if (state.view === 'agents') renderAgentsView();
-  else if (state.view === 'memory') memDraw();
-  else if (state.view === 'backups') renderBackupsView();
+  else if (state.view === 'settings') refreshSettingsPage();
   else renderSections(state.view);
   updateArchiveChip();
 }
@@ -949,18 +939,6 @@ function renderFilterBar(){
   // Follows the strip it belongs to, and goes with it in a preview or the demo,
   // where the file behind it is not one that can be written to.
   $('#editBuckets').classList.toggle('hidden', state.locked);
-  // The Agents tab has no buckets to filter — there is nothing under it for
-  // the strip, its theme pills or the edit-buckets pencil to narrow. Hidden
-  // here, after renderTabs() has drawn them (still needed for syncHash() and
-  // to keep the strip's own content current), rather than skipped above, so
-  // whichever view comes next finds them already right and just un-hides
-  // them the same way it always has.
-  const onAgents = state.view === 'agents';
-  $('#bucketFilters').classList.toggle('hidden', onAgents);
-  if (onAgents) {
-    $('#themeBar').classList.add('hidden');
-    $('#editBuckets').classList.add('hidden');
-  }
   renderPhoneChrome();
 }
 

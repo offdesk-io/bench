@@ -133,7 +133,7 @@ Every `ai:full` task or sub-step carries a prompt, on the task, indented one lev
 
 The prompt used to live only in Delegate to Claude, which meant it was the one piece of content with no home in the buckets and could not be rebuilt, only maintained. Writing it on the task fixes that.
 
-The owner's own rules under `### How I want messages and prompts written` in the `## Context` section of todo.md override the rules below. Rules for the prompt itself are otherwise unchanged: one to three sentences, second person imperative, name the skill where one applies, say what the output should be, and leave `[path]`, `[name]`, `[fill in]` rather than guessing. Name the person rather than leaving `[name]` where the task is about a specific person, otherwise two review packs collapse into one prompt the owner has to edit every time.
+The owner's own rules under `### How I want messages and prompts written` in `context.md` override the rules below. Rules for the prompt itself are otherwise unchanged: one to three sentences, second person imperative, name the skill where one applies, say what the output should be, and leave `[path]`, `[name]`, `[fill in]` rather than guessing. Name the person rather than leaving `[name]` where the task is about a specific person, otherwise two review packs collapse into one prompt the owner has to edit every time.
 
 ## Suggested messages
 
@@ -152,7 +152,7 @@ Sensitive messages use `Suggested message (draft):` instead, with a following no
 
 One level deeper matters, because parents carry notes and sub-steps at the same indent, so a message at the same level as its step is ambiguous about which step it serves.
 
-Rules for the message itself. **The owner's own rules under `### How I want messages and prompts written` in the `## Context` section of todo.md override everything below, and everything in the Prompts section above.** The owner can see and edit that section on the board, the owner cannot see this file, so where the two disagree the owner's copy is the one that is current:
+Rules for the message itself. **The owner's own rules under `### How I want messages and prompts written` in `context.md` override everything below, and everything in the Prompts section above.** The owner can see and edit that section on the board, the owner cannot see this file, so where the two disagree the owner's copy is the one that is current:
 
 - **Open with the wave.** To a named person, `Hey [name] 👋` then straight into the message. To a group or a channel, `Hey 👋`. No greeting line after it, no "I hope this finds you well".
 - **Write in the owner's voice, not yours.** Plain, direct, warm enough to not read as curt. No em dashes, the owner does not use them, use commas. No bullet points inside a message. No corporate throat-clearing like "I hope this finds you well".
@@ -240,7 +240,7 @@ The meeting date in full on its own line, a blank line, the word `Agenda` on its
 
 **The block is rewritten each cycle, never appended to.** It holds the agenda for the date on the card and nothing else. Whatever came out of the last meeting is a task in the buckets, which is where actions live.
 
-The brief for what goes in it is the owner's, not this file's. `## Context` in todo.md carries `### Recurring meeting prep scripts`, one line per meeting in the owner's own words: when it happens, what it is usually about, and what to check before it. Read it every session and follow it; where it disagrees with anything below, the owner's copy wins.
+The brief for what goes in it is the owner's, not this file's. `context.md` carries `### Recurring meeting prep scripts`, one line per meeting in the owner's own words: when it happens, what it is usually about, and what to check before it. Read it every session and follow it; where it disagrees with anything below, the owner's copy wins.
 
 Rules for the writing:
 
@@ -411,7 +411,7 @@ ordinary done card wearing one more chip.
 
 ## Named people
 
-Who is who, who is away, whose contract runs out when, and the spellings that matter are all in the `## Context` section at the bottom of todo.md. Read it every session alongside the buckets.
+Who is who, who is away, whose contract runs out when, and the spellings that matter are all in `context.md`, beside `people.md` and `about.md` and read through the memory lookup (the memory folder when `memory_root` is set, else `data/<dataset>/`). It is not a section of todo.md. Read it every session alongside the buckets.
 
 It lives in todo.md so the owner can see and correct it and the board can use it. It is standing information about the owner's working life, not a rule about how the file is formatted, so it belongs with the owner's data rather than in this skill.
 

@@ -27,7 +27,9 @@ plan, which is what `do` has the driving session do. Where the run stands is
 kept in `agent-runs.json` (core/agent_runs.py) for the status line on the card.
 
 Off until the owner sets its hours on the agents dashboard: the runner treats a list it
-has no settings for as off.
+has no settings for as off. A list whose `agents` is false in settings.json's
+`boards` (core/settings.py) is skipped whole, with the runner's one log line
+saying why.
 """
 
 import datetime as dt
@@ -73,10 +75,13 @@ TASK_TIMEOUT = 20 * 60
 BY = todo.IMPLEMENT_AGENT
 
 # Where improve-agent lives, for code plans only. Its git module and registry are
-# read, never written. the profile names it (Improve agent folder; <memory_root>/me/profile.md if Bench's memory_root is set and it exists, else data/profile.md) and
-# $IMPLEMENT_IMPROVE_DIR overrides that, for the tests. Unset, code plans are
-# turned away.
-IMPROVE_DIR = os.environ.get("IMPLEMENT_IMPROVE_DIR") or owner_profile.improve_agent_folder() or ""
+# read, never written. The profile of the list the run is for names it
+# (Improve agent folder; see core/owner_profile.py for which profile that is)
+# and $IMPLEMENT_IMPROVE_DIR overrides that, for the tests. Unset, code plans
+# are turned away.
+def improve_dir():
+    return (os.environ.get("IMPLEMENT_IMPROVE_DIR")
+            or owner_profile.improve_agent_folder(paths.DATA_ROOT, board=paths.dataset()) or "")
 
 # Figma work may run alone only with the desktop app open
 # on the right file and the Figma Console bridge paired. The bridge is a server
@@ -115,6 +120,24 @@ _runs = {}
 
 def _use(target_id):
     os.environ["PLANNING_DATASET"] = target_id
+
+
+OFF = "agents are off for this board in Settings"
+
+
+def _off(target):
+    return not settings.agents_on(target["id"], paths.DATA_ROOT)
+
+
+def before(target, todo_, dry):
+    """Only ever a refusal: a list with its agents off runs nothing."""
+    if _off(target):
+        return {"note": OFF} if dry else {"skip": OFF}
+    return None
+
+
+def problems(target):
+    return ["Agents are off for this board in Bench's Settings, so nothing runs on it."] if _off(target) else []
 
 
 # --------------------------------------------------------------------------
@@ -241,10 +264,11 @@ def project_folder(task):
 
 def _improve():
     """improve-agent's git module and suite runner, or None where it is not there."""
-    if not IMPROVE_DIR or not os.path.isdir(os.path.join(IMPROVE_DIR, "improve")):
+    where = improve_dir()
+    if not where or not os.path.isdir(os.path.join(where, "improve")):
         return None
-    if IMPROVE_DIR not in sys.path:
-        sys.path.append(IMPROVE_DIR)
+    if where not in sys.path:
+        sys.path.append(where)
     from improve import build, gitwork  # noqa: E402
     return build, gitwork
 
@@ -264,7 +288,7 @@ def code_repo(task):
     if not os.path.exists(os.path.join(real, ".git")):
         return None, "%s is not a git repo" % real
     try:
-        with open(os.path.join(IMPROVE_DIR, "registry.json"), encoding="utf-8") as fh:
+        with open(os.path.join(improve_dir(), "registry.json"), encoding="utf-8") as fh:
             repos = json.load(fh).get("repos") or []
     except (OSError, ValueError):
         repos = []
@@ -449,7 +473,7 @@ def options(item, target):
              "Write(/%s/**)" % folder, "Edit(/%s/**)" % folder]
     if item["kind"] == "figma" and figma_ready(item)[0]:
         tools += FIGMA_WRITE_TOOLS
-    return dict(base, cwd=ROOT, agent="implement-agent", tools=tools, dirs=[folder] + plan.EXTRA_DIRS)
+    return dict(base, cwd=ROOT, agent="implement-agent", tools=tools, dirs=[folder] + plan.extra_dirs(target["id"]))
 
 
 def _parse(text):

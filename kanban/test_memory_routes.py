@@ -19,6 +19,14 @@ What it holds to:
     is not there; the extra columns come back on /people.json;
   * /memory.json carries about, people, every bucket with its brief, and the
     profile, in one reply;
+  * with a memory folder in settings.json, about and people are read from
+    the data/ copy until the memory folder has its own, and every save lands
+    in the memory folder and leaves the data/ copy as it was;
+  * a board with a memory folder of its own, or none, reads and writes its
+    files and its profile there and never the owner's;
+  * the settings route takes `boards`, one key at a time, refuses unknown
+    lists, keys and folders, and marks boards.md; signed in it names only the
+    boards the person can see, with no path, and cannot be saved;
   * a write that is not from the board is refused, and a person who cannot see
     a board gets the refusal the other per-board routes give.
 """
@@ -99,7 +107,9 @@ def in_process(root):
     server.current_dataset = lambda: "memory-test"
     server.planning_agent_plan.paths.DATA_ROOT = root
     os.environ["PLANNING_DATASET"] = "memory-test"
-    server.settings.people_path = lambda dataset, data_root=None: os.path.join(tmp, "people.md")
+    # The list's memory files are looked up under the data root, which is
+    # `root` here, so the real data/ and its settings.json are never read.
+    server.DATA_ROOT = root
     os.makedirs(os.path.join(tmp, "buckets", "people"))
     with open(os.path.join(tmp, "buckets", "people", "people.md"), "w", encoding="utf-8") as fh:
         fh.write("# People brief\n")
@@ -202,6 +212,23 @@ def in_process(root):
         with open(os.path.join(tmp, "about.md"), "w", encoding="utf-8") as fh:
             fh.write("A studio of four.\n\nWe build things.")
 
+        # --- context -----------------------------------------------------------
+        code, got = request(base, "GET", "/context.json")
+        ok("a board with no context.md reads as empty text", code == 200 and got["text"] == "" and got["exists"] is False,
+           "%s %s" % (code, got))
+        code, got = request(base, "PUT", "/context", {"text": "Ana is away.\n"}, FROM_BOARD)
+        ok("the context can be saved", code == 200 and got.get("ok") is True, "%s %s" % (code, got))
+        code, got = request(base, "GET", "/context.json")
+        ok("and reads back", got["text"] == "Ana is away.\n" and got["exists"] is True, str(got))
+        ok("in context.md beside the list", os.path.isfile(os.path.join(tmp, "context.md")))
+        code, _ = request(base, "PUT", "/context", {"text": "x"}, {"Content-Type": "application/json"})
+        ok("a context write not from the board is refused", code == 403, "got %s" % code)
+        code, _ = request(base, "PUT", "/context", {"nope": 1}, FROM_BOARD)
+        ok("a context write with no text is refused", code == 400, "got %s" % code)
+        code, got = request(base, "GET", "/memory.json")
+        ok("memory.json carries it", got["context"] == {"text": "Ana is away.\n", "exists": True}, str(got.get("context")))
+        os.remove(os.path.join(tmp, "context.md"))
+
         # --- memory.json --------------------------------------------------------
         code, got = request(base, "GET", "/memory.json")
         ok("memory.json answers", code == 200, "%s %s" % (code, got))
@@ -218,6 +245,119 @@ def in_process(root):
         ok("todo.md's Context is not in it", "Notes." not in json.dumps(got))
         with open(os.path.join(tmp, "todo.md"), encoding="utf-8") as fh:
             ok("and todo.md is untouched", fh.read() == LIST)
+
+        # --- with a memory folder ---------------------------------------------
+        memory = os.path.join(root, "MEMORY")
+        os.makedirs(memory)
+        with open(os.path.join(root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"memory_root": memory}, fh)
+        there = os.path.join(memory, "bench", "memory-test")
+        with open(os.path.join(tmp, "people.md"), "w", encoding="utf-8") as fh:
+            fh.write(PEOPLE_MD)
+        code, got = request(base, "GET", "/about.json")
+        ok("with a memory folder and no copy in it, about reads the list's own",
+           code == 200 and got["text"] == "A studio of four.\n\nWe build things.", "%s %s" % (code, got))
+        code, got = request(base, "GET", "/people.json")
+        ok("and so do people", [p["name"] for p in got["people"]] == ["Ana", "Anu"], str(got))
+        code, got = request(base, "PUT", "/about", {"text": "Moved."}, FROM_BOARD)
+        ok("an about save with a memory folder answers", code == 200, "%s %s" % (code, got))
+        with open(os.path.join(there, "about.md"), encoding="utf-8") as fh:
+            ok("and lands in the memory folder", fh.read() == "Moved.")
+        with open(os.path.join(tmp, "about.md"), encoding="utf-8") as fh:
+            ok("leaving the list's own copy as it was", fh.read() == "A studio of four.\n\nWe build things.")
+        code, got = request(base, "GET", "/about.json")
+        ok("the memory folder's copy is read from then on", got["text"] == "Moved.", str(got))
+        code, got = request(base, "PUT", "/people", {"people": rows}, FROM_BOARD)
+        ok("a people save with a memory folder answers", code == 200 and [p["name"] for p in got["people"]] == ["Ana", "Anu", "Bo"],
+           "%s %s" % (code, got))
+        with open(os.path.join(there, "people.md"), encoding="utf-8") as fh:
+            moved = fh.read()
+        ok("lands in the memory folder, keeping the rest of the file it was read from",
+           "| Bo | Engineer | Dev | Anu |" in moved and "## Often confused" in moved, moved)
+        with open(os.path.join(tmp, "people.md"), encoding="utf-8") as fh:
+            ok("and the list's own people.md is not written", fh.read() == PEOPLE_MD)
+        code, got = request(base, "GET", "/memory.json")
+        ok("memory.json reads both from the memory folder",
+           got["about"]["text"] == "Moved." and [p["name"] for p in got["people"]] == ["Ana", "Anu", "Bo"], str(got))
+        code, got = request(base, "PUT", "/context", {"text": "Moved context."}, FROM_BOARD)
+        ok("a context save with a memory folder answers", code == 200, "%s %s" % (code, got))
+        with open(os.path.join(there, "context.md"), encoding="utf-8") as fh:
+            ok("and lands in the memory folder", fh.read() == "Moved context.")
+        ok("leaving the list's own folder without one", not os.path.exists(os.path.join(tmp, "context.md")))
+        code, got = request(base, "GET", "/context.json")
+        ok("the memory folder's copy is read from then on", got["text"] == "Moved context.", str(got))
+
+        # --- a board with a memory folder of its own, then none ------------------
+        os.makedirs(os.path.join(memory, "me"))
+        with open(os.path.join(memory, "me", "profile.md"), "w", encoding="utf-8") as fh:
+            fh.write("# PA profile\n\n## About\n\n- Name: Owner\n")
+        code, got = request(base, "GET", "/memory.json")
+        ok("an inheriting board shows the owner's profile", got["profile"]["name"] == "Owner", str(got["profile"]))
+        own = os.path.join(root, "OWN")
+        os.makedirs(own)
+        with open(os.path.join(root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"memory_root": memory, "boards": {"memory-test": {"memory_root": own}}}, fh)
+        code, got = request(base, "GET", "/memory.json")
+        ok("a board with its own folder reads nothing from the owner's",
+           got["about"]["text"] == "A studio of four.\n\nWe build things." and got["profile"]["name"] == ""
+           and got["profile"]["needs_setup"] is True, str(got))
+        code, got = request(base, "PUT", "/about", {"text": "Own."}, FROM_BOARD)
+        with open(os.path.join(own, "bench", "memory-test", "about.md"), encoding="utf-8") as fh:
+            ok("and saves into its own folder", code == 200 and fh.read() == "Own.")
+        with open(os.path.join(there, "about.md"), encoding="utf-8") as fh:
+            ok("leaving the owner's folder as it was", fh.read() == "Moved.")
+        with open(os.path.join(root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"memory_root": memory, "boards": {"memory-test": {"memory_root": None}}}, fh)
+        code, got = request(base, "GET", "/memory.json")
+        ok("a board with none reads data/ only",
+           got["about"]["text"] == "A studio of four.\n\nWe build things." and got["profile"]["name"] == "", str(got))
+        code, got = request(base, "PUT", "/profile-basics.json", {"name": "Demo"}, FROM_BOARD)
+        ok("its profile saves beside the list", code == 200 and got["name"] == "Demo"
+           and os.path.isfile(os.path.join(tmp, "profile.md")), "%s %s" % (code, got))
+        with open(os.path.join(memory, "me", "profile.md"), encoding="utf-8") as fh:
+            ok("and the owner's profile is not written", "Demo" not in fh.read())
+        code, got = request(base, "PUT", "/profile-basics.json", {"country": "PT"}, FROM_BOARD)
+        import owner_profile
+        ok("its banners go by its own profile's calendar",
+           code == 200 and server.board_holiday_regions("memory-test") == ("PT:",)
+           and owner_profile.holiday_regions(root) != ("PT:",), "%s %s" % (code, got))
+
+        # --- the settings route takes boards -----------------------------------
+        os.environ["AGENTS_FENCES"] = os.path.join(root, "fences.json")
+        with open(os.path.join(root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"memory_root": memory}, fh)
+        code, got = request(base, "GET", "/settings.json")
+        ok("with no boards setting, settings carry none", code == 200 and "boards" not in got, "%s %s" % (code, got))
+        body = {"boards": {"memory-test": {"memory_root": own, "banners": False, "agents": False}}}
+        code, got = request(base, "PUT", "/settings.json", body, FROM_BOARD)
+        ok("boards can be saved", code == 200 and got.get("boards") == body["boards"], "%s %s" % (code, got))
+        code, got = request(base, "GET", "/settings.json")
+        ok("and read back", got.get("boards") == body["boards"], str(got))
+        with open(os.path.join(memory, "boards.md"), encoding="utf-8") as fh:
+            ok("boards.md marks the board's agents off", "- memory-test (current, agents off)" in fh.read())
+        code, got = request(base, "PUT", "/settings.json", {"boards": {"memory-test": {"memory_root": None}}}, FROM_BOARD)
+        ok("one key changes and the rest stay", code == 200 and got["boards"]["memory-test"] ==
+           {"memory_root": None, "banners": False, "agents": False}, "%s %s" % (code, got))
+        with open(os.path.join(root, "settings.json"), encoding="utf-8") as fh:
+            kept = fh.read()
+        for bad, why in (({"boards": {"nobody": {}}}, "no list called nobody"),
+                         ({"boards": {"memory-test": {"colour": "red"}}}, "unknown setting colour"),
+                         ({"boards": {"memory-test": {"memory_root": "relative"}}}, "full path"),
+                         ({"boards": {"memory-test": {"memory_root": os.path.join(root, "gone")}}}, "no folder"),
+                         ({"boards": {"memory-test": {"banners": "off"}}}, "true or false"),
+                         ({"boards": ["memory-test"]}, "must be an object")):
+            code, got = request(base, "PUT", "/settings.json", bad, FROM_BOARD)
+            ok("a bad boards value is refused: %s" % why, code == 400 and why in got.get("error", ""),
+               "%s %s" % (code, got))
+        with open(os.path.join(root, "settings.json"), encoding="utf-8") as fh:
+            ok("and nothing refused is written", fh.read() == kept)
+        code, _ = request(base, "PUT", "/settings.json", body, {"Content-Type": "application/json"})
+        ok("a settings write not from the board is refused", code == 403, "got %s" % code)
+        code, got = request(base, "PUT", "/settings.json", {"boards": {"memory-test": None}}, FROM_BOARD)
+        ok("null clears the board's settings", code == 200 and "boards" not in got, "%s %s" % (code, got))
+        with open(os.path.join(memory, "boards.md"), encoding="utf-8") as fh:
+            ok("and boards.md drops the mark", "- memory-test (current): " in fh.read())
+        os.remove(os.path.join(root, "settings.json"))
     finally:
         httpd.shutdown()
         httpd.server_close()
@@ -232,9 +372,22 @@ def signed_in(root):
     with open(os.path.join(data, "tiago-own", "about.md"), "w", encoding="utf-8") as fh:
         fh.write("SECRET-ABOUT")
     outsider = {"X-Offdesk-Email": "nobody@example.com", "X-Offdesk-Name": "Nobody"}
+    own = os.path.join(root, "SERVER-ONLY-FOLDER")
+    os.makedirs(own)
+    with open(os.path.join(data, "settings.json"), "w", encoding="utf-8") as fh:
+        json.dump({"boards": {"offdesk": {"memory_root": own, "banners": False},
+                              "tiago-own": {"agents": False}}}, fh)
     srv = Server(data, "header")
     ok("the signed-in server starts", srv.wait())
     try:
+        code, body, _ = srv.ask("GET", "/settings.json", dict(JEROME))
+        got = json.loads(body) if code == 200 else {}
+        ok("signed in, boards name only those the person can see, and no path",
+           got.get("boards") == {"offdesk": {"memory_root": "SERVER-ONLY-FOLDER", "banners": False}}
+           and root not in body, "%d %s" % (code, body[:300]))
+        code, _, _ = srv.ask("PUT", "/settings.json", dict(TIAGO, **BOARD), {"boards": {"offdesk": {"agents": False}}})
+        ok("signed in, boards cannot be saved", code == 403, "got %d" % code)
+        os.remove(os.path.join(data, "settings.json"))
         code, body, _ = srv.ask("GET", "/memory.json", dict(TIAGO))
         ok("a person who can see a board reads its memory", code == 200, "%d %s" % (code, body[:200]))
         code, body, _ = srv.ask("PUT", "/about", dict(JEROME, **BOARD), {"text": "mine"})

@@ -25,6 +25,10 @@ the test runner's). The append itself is the notifier's notify.queue(), and
 without the notifier it is the copy below, which writes the same line under
 the same lock.
 
+A board whose banners are off in settings.json's `boards` (core/settings.py)
+gets nothing queued: queue() returns None and the command says so and exits 0,
+since the line was not wanted rather than lost.
+
 `task` and `view` say where the banner goes when it is pressed: a card's id or
 `#slug`, and one of the board's tabs. The rules for posting (08:30 to 20:00 but
 for the `content` board, three a minute, one post per line) are the drainers',
@@ -48,6 +52,7 @@ except ImportError:          # no flock off a Unix; appends then rely on os.repl
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "core"))
 import notify_due  # noqa: E402
+import settings  # noqa: E402
 
 MAX_QUEUED = 20
 _home = {}
@@ -57,11 +62,22 @@ def data_root():
     return os.environ.get("TODOS_DATA_ROOT") or os.path.join(ROOT, "data")
 
 
-def queue_path(dataset=None):
+def _board(dataset=None):
     if not dataset:
         import dataset as _dataset
         dataset = _dataset.current(data_root())
-    return notify_due.queue_file(data_root(), dataset)
+    return dataset
+
+
+def queue_path(dataset=None):
+    return notify_due.queue_file(data_root(), _board(dataset))
+
+
+def quiet(dataset=None, path=None):
+    """True when the board's banners are off. With only a `path`, the board
+    is the folder the queue file sits in."""
+    board = os.path.basename(os.path.dirname(path)) if path and not dataset else _board(dataset)
+    return not settings.banners_on(board, data_root())
 
 
 def notifier():
@@ -136,8 +152,11 @@ def queue(title, body, dataset=None, task=None, view=None, path=None):
 
     `path` names the queue file outright, for a caller that already resolves
     it (paths.notify_queue_path() in the agents, under $TODOS_DATA_ROOT).
+    Nothing is written for a board whose banners are off (quiet()).
     Never raises."""
     try:
+        if quiet(dataset, path):
+            return None
         path = path or queue_path(dataset)
     except Exception:
         return None
@@ -156,6 +175,13 @@ def main(argv):
         print('usage: notify.py [--dataset NAME] [--task KEY] [--view NAME] '
               '"Title" "Body"', file=sys.stderr)
         return 2
+    try:
+        off = quiet(opts["--dataset"])
+    except Exception:
+        off = False
+    if off:
+        print("not queued: banners are off for this board in Settings")
+        return 0
     path = queue(argv[0], argv[1], opts["--dataset"],
                  task=opts["--task"], view=opts["--view"])
     if not path:

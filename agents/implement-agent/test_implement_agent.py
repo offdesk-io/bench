@@ -349,6 +349,46 @@ def test_off():
           all(v[1] == "run.py" for k, v in spec.items() if isinstance(v, list)), True)
 
 
+def test_agents_off_for_the_board():
+    check("agents on: no refusal and no problem", (hooks.before(TARGET, [], False), hooks.problems(TARGET)), (None, []))
+    conf = os.path.join(DATA, "settings.json")
+    write(conf, json.dumps({"boards": {"t": {"agents": False}, "u": {"banners": False}}}))
+    try:
+        check("agents off: the run is refused with why", hooks.before(TARGET, [{}], False), {"skip": hooks.OFF})
+        check("agents off: a dry run says why", hooks.before(TARGET, [{}], True), {"note": hooks.OFF})
+        check("agents off: the card says so", len(hooks.problems(TARGET)), 1)
+        check("banners off alone leaves the agents on", hooks.before({"id": "u"}, [{}], False), None)
+    finally:
+        os.remove(conf)
+
+
+def test_improve_folder_is_the_boards():
+    """Where improve-agent lives comes from the list's own profile, so a list
+    kept apart from the owner's memory never reaches the owner's checkout."""
+    saved = os.environ.pop("IMPLEMENT_IMPROVE_DIR")
+    profile, conf = os.path.join(DATA, "profile.md"), os.path.join(DATA, "settings.json")
+    write(os.path.join(DATA, "demo", "todo.md"), "")
+    write(profile, "# PA profile\n\n## Setup\n\n- Improve agent folder: /owner/improve-agent\n")
+    try:
+        hooks._use("t")
+        check("an inheriting list reads the owner's improve-agent folder", hooks.improve_dir(), "/owner/improve-agent")
+        write(conf, json.dumps({"boards": {"demo": {"memory_root": None}}}))
+        hooks._use("demo")
+        check("a list with no memory folder does not", hooks.improve_dir(), "")
+        check("so its code plans are turned away", hooks._improve(), None)
+        write(os.path.join(DATA, "demo", "profile.md"), "# PA profile\n\n## Setup\n\n- Improve agent folder: /demo/ia\n")
+        check("it reads its own profile's", hooks.improve_dir(), "/demo/ia")
+        os.environ["IMPLEMENT_IMPROVE_DIR"] = saved
+        check("the test override still wins", hooks.improve_dir(), saved)
+    finally:
+        os.environ["IMPLEMENT_IMPROVE_DIR"] = saved
+        hooks._use("t")
+        for f in (profile, conf):
+            if os.path.exists(f):
+                os.remove(f)
+        shutil.rmtree(os.path.join(DATA, "demo"), ignore_errors=True)
+
+
 def main():
     try:
         test_queue()
@@ -357,6 +397,8 @@ def main():
         test_land()
         test_code()
         test_off()
+        test_agents_off_for_the_board()
+        test_improve_folder_is_the_boards()
     finally:
         shutil.rmtree(TMP, ignore_errors=True)
     if FAILED:

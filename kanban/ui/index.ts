@@ -119,9 +119,9 @@ export type {
   CompletedByCategoryData, CategoryRowData, EffortCell,
   RecentAccomplishmentsData, DoneRowData, WeeklyTrendProps, TrendSeriesData, TrendWeekData,
 } from './ReportsBlocks'
-export { OverviewView, MatrixView, TimelineView } from './SectionsView'
+export { OverviewView, ReportsView, MatrixView, TimelineView } from './SectionsView'
 export type {
-  OverviewViewProps, MatrixViewProps, TimelineViewProps, SectionBody,
+  OverviewViewProps, ReportsViewProps, MatrixViewProps, TimelineViewProps, SectionBody,
 } from './SectionsView'
 export type { BackupsViewProps, BackupFile, ArchiveFile } from './BackupsView'
 export type { ProjectsViewProps, ProjectSummary, ProjectSortOption } from './ProjectsView'

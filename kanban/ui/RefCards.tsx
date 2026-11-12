@@ -74,6 +74,8 @@ export interface RefCardsProps {
   onDays: (days: number) => void
   schedule: ScheduleState
   runResults: RunResults | null
+  /** Which card to draw: the Spend tab and the Schedules tab each show one. Both when absent. */
+  show?: 'spend' | 'schedules'
 }
 
 /* Tokens are shown in millions throughout. The raw figures run to hundreds of
@@ -355,30 +357,34 @@ function RunResultsFold({ results }: { results: RunResults | null }) {
   )
 }
 
-export function RefCards({ usage, days, ranges, onDays, schedule, runResults }: RefCardsProps) {
+export function RefCards({ usage, days, ranges, onDays, schedule, runResults, show }: RefCardsProps) {
   return (
     <div className="pvcol">
-      <Column
-        titleAs="h3"
-        title="Token Session"
-        className="schedview usage prose"
-        desc="What has been spent, window by window."
-        children={
-          <>
-            <div id="usageOut">
-              <UsageBody usage={usage} days={days} ranges={ranges} onDays={onDays} />
-            </div>
-            <RunResultsFold results={runResults} />
-          </>
-        }
-      />
-      <Column
-        titleAs="h3"
-        title="What runs on a clock"
-        className="reportsview clockview prose"
-        desc="Set in the agents dashboard, not here."
-        children={<div id="schedOut"><ScheduleBody schedule={schedule} /></div>}
-      />
+      {show !== 'schedules' ? (
+        <Column
+          titleAs="h3"
+          title="Token Session"
+          className="schedview usage prose"
+          desc="What has been spent, window by window."
+          children={
+            <>
+              <div id="usageOut">
+                <UsageBody usage={usage} days={days} ranges={ranges} onDays={onDays} />
+              </div>
+              <RunResultsFold results={runResults} />
+            </>
+          }
+        />
+      ) : null}
+      {show !== 'spend' ? (
+        <Column
+          titleAs="h3"
+          title="What runs on a clock"
+          className="reportsview clockview prose"
+          desc="Set in the agents dashboard, not here."
+          children={<div id="schedOut"><ScheduleBody schedule={schedule} /></div>}
+        />
+      ) : null}
     </div>
   )
 }

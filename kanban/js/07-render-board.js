@@ -108,7 +108,7 @@ function syncHash(push){
   const openSub = !openLoc && state.openSubParent && state.openTask && state.doc && locateSub(state.openTask);
   const key = openLoc ? taskKey(openLoc.task) : (openSub ? state.openTask : '');
   const hash = '#' + state.view +
-    (withBucket ? '/' + bucketNamesToSlug(state.bucketFilter) : '') +
+    (state.view === 'settings' ? '/' + settingsTab : withBucket ? '/' + bucketNamesToSlug(state.bucketFilter) : '') +
     (key ? '!task=' + encodeTaskKey(key) : '');
   if (location.hash === hash) return;
   if (push && !restoringHash) history.pushState(null, '', hash);

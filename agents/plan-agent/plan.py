@@ -693,7 +693,9 @@ def build_prompt(task, prior=None):
 
 
 # What the agents are allowed to look at outside this repo: the owner's
-# workspace folder, named by `Workspace folder:` in the profile (<memory_root>/me/profile.md if Bench's memory_root is set and it exists, else data/profile.md). The agents
+# workspace folder, named by `Workspace folder:` in the profile of the list the
+# run is for (core/owner_profile.py: the list's memory folder's, its own, or the
+# owner's while it inherits, so a list kept apart never gets the owner's). The agents
 # may be told to read things up there, such as a map of the folder or an index
 # of skills, and without this they cannot, because `claude -p` can only reach
 # its own working directory. Without the setting the list is empty and the
@@ -702,8 +704,10 @@ def build_prompt(task, prior=None):
 # The parent folder rather than a list of children: an agent that can read the
 # map and not the territory is worse off than one with neither. Reading is all
 # it can do with them, see the tool list below.
-_workspace = owner_profile.workspace_folder()
-EXTRA_DIRS = [_workspace] if _workspace else []
+def extra_dirs(dataset=None):
+    """[the workspace folder] for `dataset` (the list in force by default), or []."""
+    folder = owner_profile.workspace_folder(paths.DATA_ROOT, board=dataset or paths.dataset())
+    return [folder] if folder else []
 
 
 def project_dirs(task):
@@ -712,7 +716,7 @@ def project_dirs(task):
     A `Project:` note can carry an absolute path to a folder the owner approved on the
     board (data/<dataset>/project-folders.json), and a bare name resolves in
     the list's projects folder when settings name one. The planner is sandboxed to the
-    repo plus EXTRA_DIRS, so a folder elsewhere is added for this one run, and
+    repo plus extra_dirs(), so a folder elsewhere is added for this one run, and
     only once project_folders.resolve() has said it may be used. A bare name
     still under data/ is in the repo already and needs nothing.
     """
@@ -724,7 +728,8 @@ def project_dirs(task):
         return []
     if project_folders.inside(os.path.realpath(ROOT), real):
         return []
-    if EXTRA_DIRS and project_folders.inside(os.path.realpath(os.path.expanduser(EXTRA_DIRS[0])), real):
+    extra = extra_dirs()
+    if extra and project_folders.inside(os.path.realpath(os.path.expanduser(extra[0])), real):
         return []
     return [real]
 
