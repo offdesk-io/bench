@@ -366,6 +366,40 @@ os.environ.pop("NOTIFY_HOME", None)
 if saved_home is not None:
     os.environ["NOTIFY_HOME"] = saved_home
 
+# Each board's own calendar: Portugal Day is a working day on a board that
+# inherits the owner's UK calendar, and a holiday on a board kept apart with
+# a Portuguese profile of its own.
+import owner_profile  # noqa: E402
+with tempfile.TemporaryDirectory() as data:
+    portugal_day = D(2026, 6, 10)
+    for name in ("uk", "pt"):
+        os.makedirs(os.path.join(data, name))
+        with open(os.path.join(data, name, "todo.md"), "w") as fh:
+            fh.write(doc("- [ ] **%s task** [due:: 2026-06-10]" % name))
+    with open(os.path.join(data, "profile.md"), "w") as fh:
+        fh.write("# PA profile\n\n## About\n\n- Holidays: UK\n")
+    with open(os.path.join(data, "pt", "profile.md"), "w") as fh:
+        fh.write("# PA profile\n\n## About\n\n- Holidays: PT\n")
+    with open(os.path.join(data, "settings.json"), "w") as fh:
+        json.dump({"boards": {"pt": {"memory_root": None}}}, fh)
+    days = notify_due.calendars(["uk", "pt"], lambda b: owner_profile.board_holiday_regions(os.path.join(data, b), data))
+    check("calendar: each board's day test is its own profile's",
+          (days["uk"](portugal_day), days["pt"](portugal_day)), (True, False))
+    check("calendar: next banner follows each board's calendar",
+          notify_due.next_banner(data, ["pt"], at(portugal_day, "08:00"), lambda d: True,
+                                 working_for=days.get), at(D(2026, 6, 11), "09:00"))
+    check("calendar: without working_for every board uses is_working",
+          notify_due.next_banner(data, ["pt"], at(portugal_day, "08:00"), lambda d: True), at(portugal_day, "09:00"))
+    got = []
+    notify_due.run_tick(data, ["uk", "pt"], at(portugal_day, "10:00"), lambda d: True,
+                        lambda *a: got.append((a[0], a[5])) or (True, ""), working_for=days.get)
+    check("calendar: a board on its own holiday stays quiet", got, [("uk task", "uk")])
+    got = []
+    notify_due.run_tick(data, ["uk", "pt"], at(D(2026, 6, 11), "09:00"), lambda d: True,
+                        lambda *a: got.append((a[0], a[1], a[5])) or (True, ""), working_for=days.get)
+    check("calendar: and goes out the next working day as overdue",
+          [(t, b) for t, _, b in got if b == "pt"], [("pt task", "pt")])
+
 os.environ["BENCH_NOTIFY"] = "0"
 check("BENCH_NOTIFY=0 keeps it off", notify_due.start("/x", list, tuple, "u"), None)
 

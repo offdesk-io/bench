@@ -1606,6 +1606,13 @@ def _tail(path, n=12):
         return []
 
 
+def board_holiday_regions(board):
+    """A board's holiday regions for its banners, from its own profile
+    (owner_profile.board_holiday_regions)."""
+    import owner_profile
+    return owner_profile.board_holiday_regions(dataset_dir(board), DATA_ROOT)
+
+
 # The thread notify_due.start() returned, or None when banners are off here.
 NOTIFIER = {"thread": None}
 
@@ -1629,12 +1636,14 @@ def _banners_job():
     last = notify_due.STATUS["last_tick"]
     nxt = ""
     if on and todo is not None:
+        boards = list_datasets(everyone=True)
+        days = notify_due.calendars(boards, board_holiday_regions)
         import owner_profile
         regions = owner_profile.holiday_regions(DATA_ROOT)
         nxt = notify_due.next_banner(
-            DATA_ROOT, list_datasets(everyone=True), datetime.datetime.now(),
+            DATA_ROOT, boards, datetime.datetime.now(),
             lambda d: todo.is_working_day(d, regions),
-            lambda p: _steady_read(p)[0]).isoformat(timespec="minutes")
+            lambda p: _steady_read(p)[0], working_for=days.get).isoformat(timespec="minutes")
     return {
         "id": "banners",
         "name": "Desktop banners",
@@ -4551,8 +4560,7 @@ def main():
     import owner_profile
     if todo is not None and not SCRATCH:
         NOTIFIER["thread"] = notify_due.start(
-            DATA_ROOT, lambda: list_datasets(everyone=True),
-            lambda: owner_profile.holiday_regions(DATA_ROOT),
+            DATA_ROOT, lambda: list_datasets(everyone=True), board_holiday_regions,
             "http://127.0.0.1:%d/%s" % (PORT, PAGE),
             read_text=lambda p: _steady_read(p)[0])
         if NOTIFIER["thread"]:

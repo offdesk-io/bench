@@ -316,6 +316,11 @@ def in_process(root):
            and os.path.isfile(os.path.join(tmp, "profile.md")), "%s %s" % (code, got))
         with open(os.path.join(memory, "me", "profile.md"), encoding="utf-8") as fh:
             ok("and the owner's profile is not written", "Demo" not in fh.read())
+        code, got = request(base, "PUT", "/profile-basics.json", {"country": "PT"}, FROM_BOARD)
+        import owner_profile
+        ok("its banners go by its own profile's calendar",
+           code == 200 and server.board_holiday_regions("memory-test") == ("PT:",)
+           and owner_profile.holiday_regions(root) != ("PT:",), "%s %s" % (code, got))
 
         # --- the settings route takes boards -----------------------------------
         os.environ["AGENTS_FENCES"] = os.path.join(root, "fences.json")
