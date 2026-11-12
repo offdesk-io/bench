@@ -180,7 +180,7 @@ function settingsFormHTML(draft, choices, first){
     (first ? '' : settingsSectionsHTML(draft)) +
     (draft.signedIn ? (draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '') + '</div>' :
     (first ? '' : '<label class="field"><span>Memory folder</span><input type="text" data-memory value="' + escAttr(draft.memoryRoot) + '" placeholder="Not set">' +
-      '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each list’s people are read from there first, and Bench lists its boards in boards.md inside it. Empty means none.</span></label>') +
+      '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.</span></label>') +
     (first || !draft.list ? '' : '<label class="field"><span>Projects folder for ' + esc(draft.list) + '</span><input type="text" data-projects value="' + escAttr(draft.projectsRoot) + '" placeholder="Not set">' +
       '<span class="help">A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + esc(draft.list) + '/projects/.</span></label>') +
     boardGroupHTML(draft, first) +
