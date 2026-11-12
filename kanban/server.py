@@ -272,19 +272,8 @@ def memory_path(kind, name=None, write=False):
 
 
 def bucket_agent_name(dataset, bucket):
-    """A bucket's agent as the board names it: "[List] [bucket] agent", the
-    list's name said once where the bucket already starts with it. The one
-    place the rule is written here; bucket_agents.agent_name takes over from it
-    once that exists."""
-    if hasattr(bucket_agents, "agent_name"):
-        return bucket_agents.agent_name(dataset, bucket)
-    list_words = [w for w in re.split(r"[-_\s]+", dataset) if w]
-    bucket_words = [w for w in re.split(r"[-_\s]+", bucket) if w]
-    if bucket_words[:len(list_words)] == list_words:
-        bucket_words = bucket_words[len(list_words):]
-    words = list_words + bucket_words + ["agent"]
-    name = " ".join(words)
-    return name[:1].upper() + name[1:]
+    """A bucket's agent as the board names it, from core/bucket_agents.py."""
+    return bucket_agents.agent_name(dataset, bucket)
 
 
 def people_path(name=None, write=False):
