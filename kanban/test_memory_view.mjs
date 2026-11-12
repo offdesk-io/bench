@@ -221,6 +221,19 @@ try {
   await evalJS(`memLoad()`)
   await wait(600)
 
+  // each section says what it is for, filled or empty
+  const descs = `[...document.querySelectorAll('#memView .memsec')].map(s => s.dataset.mem + '=' + (s.querySelector(':scope > .memdesc') || {}).textContent).join('|')`
+  const wantDescs = {
+    about: 'What this business does, in a few lines every agent reads first.',
+    people: 'Who is who: role, team, who reports to whom, and the names that get confused.',
+    buckets: 'One per bucket: what kind of work lands there and how it should be handled.',
+    context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone.",
+    profile: 'Facts about you that agents work from: how you work, write and want things done.'
+  }
+  const wantStr = ['about', 'people', 'buckets', 'context', 'profile'].map(k => k + '=' + wantDescs[k]).join('|')
+  check('each section shows its description', await evalJS(descs) === wantStr, await evalJS(descs))
+  check('descriptions are not index entries', await evalJS(`document.querySelectorAll('.memindex a').length === document.querySelectorAll('#memView .memsec, #memView .membucket[id], #memView h4[data-mem-sub]').length`))
+
   // every section empty: each still renders, with a placeholder and an index entry
   await evalJS(`(() => {
     memData.about = { text: '' }; memData.people = []; memData.buckets = []; memData.profile = {};
@@ -228,6 +241,7 @@ try {
     memDraw();
   })()`)
   check('with everything empty every section still renders', await evalJS(sections) === 'about,people,buckets,context,profile', await evalJS(sections))
+  check('empty sections keep their description', await evalJS(descs) === wantStr)
   check('each carries a placeholder', await evalJS(`[...document.querySelectorAll('#memView .memsec')].every(s => s.querySelector('.memempty'))`))
   check('and keeps its index entry', await evalJS(`[...document.querySelectorAll('#memView .memsec')].every(s => document.querySelector('.memindex a[data-mem-jump="' + s.id + '"]'))`))
   check('Edit still works from an empty section', await evalJS(`!!document.querySelector('[data-mem=about] [data-mem-edit=about]') && !!document.querySelector('[data-mem=people] [data-mem-edit=people]')`))

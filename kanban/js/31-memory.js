@@ -101,6 +101,15 @@ function memFormButtons(which){
 function memSlug(text){
   return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
 }
+/* What each section is for, shown under its heading whether or not it has content. */
+const MEM_DESC = {
+  about: 'What this business does, in a few lines every agent reads first.',
+  people: 'Who is who: role, team, who reports to whom, and the names that get confused.',
+  buckets: 'One per bucket: what kind of work lands there and how it should be handled.',
+  context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone.",
+  profile: 'Facts about you that agents work from: how you work, write and want things done.'
+};
+function memDesc(id){ return MEM_DESC[id] ? '<p class="memdesc">' + esc(MEM_DESC[id]) + '</p>' : ''; }
 let memIds = new Set();   // ids issued during this render, so two headings that slug alike stay apart
 function memUniqueId(base){
   let id = base, n = 1;
@@ -111,7 +120,7 @@ function memUniqueId(base){
 function memSection(id, title, bodyHTML, edit, extra){
   return '<section class="memsec" id="' + esc(memUniqueId('mem-' + memSlug(id))) + '" data-mem="' + esc(id) + '">' +
     '<div class="memhead"><h3>' + esc(title) + '</h3>' + (edit || '') + '</div>' +
-    (extra || '') + bodyHTML +
+    memDesc(id) + (extra || '') + bodyHTML +
   '</section>';
 }
 
@@ -153,9 +162,9 @@ function memPeopleHTML(){
 
 function memBucketsHTML(){
   const list = memData.buckets;
-  if (!list.length) return '<section class="memsec" id="mem-buckets" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' +
+  if (!list.length) return '<section class="memsec" id="mem-buckets" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' + memDesc('buckets') +
     memEmpty('No buckets yet. Each bucket of the board gets its brief here.') + '</section>';
-  return '<section class="memsec" id="mem-buckets" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' +
+  return '<section class="memsec" id="mem-buckets" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' + memDesc('buckets') +
     list.map(b => {
       const which = 'bucket:' + b.heading;
       let body;
