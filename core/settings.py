@@ -63,6 +63,9 @@ nothing raises.
   does not name as it was. `memory_root` sent as "inherit" takes the list
   back to the global folder, and a list sent as null loses its whole entry.
   Lists are named as on disk, with a todo.md, and any other key is refused.
+  A list's own folder is its own: never the global memory folder, the data
+  root, a list's folder under it or the home folder, and no two lists share
+  one, compared on disk through symlinks.
 
 Daily budgets are kept out of this file, in the agents engine's fences file
 (`data/agents/fences.json`, `$AGENTS_FENCES`), because the engine reads them
@@ -458,6 +461,10 @@ def validate(data, root=None):
     err = _boards_error(data.get("boards"), root or data_root())
     if err:
         return err
+    if "boards" in data or "memory_root" in data:
+        err = _boards_clash(data, root)
+        if err:
+            return err
     roots = data.get("projects_roots")
     if roots is None:
         return None
@@ -527,6 +534,61 @@ def _boards_error(boards, base):
         err = _folder_error("boards.%s.memory_root" % name, value)
         if err:
             return err
+    return None
+
+
+def _identity(value):
+    """A folder's identity on disk, so a symlink, `~` or another spelling of
+    one folder compares equal. A folder that has gone is its real path."""
+    real = os.path.realpath(os.path.expanduser(value))
+    try:
+        st = os.stat(real)
+        return (st.st_dev, st.st_ino)
+    except OSError:
+        return real
+
+
+def _boards_clash(data, root):
+    """Refuse a list's own memory folder that is not a folder of its own: the
+    global memory folder, the data root, a list's folder under it, the home
+    folder, or the folder of another list. Checked against what the save
+    would leave, so a clash with a list that was not sent is caught too."""
+    base = root or data_root()
+    merged = {k: dict(v) for k, v in load(root).get("boards", {}).items()}
+    for name, entry in (data.get("boards") or {}).items():
+        if entry is None:
+            merged.pop(name, None)
+            continue
+        own = merged.setdefault(name, {})
+        if "memory_root" in entry:
+            if entry["memory_root"] == INHERIT:
+                own.pop("memory_root", None)
+            else:
+                own["memory_root"] = _memory_value(entry["memory_root"])
+    if "memory_root" in data:
+        memory = _memory_value(data["memory_root"])
+    else:
+        memory = load(root).get("memory_root")
+    taken = {}
+    if memory:
+        taken[_identity(memory)] = "the global memory folder"
+    taken[_identity(base)] = "the data folder"
+    try:
+        names = sorted(os.listdir(base))
+    except OSError:
+        names = []
+    for name in names:
+        if os.path.isfile(os.path.join(base, name, "todo.md")):
+            taken[_identity(os.path.join(base, name))] = "the %s list's own data folder" % name
+    taken[_identity("~")] = "the home folder"
+    for name in sorted(merged):
+        value = merged[name].get("memory_root")
+        if not value:
+            continue
+        key = _identity(value)
+        if key in taken:
+            return "boards.%s.memory_root cannot be %s" % (name, taken[key])
+        taken[key] = "the %s list's memory folder" % name
     return None
 
 

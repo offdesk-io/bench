@@ -400,6 +400,51 @@ class SettingsTest(unittest.TestCase):
         self.assertIn("full path", ok({"work": {"memory_root": "OWN"}}))
         self.assertIn("no folder", ok({"work": {"memory_root": os.path.join(self.root, "gone")}}))
 
+    def test_boards_memory_root_must_be_a_folder_of_its_own(self):
+        self.lists("work", "demo")
+        own, other, mem = self.projects("OWN"), self.projects("OTHER"), self.memory()
+        ok = lambda d, **extra: settings.validate(dict({"boards": d}, **extra), self.root)
+        self.assertIsNone(ok({"work": {"memory_root": own}, "demo": {"memory_root": other}}))
+        self.assertIn("cannot be the data folder", ok({"work": {"memory_root": self.root}}))
+        self.assertIn("cannot be the demo list's own data folder",
+                      ok({"work": {"memory_root": os.path.join(self.root, "demo")}}))
+        self.assertIn("cannot be the work list's own data folder",
+                      ok({"work": {"memory_root": os.path.join(self.root, "work")}}))
+        self.assertIn("cannot be the home folder", ok({"work": {"memory_root": os.path.expanduser("~")}}))
+        self.assertIn("cannot be the home folder", ok({"work": {"memory_root": "~"}}))
+        # The global folder, saved or sent in the same save.
+        self.assertIn("cannot be the global memory folder", ok({"work": {"memory_root": mem}}, memory_root=mem))
+        self.write({"memory_root": mem})
+        self.assertIn("cannot be the global memory folder", ok({"work": {"memory_root": mem}}))
+        self.assertIsNone(ok({"work": {"memory_root": mem}}, memory_root=""))
+        # Two lists never share one, sent together or against what is saved.
+        self.assertIn("cannot be the demo list's memory folder",
+                      ok({"demo": {"memory_root": own}, "work": {"memory_root": own}}))
+        self.write({"memory_root": mem, "boards": {"demo": {"memory_root": own}}})
+        self.assertIn("cannot be the demo list's memory folder", ok({"work": {"memory_root": own}}))
+        self.assertIsNone(ok({"work": {"memory_root": own}, "demo": {"memory_root": "inherit"}}))
+        self.assertIsNone(ok({"work": {"memory_root": own}, "demo": None}))
+        self.assertIsNone(ok({"work": {"memory_root": own}, "demo": {"memory_root": None}}))
+        # Moving the global folder onto a list's own is caught as well.
+        self.assertIn("cannot be the global memory folder", settings.validate({"memory_root": own}, self.root))
+        # Null and inherit are never a clash.
+        self.assertIsNone(ok({"work": {"memory_root": None}, "demo": {"memory_root": None}}))
+
+    def test_boards_memory_root_compared_through_symlinks(self):
+        self.lists("work", "demo")
+        own, mem = self.projects("OWN"), self.memory()
+        for target, link in ((own, "to-own"), (mem, "to-mem"), (os.path.join(self.root, "demo"), "to-demo"),
+                             (self.root, "to-data"), (os.path.expanduser("~"), "to-home")):
+            os.symlink(target, os.path.join(self.root, link))
+        self.write({"memory_root": mem, "boards": {"demo": {"memory_root": own}}})
+        ok = lambda v: settings.validate({"boards": {"work": {"memory_root": os.path.join(self.root, v)}}}, self.root)
+        self.assertIn("demo list's memory folder", ok("to-own"))
+        self.assertIn("global memory folder", ok("to-mem"))
+        self.assertIn("demo list's own data folder", ok("to-demo"))
+        self.assertIn("data folder", ok("to-data"))
+        self.assertIn("home folder", ok("to-home"))
+        self.assertIn("demo list's memory folder", ok("OWN/"))
+
     def test_boards_save_per_list_and_per_key(self):
         self.lists("work", "demo")
         own = self.projects("OWN")
