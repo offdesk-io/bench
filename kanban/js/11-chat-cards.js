@@ -428,11 +428,12 @@ function viewDefs(){
     { id:'timeline', label:'Timeline' },
     { id:'matrix',   label:'Matrix' },
     { id:'sep1', sep:true },
-    { id:'agents',   label:'Agents' }
+    { id:'agents',   label:'Agents' },
+    { id:'memory',   label:'Memory' }
   ];
   /* The agents run on the owner's Mac, so the shared board has no Agents tab
      (loadWhoami() in 21-datasets.js), and no separator left dangling before it. */
-  if (state.who) return defs.filter(d => d.id !== 'agents' && d.id !== 'sep1');
+  if (state.who) return defs.filter(d => d.id !== 'agents');
   return defs;
 }
 /* Backups isn't a view of the board, it's a data operation — see the Backups

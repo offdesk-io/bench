@@ -283,30 +283,179 @@ def publish_boards():
         print("Could not write boards.md in the memory folder: %s" % err)
 
 
+# The people table's columns beyond Name and Role, by the key the board uses
+# and the header words that mean it. A table without one leaves that key out
+# of the reply, so a caller that only knows name and role sees what it saw.
+PEOPLE_EXTRA = (("team", ("team",)),
+                ("reports_to", ("reports to", "reports_to", "reports")),
+                ("notes", ("notes", "note")))
+
+
+def _people_columns(cells):
+    """{key: column index} for a people table's header cells: name, role and
+    whichever of PEOPLE_EXTRA the header has."""
+    heads = [c.strip().lower() for c in cells]
+    cols = {"name": 0, "role": 1}
+    for key, words in PEOPLE_EXTRA:
+        for i, head in enumerate(heads):
+            if i > 1 and head in words:
+                cols[key] = i
+                break
+    return cols
+
+
 def read_people(text):
     """Every person in people.md's tables, in the order the file lists them.
 
     Only a table headed `Name | Role`, so the GitHub usernames table beside
     them, which lists some of the same people again, is not read twice.
     Asterisks come off the name. What the drawer's Delegate to offers after
-    the two agents, so nobody keeps a second list of names by hand."""
-    people, seen, in_people = [], set(), False
+    the two agents, so nobody keeps a second list of names by hand. A table
+    that also has Team, Reports to or Notes columns brings them along, as
+    team, reports_to and notes."""
+    people, seen, cols = [], set(), None
     for line in text.splitlines():
         line = line.strip()
         if not line.startswith("|"):
-            in_people = False
+            cols = None
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
         if cells and cells[0].lower() == "name":
-            in_people = len(cells) > 1 and cells[1].lower() == "role"
+            cols = _people_columns(cells) if len(cells) > 1 and cells[1].lower() == "role" else None
             continue
-        if not in_people or set(cells[0]) <= set("-: "):
+        if cols is None or set(cells[0]) <= set("-: "):
             continue
         name = cells[0].replace("**", "").strip()
         if name and name not in seen:
             seen.add(name)
-            people.append({"name": name, "role": cells[1] if len(cells) > 1 else ""})
+            row = {"name": name, "role": cells[1] if len(cells) > 1 else ""}
+            for key, i in cols.items():
+                if key not in row:
+                    row[key] = cells[i] if i < len(cells) else ""
+            people.append(row)
     return people
+
+
+def _cell(value):
+    """A value as one table cell: no pipe or line break to split the row."""
+    return re.sub(r"\s+", " ", str(value or "").replace("|", "/")).strip()
+
+
+def write_people_table(text, rows):
+    """`text` (a people.md, or "") with its people table replaced by `rows`,
+    each {name, role, team, reports_to, notes}. Everything else in the file is
+    kept as it is: headings, prose, the other tables. The table is the one
+    headed `Name | Role`; a file with two of them raises ValueError, because
+    read_people() merges their rows and there is no telling which a row
+    belongs in. Its columns stay as the file has them,
+    and a column the file does not have yet (Team, Reports to, Notes) is added
+    on the right. A person already in the file keeps their cells as written
+    wherever the saved value is the one read from them. A file with no such
+    table gets one at the end."""
+    lines = text.split("\n") if text else []
+    blocks, i = [], 0       # (first line, line after) of each people table
+    while i < len(lines):
+        if lines[i].strip().startswith("|"):
+            j = i
+            while j < len(lines) and lines[j].strip().startswith("|"):
+                j += 1
+            head = [c.strip().lower() for c in lines[i].strip().strip("|").split("|")]
+            if len(head) > 1 and head[0] == "name" and head[1] == "role":
+                blocks.append((i, j))
+            i = j
+        else:
+            i += 1
+    if len(blocks) > 1:
+        raise ValueError("more than one people table")
+    heads = ["Name", "Role"]
+    old = {}                # name -> its raw cells in the first table
+    if blocks:
+        a, b = blocks[0]
+        heads = [c.strip() for c in lines[a].strip().strip("|").split("|")]
+    cols = _people_columns(heads)
+    titles = {"team": "Team", "reports_to": "Reports to", "notes": "Notes"}
+    for key, _ in PEOPLE_EXTRA:
+        if key not in cols:
+            cols[key] = len(heads)
+            heads.append(titles[key])
+    if blocks:
+        for a, b in blocks:
+            for line in lines[a + 1:b]:
+                cells = [c.strip() for c in line.strip().strip("|").split("|")]
+                if cells and not set(cells[0]) <= set("-: "):
+                    old.setdefault(cells[0].replace("**", "").strip(), cells)
+    width = len(heads)
+    table = ["| " + " | ".join(heads) + " |", "| " + " | ".join("---" for _ in heads) + " |"]
+    for row in rows:
+        name = _cell(row.get("name"))
+        was = old.get(name)
+        cells = (list(was) + [""] * width)[:width] if was else [""] * width
+        for key, i in cols.items():
+            value = _cell(row.get(key))
+            if key == "name":
+                if not was:
+                    cells[i] = value
+                continue
+            kept = _cell(was[i]) if was and i < len(was) else ""
+            if value != kept:
+                cells[i] = value
+        table.append("| " + " | ".join(cells) + " |")
+    if not blocks:
+        body = text.rstrip("\n")
+        return (body + "\n\n" if body else "# People\n\n") + "\n".join(table) + "\n"
+    a, b = blocks[0]
+    return "\n".join(lines[:a] + table + lines[b:])
+
+
+def write_text_file(path, text):
+    """`text` into `path`, through a temp file and a swap, so a crash cannot
+    leave half of it for a reader."""
+    # A link (a memory_root file) is written through, so it stays a link.
+    path = os.path.realpath(path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(path), prefix=".write-", suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        try:
+            os.chmod(tmp, os.stat(path).st_mode & 0o7777)
+        except OSError:
+            os.chmod(tmp, 0o644)
+        os.replace(tmp, path)
+    except BaseException:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        raise
+
+
+def about_path(name=None):
+    """A board's free-text description of its company and team."""
+    return os.path.join(dataset_dir(name or current_dataset()), "about.md")
+
+
+def _read_text(path):
+    """(text, exists) for a file, ("", False) when it is not there."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            return fh.read(), True
+    except OSError:
+        return "", False
+
+
+def bucket_headings(name=None):
+    """[(heading, name)] for each numbered bucket in the board's todo.md, in
+    file order, "1. Tasks" and "Tasks". Reads the file and changes nothing."""
+    if todo is None:
+        return []
+    text, _ = _read_text(todo_path(name))
+    out = []
+    for line in text.splitlines():
+        m = todo.BUCKET_RE.match(line)
+        if m:
+            out.append(("%s. %s" % (m.group(1), m.group(2).strip()), m.group(2).strip()))
+    return out
 
 
 def todo_path(name=None):
@@ -2781,6 +2930,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return
         # Two files are written with PUT, so the line says which.
         what = ("a bucket brief" if "/bucket-brief" in first
+                else "the board's about text" if "PUT /about" in first
+                else "the board's people" if "PUT /people" in first
                 else "%s/%s/todo.md" % (DATA, current_dataset()))
         sys.stdout.write("saved %s\n" % what)
         sys.stdout.flush()
@@ -2999,6 +3150,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             except OSError:
                 # A dataset with no people.md yet: nobody to offer but the agents.
                 return self._json(200, {"people": []})
+        if path == "/about.json":
+            ds = current_dataset()
+            text, exists = _read_text(about_path(ds))
+            return self._json(200, {"text": text, "exists": exists,
+                                    "path": os.path.relpath(about_path(ds), dataset_dir(ds) if AUTH else ROOT)})
+        if path == "/memory.json":
+            ds = current_dataset()
+            about, about_exists = _read_text(about_path(ds))
+            people, _ = _read_text(people_path(ds))
+            buckets = []
+            for heading, label in bucket_headings(ds):
+                try:
+                    stream, bpath = bucket_brief_path(heading, ds)
+                except LookupError:
+                    stream, bpath = None, None
+                text, exists = _read_text(bpath) if bpath else ("", False)
+                buckets.append({"name": label, "heading": heading, "slug": stream,
+                                "text": text, "exists": exists,
+                                "filled": bool(exists and planning_agent_plan.BRIEF_EMPTY not in text)})
+            return self._json(200, {"board": ds,
+                                    "about": {"text": about, "exists": about_exists},
+                                    "people": read_people(people),
+                                    "buckets": buckets,
+                                    "profile": profile_reply()})
         if path == "/attach-queue.json":
             try:
                 with open(attach_queue_path(), encoding="utf-8") as fh:
@@ -3866,6 +4041,70 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return self._json(200, {"ok": True, "stream": stream,
                                 "filled": planning_agent_plan.BRIEF_EMPTY not in text})
 
+    def _put_json_from_board(self):
+        """(payload, None), or (None, True) once a refusal has been sent: the
+        same checks _put_bucket_brief() makes before it looks at the body."""
+        if self.headers.get("X-Board") != "1":
+            self._json(403, {"error": "not from the board"})
+            return None, True
+        try:
+            payload = json.loads((self._body() or b"{}").decode("utf-8"))
+        except (UnicodeDecodeError, ValueError):
+            self._json(400, {"error": "body was not valid JSON"})
+            return None, True
+        if not isinstance(payload, dict):
+            self._json(400, {"error": "body must be an object"})
+            return None, True
+        return payload, False
+
+    def _put_about(self):
+        """The board's company text, replaced whole. Like a brief it has no
+        second writer and no cached copy to merge with."""
+        payload, refused = self._put_json_from_board()
+        if refused:
+            return
+        text = payload.get("text")
+        if not isinstance(text, str):
+            return self._json(400, {"error": "expected the text"})
+        ds = current_dataset()
+        if not ds:
+            return self._json(404, {"error": "no list you can see"})
+        write_text_file(about_path(ds), text)
+        return self._json(200, {"ok": True})
+
+    def _put_people(self):
+        """The board's team: the rows replace the people table in people.md,
+        and the rest of the file stays as it is (write_people_table())."""
+        payload, refused = self._put_json_from_board()
+        if refused:
+            return
+        rows = payload.get("people")
+        if not isinstance(rows, list) or not all(isinstance(r, dict) for r in rows):
+            return self._json(400, {"error": "expected a list of people"})
+        names = []
+        for r in rows:
+            for key in ("name", "role", "team", "reports_to", "notes"):
+                if not isinstance(r.get(key, ""), str):
+                    return self._json(400, {"error": "%s must be text" % key})
+            name = _cell(r.get("name")).replace("**", "")
+            if not name:
+                return self._json(400, {"error": "every person needs a name"})
+            if name in names:
+                return self._json(400, {"error": "%s is listed twice" % name})
+            names.append(name)
+        ds = current_dataset()
+        if not ds:
+            return self._json(404, {"error": "no list you can see"})
+        path = people_path(ds)
+        text, _ = _read_text(path)
+        try:
+            table = write_people_table(text, rows)
+        except ValueError:
+            return self._json(409, {"error": "people.md has more than one people table; tidy it by hand first"})
+        write_text_file(path, table)
+        text, _ = _read_text(path)
+        return self._json(200, {"ok": True, "people": read_people(text)})
+
     def _put_settings(self):
         if self.headers.get("X-Board") != "1":
             return self._json(403, {"error": "not from the board"})
@@ -3927,6 +4166,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # different contract — see _put_bucket_brief().
         if self.path.split("?")[0] == "/bucket-brief":
             return self._put_bucket_brief()
+        if self.path.split("?")[0] == "/about":
+            return self._put_about()
+        if self.path.split("?")[0] == "/people":
+            return self._put_people()
         if self.path.split("?")[0] == "/settings.json":
             return self._put_settings()
         if self.path.split("?")[0] == "/profile-basics.json":
