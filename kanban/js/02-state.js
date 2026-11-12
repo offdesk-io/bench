@@ -442,14 +442,10 @@ const AGENT_CARDS = [
     does: 'Keeps your list. Tell it in the chat what moved and it adds, moves, dates and ticks off tasks, and writes the message or agenda that goes with one.',
     cannot: 'Do the work on a task, or change one you did not mention.',
     needs: 'You to say what changed, in your own words.' },
-  { name: 'Plan agent',
-    does: 'Works out overnight what doing a task would take, and leaves a plan on the task’s card for you to read.',
-    cannot: 'Carry anything out. Nothing in a plan has been done yet.',
-    needs: 'A task delegated to it, and a set-up bucket so it knows how you work there. You approve the plan or send it back with a note.' },
-  { name: 'Implement agent',
-    does: 'Carries out a plan you approved: a write-up, a draft, a prompt, data, a deck or code.',
-    cannot: 'Change your list, send anything on your behalf, or start work you have not agreed. Figma work only runs with you there.',
-    needs: 'An approved plan, or a task that already says exactly how. You review what it made before the card moves on.' }
+  { name: 'Bucket agents',
+    does: 'One agent per bucket, as the bucket’s brief defines it. It plans a task, or does the work, inside that bucket’s own guidelines.',
+    cannot: 'Change your list, send anything on your behalf, merge or push. Figma work only runs with you there.',
+    needs: 'A brief with every section filled in. A plan-first bucket waits for you to approve the plan; you always review the work.' }
 ];
 
 /* Owners and specialists. The PA, the Plan agent and the Implement agent own

@@ -45,6 +45,11 @@ loadAgentRuns();
 setInterval(() => { if (!document.hidden) loadAgentRuns(); }, 60 * 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadAgentRuns(); });
 
+/* "starts when assigned" or "starts in the board's hours". */
+function bucketAgentStartWords(a){
+  return a.start === 'scheduled' ? "starts in this board's hours" : 'starts when assigned';
+}
+
 function agentRunFor(sub){
   return (sub && sub.stableId && agentRuns[sub.stableId]) || null;
 }
@@ -103,13 +108,24 @@ function agentRunStatus(t){
       return Object.assign(base, { tone: 'failed', failed: true,
         text: who + ' · failed · ' + runWhen(rec.at),
         title: st === 'stale' ? 'It started and never finished.' : (rec.why || 'The run failed.') });
+    const ba = legacyAgent(who) ? null : bucketAgentNamed(who);
+    if (ba && !ba.ready && st !== 'running')
+      return Object.assign(base, { tone: 'failed', text: who + ' · not set up',
+        title: 'Its brief still needs ' + (bucketAgentMissingText(ba) || 'filling in') + '.' });
     if (st === 'queued')
       return Object.assign(base, { tone: 'queued',
-        text: who + ' · retrying ' + (who === 'Plan agent' ? 'tonight' : 'on the next /do'),
+        text: who + ' · retrying ' + (ba ? bucketAgentStartWords(ba) : who === 'Plan agent' ? 'tonight' : 'on the next /do'),
         title: 'You asked for it to be tried again at ' + runWhen(rec.retry || rec.at) });
     if (st === 'done')
       return Object.assign(base, { tone: 'queued', text: who + ' · finished · ' + runWhen(rec.at),
         title: 'Finished. The board ticks the sub-task when it next drains what the agent asked for.' });
+    if (ba) {
+      const waits = ba.start === 'scheduled' && !bucketAgentInHours();
+      return Object.assign(base, { tone: 'queued',
+        text: who + ' · ' + (waits ? "outside this board's hours" : 'queued, ' + bucketAgentStartWords(ba)),
+        title: waits ? 'Not started. It starts in the hours set for this board.'
+          : 'Not started. ' + (ba.start === 'scheduled' ? 'It starts in the next of its hours.' : 'It starts as soon as a task is assigned to it.') });
+    }
     return Object.assign(base, { tone: 'queued',
       text: who + ' · queued' + (who === 'Plan agent' ? ' for tonight' : ''),
       title: who === 'Plan agent' ? 'Not started. The Plan agent works overnight.'
@@ -121,8 +137,11 @@ function agentRunStatus(t){
   const rec = prev && agentRunFor(prev.step);
   const when = rec ? runWhen(rec.at) : '';
   const decide = rec && rec.label === 'needs a decision';
+  const waitFor = !legacyAgent(who) && bucketAgentNamed(who)
+    ? (cur.kind === 'plan-review' ? 'waiting for you to review the plan' : 'waiting for you to review the work')
+    : 'waiting for you';
   return { sub: cur.step.stableId, agent: who, tone: 'you',
-    text: who + ' · ' + (decide ? 'needs a decision from you' : 'waiting for you') + (when ? ' · ' + when : ''),
+    text: who + ' · ' + (decide ? 'needs a decision from you' : waitFor) + (when ? ' · ' + when : ''),
     title: cur.kind === 'plan-review' ? 'The plan is written and waits for your review.'
       : 'The work is done and waits for your review.' };
 }
@@ -160,7 +179,9 @@ function runBlockHTML(t, st){
     '</div>' +
     '<span class="help">' + esc(st.agent === 'Plan agent'
       ? 'Retry runs it again tonight. Take it back makes the task yours.'
-      : 'Retry runs it again on the next /do. Take it back makes the task yours.') + '</span>';
+      : st.agent === 'Implement agent'
+        ? 'Retry runs it again on the next /do. Take it back makes the task yours.'
+        : 'Retry asks its agent to try again. Take it back makes the task yours.') + '</span>';
   return '<div class="field runblock"><span>Agent</span>' + runLineHTML(st) + btns + '</div>';
 }
 
@@ -217,7 +238,8 @@ async function retryRun(sub, t){
     return;
   }
   const st = agentRunStatus(t);
-  showToast(st && st.agent === 'Implement agent' ? 'It will run again on the next /do.' : 'It will run again tonight.', 'good');
+  showToast(st && st.agent === 'Implement agent' ? 'It will run again on the next /do.'
+    : st && st.agent === 'Plan agent' ? 'It will run again tonight.' : 'Its agent will try again.', 'good');
   refreshView();
   if (state.openTask) openDrawer(state.openTask);
 }

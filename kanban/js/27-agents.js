@@ -1,15 +1,15 @@
 'use strict';
 
 /* =========================================================================
-   4d. Agents — what each agent does, and the Plan and Implement agents'
-   switches, hours and runs.
+   4d. Agents — what each agent does, and the Bucket agents' switch, hours and
+   run for each board, with each bucket's agent listed under them.
 
    The switches and hours are the agents dashboard's own page,
    PACKAGES/agents-engine/react, reached as BoardUI.AgentsApp, so this view and
    the standalone agents dashboard draw one hour track rather than two. It asks
    /agents-api/* (kanban/server.py), which runs agents-engine's routes over this
-   repo's agents/ folder only, so the agents on it are the two the board hands
-   work to. Every change goes through the agent's own `apply` command; nothing
+   repo's agents/ folder only, so the agents on it are the ones the board hands
+   work to (the old Plan and Implement agents are filtered out below). Every change goes through the agent's own `apply` command; nothing
    here or in the server opens a schedule file.
 
    Under it, one card per agent from AGENT_CARDS (02-state.js): what it does,
@@ -127,7 +127,6 @@ function agentCardsHTML(highlight){
         '<header><span class="avatar" aria-hidden="true">' + avatarSvg(c.name, 28) + '</span>' +
         '<h3>' + esc(c.name) + '</h3></header>' +
         '<dl>' + row('Does', c.does) + row('Cannot', c.cannot) + row('Needs from you', c.needs) + '</dl>' +
-        handoverLevelHTML(c.name) +
       '</article>').join('') +
     '</div></section>';
 }
@@ -188,34 +187,6 @@ function wireAgentSetupButtons(root){
   root.querySelectorAll('[data-agent-setup]').forEach(btn => {
     btn.onclick = () => openAgentSetup();
   });
-  root.querySelectorAll('[data-handover-level]').forEach(sel => {
-    sel.onchange = () => {
-      setHandoverLevel(sel.dataset.handoverLevel, sel.value);
-      const help = sel.closest('.agentcard-level').querySelector('.help');
-      if (help) help.textContent = HANDOVER_LEVEL_HELP[sel.value] || '';
-    };
-  });
-}
-
-/* The handover level on an agent's card (handOver(), 04-tier-two-the-one-
-   thing.js): how much of its work waits on you. Only for the agents a task can
-   be handed to; the PA has none. */
-const HANDOVER_LEVEL_HELP = {
-  'plan-first': 'You read and approve its plan before the work starts.',
-  'just-do-it': 'The work goes straight on to review. Any plan is still there to read.',
-  'off': 'Not offered under Delegate to. Tasks already handed over carry on.'
-};
-function handoverLevelHTML(agent){
-  const levels = HANDOVER_LEVELS[agentOf(agent)];
-  if (!levels) return '';
-  const cur = handoverLevel(agent);
-  const id = 'handover-' + agentOf(agent).toLowerCase().replace(/\s+/g, '-');
-  return '<div class="field agentcard-level"><label for="' + id + '">Handover</label>' +
-    '<select id="' + id + '" data-handover-level="' + esc(agentOf(agent)) + '">' +
-      levels.map(l => '<option value="' + l + '"' + (l === cur ? ' selected' : '') + '>' +
-        esc(HANDOVER_LEVEL_LABEL[l]) + '</option>').join('') +
-    '</select>' +
-    '<span class="help">' + esc(HANDOVER_LEVEL_HELP[cur] || '') + '</span></div>';
 }
 
 /* ---- Setting up an agent: four questions about one bucket ----
@@ -347,57 +318,98 @@ async function saveAgentSetup(){
   agentSetupDone(res);
 }
 
-/* The last sheet: what was written, the Plan agent's card, and the one thing
-   to do next. The Plan agent is the card it ends on because it is the first
-   an agent-handed task meets. */
+/* The last sheet: what was written, the bucket agents' card, and the one thing
+   to do next. */
 function agentSetupDone(){
   const w = agentWizard;
   agentWizard = null;
   showModal('Your agent is set up for ' + w.bucket,
     'Your answers are in the ' + esc(w.bucket) + ' bucket’s brief. You can change them any time ' +
     'from Edit buckets, under Brief.',
-    '<div class="agentsetup-done">' + agentCardsHTML('Plan agent') + '</div>' +
+    '<div class="agentsetup-done">' + agentCardsHTML('Bucket agents') + '</div>' +
     '<p class="agentsetup-next"><strong>Next:</strong> open a task in ' + esc(w.bucket) +
-    ' and choose Plan agent under Delegate to. It plans the task overnight and leaves the plan on the card for you.</p>',
+    ' and choose its agent under Delegate to. It works the task and leaves the result on the card for you.</p>',
     [{ label: 'Done', primary: true }],
     { wide: true });
 }
 
-/* ---- The seven bucket planners ----
+/* ---- The bucket agents of this list ----
 
-   AGENT_CARDS above says what the Plan and Implement agents do; it never
-   mentions the per-bucket planners (`data/<dataset>/buckets/<stream>/<dataset>-<stream>-agent.md`)
-   because there is one of those to describe, not seven. This section instead
-   names each bucket of the current list and which planner works it, or
-   "fallback planner" where none has been written yet.
+   Under the board's switch and hours (the AgentsApp above, one target per
+   board) comes each bucket of the open list with its agent: the name a
+   sub-task carries in `[to::]`, how it works, when it starts, and what is
+   missing where its brief is not ready. Read through bucketAgentsNow()
+   (04-tier-two-the-one-thing.js), which a brief save reloads, so a badge
+   changes without reloading the list. Each row opens that bucket's brief. */
+function bucketAgentRowHTML(a, i){
+  const cols = bucketAgentsNow().columns;
+  const col = Object.keys(cols).find(k => cols[k] === a.bucket) || a.bucket;
+  const bi = state.doc ? state.doc.buckets.findIndex(b => b.name === col) : -1;
+  const how = a.mode === 'free-rein' ? 'free rein' : 'plan first';
+  const when = a.start === 'scheduled' ? 'scheduled' : 'starts when assigned';
+  const detail = a.ready
+    ? esc(how) + ' · ' + esc(when)
+    : 'not set up: ' + esc(bucketAgentMissingText(a) || 'its brief');
+  return '<li data-bucket-agent="' + esc(a.name) + '" class="' + (a.ready ? 'ready' : 'notready') + '">' +
+    '<span class="planner-bucket">' + plannerAvatarHTML(bucketColor(col, bi), 16).replace('class="avatar"', 'class="avatar" style="margin-right:6px"') +
+      esc(a.name) + '</span>' +
+    '<span class="planner-name">' + detail + '</span>' +
+    '<button type="button" class="btn small" data-bucket-brief="' + esc(col) + '">Brief</button></li>';
+}
 
-   The lookup — bucket_agent() and agent_on_disk() in agents/plan-agent/plan.py
-   — already runs server-side for /bucket-brief.json's "fallback" flag, so
-   this asks for it rather than working it out a second way in JS. The board
-   already has the bucket list in state.doc, so it sends the names rather
-   than the route re-parsing todo.md. */
-let plannersAsk = 0;
 async function refreshBucketPlanners(){
   const host = $('#agentsPlanners');
-  if (!host || !state.doc || !state.doc.buckets.length) { if (host) host.innerHTML = ''; return; }
-  const names = state.doc.buckets.map(b => b.name);
-  const ask = ++plannersAsk;
-  let planners;
-  try {
-    planners = (await getJSON('/agents-planners.json?buckets=' + encodeURIComponent(names.join(',')))).planners || [];
-  } catch (err) {
-    return; // Not worth a toast — the cards above still work without it.
-  }
-  if (ask !== plannersAsk) return;
+  if (!host) return;
+  await bucketAgentsLoaded();
   const again = $('#agentsPlanners');
   if (!again) return;
-  again.innerHTML = '<section class="planners" aria-label="This list’s bucket planners">' +
-    '<h2>Bucket planners</h2><ul>' +
-    planners.map((p, i) => '<li><span class="planner-bucket">' +
-      plannerAvatarHTML(bucketColor(p.bucket, state.doc.buckets.findIndex(b => b.name === p.bucket)), 16).replace('class="avatar"', 'class="avatar" style="margin-right:6px"') + esc(p.bucket) + '</span>' +
-      '<span class="planner-name">' + (p.onDisk ? esc(p.agent) : 'fallback planner') + '</span></li>').join('') +
-    '</ul></section>';
+  const rows = bucketAgentsNow().buckets;
+  if (!rows.length) { again.innerHTML = ''; return; }
+  again.innerHTML = '<section class="planners" aria-label="This list’s bucket agents">' +
+    '<h2>Bucket agents on ' + esc(state.dataset || 'this list') + '</h2><ul>' +
+    rows.map(bucketAgentRowHTML).join('') + '</ul></section>';
+  again.querySelectorAll('[data-bucket-brief]').forEach(btn => {
+    btn.onclick = () => openBucketBrief(btn.dataset.bucketBrief);
+  });
 }
+
+/* A brief save reloads the data behind the rows, then draws them again. */
+async function reloadBucketAgentsPanel(){
+  await loadBucketAgents();
+  if ($('#agentsPlanners')) refreshBucketPlanners();
+}
+
+/* ---- The old Plan and Implement agents stay off this page ----
+
+   Their folders stay on disk until a later change deletes them, and the agents
+   engine still lists whatever has an agent.json. So the page asks through this
+   wrapper, which drops them from the state the Agents tab draws, and from the
+   Spend and Schedules panels' own lists. */
+const RETIRED_AGENT_IDS = ['plan-agent', 'implement-agent'];
+const RETIRED_AGENT_NAMES = ['Plan agent', 'Implement agent'];
+function withoutRetiredAgents(body){
+  if (!body || typeof body !== 'object') return body;
+  const out = Object.assign({}, body);
+  if (Array.isArray(out.agents)) out.agents = out.agents.filter(a => RETIRED_AGENT_IDS.indexOf(a.id || a.key) < 0);
+  if (Array.isArray(out.jobs)) {
+    out.jobs = out.jobs.filter(j => RETIRED_AGENT_NAMES.indexOf(j.name) < 0 && RETIRED_AGENT_IDS.indexOf(j.agent) < 0 && !/^(Plan|Implement) agent\b/.test(j.name || ''));
+  }
+  return out;
+}
+/* The fetch the wrapper passes on to; the suite swaps it for a stub. */
+let agentsFetchInner = window.fetch.bind(window);
+window.fetch = function(url, opts){
+  const u = String(url);
+  const get = !opts || !opts.method || opts.method === 'GET';
+  if (get && (u.indexOf('/agents-api/state.json') === 0 || u.indexOf('/schedule.json') === 0)) {
+    return agentsFetchInner(url, opts).then(res => {
+      if (!res.ok) return res;
+      return res.clone().json().then(body => new Response(JSON.stringify(withoutRetiredAgents(body)),
+        { status: res.status, headers: { 'Content-Type': 'application/json' } })).catch(() => res);
+    });
+  }
+  return agentsFetchInner(url, opts);
+};
 
 /* Called by renderView() for every view but this one. */
 function leaveAgentsView(){

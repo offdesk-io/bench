@@ -137,7 +137,7 @@ function boardGroupHTML(draft, first){
     '<span class="help">Where facts about you and this list’s people are kept. Same as main uses the memory folder above, None keeps everything in data/' + esc(draft.list) + '/.</span>' +
     '<span class="help fielderr" data-err="board-memory" hidden></span></label>' +
     boardSwitchHTML('data-board-banners', b.banners, 'Desktop banners', 'A banner when a task on this board is due. Off, it sends none.') +
-    boardSwitchHTML('data-board-agents', b.agents, 'Agents', 'Lets the Plan and Implement agents work on this board. Off, they leave it alone.') +
+    boardSwitchHTML('data-board-agents', b.agents, 'Agents', 'Lets this board’s bucket agents work. Off, they leave it alone.') +
     '</div>';
 }
 
@@ -740,7 +740,7 @@ $('#settingsBtn').onclick = () => { closeDataMenu(); openSettingsPage('settings'
 /* ---- Starting an agent straight away ------------------------------------
    Settings > Agent options says, per agent, whether a task handed to it waits
    for its hours or starts at once. "At once" is the run the board already
-   offers (Run the Plan agent now; the Agents tab's Run now), pressed for the owner.
+   offers (Run the bucket agents now; the Agents tab's Run now), pressed for the owner.
    The agents read todo.md from disk, so a hand-over or approval only asks for a
    start here, and the start goes out after the save that carries it. */
 const pendingAgentStarts = new Set();
@@ -758,16 +758,11 @@ async function flushAgentStarts(){
   for (const agent of want) {
     if (!set.agents || !set.agents[agent] || set.agents[agent].start !== 'now') continue;
     try {
-      if (agent === 'plan') {
-        await postJSON('/planning_agent/run');
-        if (typeof watchRunStartedHere === 'function') watchRunStartedHere();
-        showToast('The Plan agent is running.', 'good');
-      } else {
-        await postJSON('/agents-api/run', { agent: 'implement-agent', action: 'run', target: state.dataset });
-        showToast('The Implement agent is running.', 'good');
-      }
+      await postJSON('/agents-api/run', { agent: 'bucket-agent', action: 'run', target: state.dataset });
+      if (typeof watchRunStartedHere === 'function') watchRunStartedHere();
+      showToast('The bucket agents are running.', 'good');
     } catch (err) {
-      showToast('Could not start the ' + (agent === 'plan' ? 'Plan' : 'Implement') + ' agent: ' + (err.message || err), 'bad');
+      showToast('Could not start the bucket agents: ' + (err.message || err), 'bad');
     }
   }
 }

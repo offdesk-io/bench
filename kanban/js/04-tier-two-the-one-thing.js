@@ -453,12 +453,13 @@ function locate(id){
 
    agentOf() in core/todo.js reads any `[to::]` ending in " agent" as an agent,
    which is what a tick, a card's face and the Delegate to filter ask it. */
-let bucketAgentData = { list: null, buckets: [], columns: {} };
+const NO_BUCKET_AGENTS = { list: null, buckets: [], columns: {}, hours: [], on: true };
+let bucketAgentData = NO_BUCKET_AGENTS;
 let bucketAgentLoad = null, bucketAgentLoadList = null, bucketAgentSeq = 0;
 /* The data, only while it is the current list's. A list switch leaves the old
    list's buckets behind until the new answer lands, and they are never used. */
 function bucketAgentsNow(){
-  return bucketAgentData.list === (state.dataset || '') ? bucketAgentData : { list: null, buckets: [], columns: {} };
+  return bucketAgentData.list === (state.dataset || '') ? bucketAgentData : NO_BUCKET_AGENTS;
 }
 /* Each load takes a number, and a response is kept only while it is still the
    newest load and the board is still on the list it asked about, so a slow
@@ -471,9 +472,18 @@ function loadBucketAgents(){
   bucketAgentLoad = (async () => {
     let got = null;
     try { got = await getJSON('/api/bucket-agents?list=' + encodeURIComponent(list)); } catch (err) { got = null; }
+    /* The board's switch and hours come from the runner's own state, through
+       the agents engine; best effort, and absent in the demo build. */
+    let on = true, hours = [];
+    try {
+      const st = await getJSON('/agents-api/state.json');
+      const ag = ((st && st.agents) || []).find(a => a.id === 'bucket-agent');
+      const tg = ag && (ag.targets || []).find(x => x.id === list);
+      if (tg) { on = !!tg.on; hours = tg.hours || []; }
+    } catch (err) { /* keep the defaults */ }
     if (seq !== bucketAgentSeq || list !== (state.dataset || '')) return;
     const had = bucketAgentsNow().buckets.length;
-    bucketAgentData = { list, buckets: (got && got.buckets) || [], columns: (got && got.columns) || {} };
+    bucketAgentData = { list, buckets: (got && got.buckets) || [], columns: (got && got.columns) || {}, hours, on };
     /* Only a redraw when something on screen can have changed. */
     if (state.doc && (had || bucketAgentData.buckets.length)) refreshView();
   })();
@@ -507,6 +517,12 @@ const BUCKET_AGENT_MISSING = {
 };
 function bucketAgentMissingText(a){
   return (a.missing || []).map(m => BUCKET_AGENT_MISSING[m] || m).join(', ');
+}
+/* Whether a scheduled bucket agent may start now: the board's agents are on
+   and this hour is one of its hours. */
+function bucketAgentInHours(){
+  const data = bucketAgentsNow();
+  return data.on !== false && data.hours.indexOf(new Date().getHours()) > -1;
 }
 const LEGACY_AGENTS = ['Plan agent', 'Implement agent'];
 function legacyAgent(to){ return LEGACY_AGENTS.indexOf(agentOf(to)) > -1 ? agentOf(to) : ''; }

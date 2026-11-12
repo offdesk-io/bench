@@ -489,7 +489,8 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
     window.postJSON = real
     return got
   })()`)
-  check('Plan agent set to now starts the Plan agent run, and Implement on scheduled waits', calls.length === 1 && calls[0][0] === '/planning_agent/run', JSON.stringify(calls))
+  check('Plan agent set to now starts the bucket agents\' run, and Implement on scheduled waits', calls.length === 1 && calls[0][0] === '/agents-api/run'
+    && calls[0][1].agent === 'bucket-agent' && calls[0][1].target === '_test', JSON.stringify(calls))
   await fetch(`${base}/settings.json`, { method: 'PUT', headers: { 'X-Board': '1' }, body: '{"agents":{"plan":{"start":"scheduled"},"implement":{"start":"now"}}}' })
   const calls2 = await evalJS(`(async () => {
     const real = window.postJSON, got = []
@@ -499,8 +500,8 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
     window.postJSON = real
     return got
   })()`)
-  check('Implement agent set to now runs it on the current list', calls2.length === 1 && calls2[0][0] === '/agents-api/run'
-    && calls2[0][1].agent === 'implement-agent' && calls2[0][1].action === 'run' && calls2[0][1].target === '_test', JSON.stringify(calls2))
+  check('Implement agent set to now runs the bucket agents on the current list', calls2.length === 1 && calls2[0][0] === '/agents-api/run'
+    && calls2[0][1].agent === 'bucket-agent' && calls2[0][1].action === 'run' && calls2[0][1].target === '_test', JSON.stringify(calls2))
   const drawer = readFileSync(join(HERE, 'js', '19-drawer.js'), 'utf8')
   check('a hand-over and a plan approval both ask for a start', (drawer.match(/queueAgentStart\(/g) || []).length === 2)
 

@@ -55,7 +55,7 @@ function phoneActions(){
   add('undo', 'Undo', '#undo');
   add('download', 'Download copy', '#download');
   add('settings', 'Settings', '#settingsBtn');
-  add('run-agent', 'Run the Plan agent now', '#runAgentBtn');
+  add('run-agent', 'Run the bucket agents now', '#runAgentBtn');
   add('archive', 'Archive old done tasks', '#archiveBtn');
   if (state.who) {
     actions.push({ id: 'sign-out', label: 'Sign out', danger: true,
