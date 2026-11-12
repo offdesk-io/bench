@@ -297,6 +297,32 @@ try {
   await new Promise(r => setTimeout(r, 300))
   check('two drains at once read the queue once', await evalJS(`window.__queueGets`) === 1)
 
+  /* ---- a slow answer cannot overwrite a newer one, or another list's ---- */
+
+  await evalJS(`(() => {
+    window.__held = [];
+    const was = window.fetch;
+    window.fetch = (u, o) => String(u).startsWith('/api/bucket-agents')
+      ? new Promise(res => window.__held.push(body => res(new Response(JSON.stringify(body), { status: 200 }))))
+      : was(u, o);
+    window.__ba = n => ({ buckets: [{ bucket: 'tasks', name: n, mode: 'plan-first', start: 'on-assign', ready: true, missing: [] }], columns: { Tasks: 'tasks' } });
+    window.__realFetchHeld = was;
+    loadBucketAgents(); loadBucketAgents();
+  })()`)
+  await evalJS(`window.__held[1](window.__ba('New tasks agent')); 0`)
+  await new Promise(r => setTimeout(r, 100))
+  await evalJS(`window.__held[0](window.__ba('Old tasks agent')); 0`)
+  await new Promise(r => setTimeout(r, 100))
+  check('two loads finishing out of order keep the newer answer', await evalJS(`!!bucketAgentNamed('New tasks agent') && !bucketAgentNamed('Old tasks agent')`))
+  await evalJS(`window.__held = []; loadBucketAgents(); 0`)
+  await evalJS(`window.__listWas = state.dataset; state.dataset = 'another-list'; 0`)
+  await evalJS(`window.__held[0](window.__ba('Stale list agent')); 0`)
+  await new Promise(r => setTimeout(r, 100))
+  check('an answer for a list the board has left is dropped', await evalJS(`bucketAgentData.list !== 'another-list' && !bucketAgentNamed('Stale list agent')`))
+  check('and another list\'s agents are neither found nor handed to', await evalJS(`
+    !bucketAgentNamed('New tasks agent') && handOver(__task('Theta'), 'New tasks agent') === false && subSteps(__task('Theta')).length === 0`))
+  await evalJS(`state.dataset = window.__listWas; window.fetch = window.__realFetchHeld; 0`)
+
   await evalJS(`state.locked = true`)
 
   check('nothing reached todo.md', await evalJS(`window.__blocked.every(b => b.startsWith('POST /tick-queue.json'))`), await evalJS(`window.__blocked.join(' | ')`))

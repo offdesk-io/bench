@@ -454,13 +454,25 @@ function locate(id){
    agentOf() in core/todo.js reads any `[to::]` ending in " agent" as an agent,
    which is what a tick, a card's face and the Delegate to filter ask it. */
 let bucketAgentData = { list: null, buckets: [], columns: {} };
-let bucketAgentLoad = null;
+let bucketAgentLoad = null, bucketAgentLoadList = null, bucketAgentSeq = 0;
+/* The data, only while it is the current list's. A list switch leaves the old
+   list's buckets behind until the new answer lands, and they are never used. */
+function bucketAgentsNow(){
+  return bucketAgentData.list === (state.dataset || '') ? bucketAgentData : { list: null, buckets: [], columns: {} };
+}
+/* Each load takes a number, and a response is kept only while it is still the
+   newest load and the board is still on the list it asked about, so a slow
+   answer cannot overwrite a newer one (a brief saved meanwhile) or another
+   list's. */
 function loadBucketAgents(){
   const list = state.dataset || '';
+  const seq = ++bucketAgentSeq;
+  bucketAgentLoadList = list;
   bucketAgentLoad = (async () => {
     let got = null;
     try { got = await getJSON('/api/bucket-agents?list=' + encodeURIComponent(list)); } catch (err) { got = null; }
-    const had = bucketAgentData.buckets.length;
+    if (seq !== bucketAgentSeq || list !== (state.dataset || '')) return;
+    const had = bucketAgentsNow().buckets.length;
     bucketAgentData = { list, buckets: (got && got.buckets) || [], columns: (got && got.columns) || {} };
     /* Only a redraw when something on screen can have changed. */
     if (state.doc && (had || bucketAgentData.buckets.length)) refreshView();
@@ -470,17 +482,18 @@ function loadBucketAgents(){
 /* Resolves once the list's bucket agents have been asked for, so a tick that
    names one is not read before the names are known. */
 async function bucketAgentsLoaded(){
-  if (!bucketAgentLoad || bucketAgentData.list !== (state.dataset || '')) await loadBucketAgents();
+  if (!bucketAgentLoad || bucketAgentLoadList !== (state.dataset || '')) await loadBucketAgents();
   else await bucketAgentLoad;
 }
 function bucketAgentNamed(name){
   const v = String(name || '').trim().toLowerCase();
-  return v ? bucketAgentData.buckets.find(b => String(b.name).toLowerCase() === v) || null : null;
+  return v ? bucketAgentsNow().buckets.find(b => String(b.name).toLowerCase() === v) || null : null;
 }
 /* The agent of the bucket a column belongs to, or null. */
 function bucketAgentOfColumn(columnName){
-  const bucket = bucketAgentData.columns[columnName] || columnName;
-  return bucketAgentData.buckets.find(b => b.bucket === bucket) || null;
+  const data = bucketAgentsNow();
+  const bucket = data.columns[columnName] || columnName;
+  return data.buckets.find(b => b.bucket === bucket) || null;
 }
 function bucketAgentOfTask(t){
   const loc = t && locate(t.id);
