@@ -57,6 +57,14 @@
     display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center;
   }
   h1{font-size: var(--tenon-typography-size-lg); font-weight:650; margin:0 4px 0 0; letter-spacing:-.01em}
+  /* The "bench." wordmark (offdesk/brand/bench), inline so its fill can follow
+     the theme. Brand colours, not Tenon tokens: ink on light, paper on dark.
+     The orange dot keeps its own fill. The b's ascender is 85% of the
+     viewBox, so .9em puts it at about the cap height the old text had. */
+  h1 .wordmark{display:block; height:.9em; width:auto; overflow:visible}
+  .wm-b{fill:#141414}
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"], [data-theme$="-light"]) .wm-b{fill:#e7e5e0} }
+  :root[data-theme="dark"] .wm-b, :root[data-theme="1984"] .wm-b, :root[data-theme$="-dark"] .wm-b{fill:#e7e5e0}
   .status{font-size: var(--tenon-typography-size-sm); color:var(--tenon-text-faint); white-space:nowrap}
   .status.dirty{color:var(--tenon-text-warning); font-weight:600}
   .spacer{flex:1 1 auto}
