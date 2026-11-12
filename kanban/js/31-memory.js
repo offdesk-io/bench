@@ -32,6 +32,8 @@ let memEditing = null;    // 'about' | 'people' | 'context' | 'bucket:<heading>'
 let memFormError = '';    // the last save's message, shown inside the open form
 let memPeopleDraft = null;
 let memBucketParts = null;
+let memObserver = null;   // the index's IntersectionObserver, dropped at every redraw
+let memWatcher = null;    // notices #memView leaving the page, since the other views just overwrite #lists
 
 const MEM_PEOPLE_COLS = [
   { key: 'name', label: 'Name' }, { key: 'role', label: 'Role' }, { key: 'team', label: 'Team' },
@@ -93,8 +95,12 @@ function memFormButtons(which){
     (memFormError ? '<span class="memerr" role="alert">' + esc(memFormError) + '</span>' : '') +
   '</div>';
 }
+/* A stable anchor id for the index: the same text always gives the same id. */
+function memSlug(text){
+  return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
+}
 function memSection(id, title, bodyHTML, edit, extra){
-  return '<section class="memsec" data-mem="' + esc(id) + '">' +
+  return '<section class="memsec" id="mem-' + esc(memSlug(id)) + '" data-mem="' + esc(id) + '">' +
     '<div class="memhead"><h3>' + esc(title) + '</h3>' + (edit || '') + '</div>' +
     (extra || '') + bodyHTML +
   '</section>';
@@ -138,9 +144,9 @@ function memPeopleHTML(){
 
 function memBucketsHTML(){
   const list = memData.buckets;
-  if (!list.length) return '<section class="memsec" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' +
+  if (!list.length) return '<section class="memsec" id="mem-buckets" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' +
     memEmpty('No buckets yet.') + '</section>';
-  return '<section class="memsec" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' +
+  return '<section class="memsec" id="mem-buckets" data-mem="buckets"><div class="memhead"><h3>Buckets</h3></div>' +
     list.map(b => {
       const which = 'bucket:' + b.heading;
       let body;
@@ -155,7 +161,7 @@ function memBucketsHTML(){
       } else if (!b.exists) body = memEmpty('No brief yet.');
       else if (!b.filled) body = memEmpty('The brief is still the empty template.');
       else body = memRender(b.text, true);
-      return '<article class="membucket" data-mem-bucket="' + esc(b.heading) + '">' +
+      return '<article class="membucket" id="mem-bucket-' + esc(memSlug(b.heading)) + '" data-mem-bucket="' + esc(b.heading) + '">' +
         '<div class="memhead"><h4>' + esc(b.name) + '</h4>' + memEditBtn(which, memEditing === which) + '</div>' + body +
       '</article>';
     }).join('') +
@@ -188,23 +194,85 @@ function memProfileHTML(){
     ((p.name || '').trim() ? '<p><strong>' + esc(p.name) + '</strong></p>' : '') +
     (about.length ? '<dl class="memdl">' + about.map(([k, v]) =>
       '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>' : '') +
-    sections.map(([k, v]) => '<h4>' + esc(k) + '</h4>' + mdBlocks(String(v))).join('');
+    sections.map(([k, v]) => '<h4 id="mem-profile-' + esc(memSlug(k)) + '" data-mem-sub>' + esc(k) + '</h4>' + mdBlocks(String(v))).join('');
   return memSection('profile', 'Your profile', '<div class="repdoc memtext">' + body + '</div>', edit);
+}
+
+/* ---- The index: one link per section, one nested per subsection ---- */
+
+function memIndexHTML(host){
+  const link = (el, title, sub) => '<li' + (sub ? ' class="sub"' : '') + '><a href="#' + esc(el.id) + '" data-mem-jump="' + esc(el.id) + '">' + esc(title) + '</a>';
+  let out = '';
+  host.querySelectorAll('.memsec').forEach(sec => {
+    const h = sec.querySelector(':scope > .memhead h3');
+    const subs = [...sec.querySelectorAll('.membucket[id], h4[data-mem-sub]')];
+    out += link(sec, h ? h.textContent : sec.dataset.mem, false);
+    if (subs.length) {
+      out += '<ul>' + subs.map(el => {
+        const h4 = el.matches('h4') ? el : el.querySelector('.memhead h4');
+        return link(el, h4 ? h4.textContent : el.id, true) + '</li>';
+      }).join('') + '</ul>';
+    }
+    out += '</li>';
+  });
+  return '<nav class="memindex" aria-label="On this page"><ul>' + out + '</ul></nav>';
+}
+
+function memStopObserving(){
+  if (memObserver) { memObserver.disconnect(); memObserver = null; }
+  if (memWatcher) { memWatcher.disconnect(); memWatcher = null; }
+}
+
+/* Marks the first visible target in page order, plus its section when it is a
+   subsection. IntersectionObserver reports changes only, so the visible set is
+   kept here between callbacks. */
+function memObserve(host){
+  memStopObserving();
+  if (typeof IntersectionObserver === 'undefined') return;
+  const targets = [...host.querySelectorAll('.memsec[id], .membucket[id], h4[data-mem-sub]')];
+  const seen = new Set();
+  let current = null;
+  const mark = id => {
+    current = id;
+    const nav = host.querySelector('.memindex');
+    if (!nav) return;
+    const el = id && document.getElementById(id);
+    const sec = el && el.closest('.memsec');
+    nav.querySelectorAll('a').forEach(a => {
+      const on = a.dataset.memJump === id || (sec && a.dataset.memJump === sec.id);
+      if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+    });
+  };
+  memObserver = new IntersectionObserver(entries => {
+    if (!host.isConnected || host.offsetParent === null) { memStopObserving(); return; }
+    entries.forEach(en => { if (en.isIntersecting) seen.add(en.target.id); else seen.delete(en.target.id); });
+    const first = targets.find(t => seen.has(t.id));
+    if (first) mark(first.id);
+    else if (!current && targets.length) mark(targets[0].id);
+  }, { rootMargin: '0px 0px -60% 0px' });
+  targets.forEach(t => memObserver.observe(t));
+  // The board tab only hides #lists and the others overwrite it; either way the view is gone.
+  memWatcher = new MutationObserver(() => { if (!host.isConnected || host.offsetParent === null) memStopObserving(); });
+  memWatcher.observe(host.parentNode, { childList: true, attributes: true, attributeFilter: ['class'] });
+  mark(targets.length ? targets[0].id : null);
 }
 
 function memDraw(){
   const lists = $('#lists');
+  memStopObserving();
   if (!lists) return;
   if (memError) {
     lists.innerHTML = '<div class="memview"><p class="memerr" role="alert">' + esc(memError) + '</p></div>';
     return;
   }
   if (!memData) { lists.innerHTML = '<div class="memview"><p class="memempty">Reading what Bench keeps…</p></div>'; return; }
-  lists.innerHTML = '<div class="memview" id="memView">' +
+  lists.innerHTML = '<div class="memview" id="memView"><div class="memcontent">' +
     memAboutHTML() + memPeopleHTML() + memBucketsHTML() + memContextHTML() + memProfileHTML() +
-  '</div>';
+  '</div></div>';
   const host = lists.querySelector('#memView');
+  host.insertAdjacentHTML('afterbegin', memIndexHTML(host));
   host.onclick = memClick;
+  memObserve(host);
 }
 
 /* ---- Reading what is on screen into a draft ---- */
@@ -270,6 +338,15 @@ function memStartEdit(which){
 }
 
 function memClick(e){
+  const jump = e.target.closest('a[data-mem-jump]');
+  if (jump) {
+    // scrollIntoView, not a real hash jump: the board's own routing lives in location.hash
+    e.preventDefault();
+    const to = document.getElementById(jump.dataset.memJump);
+    const calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (to) to.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+    return;
+  }
   const t = e.target.closest('button');
   if (!t) return;
   if (t.dataset.memEdit) { memStartEdit(t.dataset.memEdit); return; }

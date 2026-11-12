@@ -3218,13 +3218,22 @@ body.signed-in #runAgentBtn{display:none !important}
 .sharing .sharewith{margin-top:8px}
 .sharing .sharewith[hidden]{display:none}
 
-/* Memory view (31-memory.js). One column of sections at a readable width;
-   #lists is a two-column flow for the other views, so this spans both. */
-.memview{column-span:all; max-width:760px; margin:0 auto; padding:8px 0 40px; display:flex; flex-direction:column; gap:28px}
-.memsec{display:flex; flex-direction:column; gap:10px}
+/* Memory view (31-memory.js). An index on the left, one column of sections at
+   a readable width beside it; #lists is a two-column flow for the other views,
+   so this spans both. */
+.memview{column-span:all; max-width:1000px; margin:0 auto; padding:8px 0 40px; display:grid; grid-template-columns:200px minmax(0, 1fr); gap:32px; align-items:start}
+.memcontent{display:flex; flex-direction:column; gap:40px; max-width:760px; min-width:0}
+.memindex{position:sticky; top:12px; max-height:calc(100vh - 24px); overflow-y:auto; font-size:var(--tenon-typography-size-sm)}
+.memindex ul{list-style:none; margin:0; padding:0}
+.memindex ul ul{margin:2px 0 8px 10px}
+.memindex a{display:block; padding:3px 8px; border-left:2px solid transparent; color:var(--tenon-text-subtle); text-decoration:none}
+.memindex a:hover{color:var(--tenon-text-default)}
+.memindex a[aria-current="true"]{border-left-color:var(--tenon-stroke-focus); color:var(--tenon-text-default); font-weight:660}
+.memindex a:focus-visible{outline:2px solid var(--tenon-stroke-focus); outline-offset:1px}
+.memsec{display:flex; flex-direction:column; gap:8px}
 .memhead{display:flex; align-items:center; justify-content:space-between; gap:12px}
-.memhead h3{margin:0; font-size:var(--tenon-typography-size-md); font-weight:660; color:var(--tenon-text-default)}
-.memhead h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:660; color:var(--tenon-text-default)}
+.memhead h3{margin:0; font-size:var(--tenon-typography-size-lg); font-weight:660; letter-spacing:-.01em; color:var(--tenon-text-default)}
+.memhead h4, .memtext h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:600; color:var(--tenon-text-subtle)}
 .membucket{display:flex; flex-direction:column; gap:8px; padding:12px 0; border-top:1px solid var(--tenon-stroke-default)}
 .memtext{max-width:68ch}
 .memempty{margin:0; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-faint)}
@@ -3248,6 +3257,8 @@ body.signed-in #runAgentBtn{display:none !important}
 .memdl dt{color:var(--tenon-text-faint)}
 .memdl dd{margin:0; color:var(--tenon-text-subtle)}
 @media (max-width:640px){
+  .memview{grid-template-columns:minmax(0, 1fr); gap:20px}
+  .memindex{position:static; max-height:none; overflow:visible}
   .memrow{grid-template-columns:1fr 1fr}
   .memrow .btn{grid-column:1 / -1; justify-self:start}
   .memtable thead{display:none}

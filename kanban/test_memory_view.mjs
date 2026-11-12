@@ -67,7 +67,7 @@ async function shot (file, w, h, mobile) {
   writeFileSync(file, Buffer.from(s.result.data, 'base64'))
   await send('Emulation.clearDeviceMetricsOverride', {})
 }
-const sections = `[...document.querySelectorAll('#memView > .memsec')].map(s => s.dataset.mem).join(',')`
+const sections = `[...document.querySelectorAll('#memView .memsec')].map(s => s.dataset.mem).join(',')`
 
 try {
   await wait(2500)
@@ -171,6 +171,32 @@ try {
   await evalJS(`${$q('[data-mem-context]')}.value = 'Added fresh.'`)
   await click('[data-mem-save=context]')
   check('Edit adds the section', /## Context\n\nAdded fresh\.\n?$/.test(await evalJS(`serializeDoc(state.doc)`)))
+
+  // --- the index -----------------------------------------------------------
+  await evalJS(`state.locked = true; renderMemoryView()`)
+  await wait(800)
+  const want = `document.querySelectorAll('#memView .memsec').length + document.querySelectorAll('#memView .membucket[id], #memView h4[data-mem-sub]').length`
+  const links = `document.querySelectorAll('nav[aria-label="On this page"] a[data-mem-jump]').length`
+  check('the index is a nav named "On this page"', await evalJS(`!!document.querySelector('#memView > nav[aria-label="On this page"]')`))
+  check('the index has one link per section and subsection', await evalJS(links) === await evalJS(want) && await evalJS(links) >= 5,
+    `${await evalJS(links)} links, ${await evalJS(want)} targets`)
+  check('every link points at an element with that id', await evalJS(`[...document.querySelectorAll('[data-mem-jump]')].every(a => document.getElementById(a.dataset.memJump) && a.getAttribute('href') === '#' + a.dataset.memJump)`))
+  check('exactly one entry is current', await evalJS(`document.querySelectorAll('.memindex a[aria-current="true"]').length`) >= 1)
+  const hashBefore = await evalJS(`location.hash`)
+  await evalJS(`document.querySelector('[data-mem-jump="mem-profile"]').click()`)
+  await wait(800)
+  check('clicking a link leaves location.hash alone', await evalJS(`location.hash`) === hashBefore, await evalJS(`location.hash`))
+  check('and scrolls the target into view', await evalJS(`(() => { const r = document.getElementById('mem-profile').getBoundingClientRect(); return r.top < innerHeight })()`))
+  const linksBefore = await evalJS(links)
+  await evalJS(`state.locked = false; memEditing = 'about'; memDraw()`)
+  check('an open edit form adds no index entries', await evalJS(`!!document.querySelector('#memView textarea')`) && await evalJS(links) === linksBefore)
+  await evalJS(`memEditing = null; memDraw()`)
+  check('the observer is running in the view', await evalJS(`memObserver !== null`))
+  await evalJS(`state.view = 'board'; renderView()`)
+  await wait(600)
+  check('leaving the view disconnects the observer', await evalJS(`memObserver === null`))
+  await evalJS(`state.view = 'memory'; renderView()`)
+  await wait(500)
 
   await shot(process.env.SHOT_DESKTOP, 1200, 1000, false)
   await shot(process.env.SHOT_PHONE, 390, 800, true)
