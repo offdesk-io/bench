@@ -69,6 +69,13 @@ before it does, records what was attempted, and ends by asserting nothing
 reached `todo.md`; the queue tests stub `/tick-queue.json` rather than read a
 file. `kanban/test_schedule.mjs` (the Spend and Schedules tabs) does the same.
 
+**Bucket agents in the browser suites.** A task is handed to its bucket's agent,
+which `/api/bucket-agents` names and says is ready or not. The scratch list has
+no buckets folder, so a suite that hands over or offers an agent seeds
+`bucketAgentData` itself, once `load()`'s own ask for it has landed (it would
+replace the seed), mapping the column's name to a bucket. The two old agents
+still hand over through `handOver(t, 'Plan agent')`, for tags already written.
+
 **`kanban/test_focus_prompt.mjs`** unlocks the tab too, because a locked tab
 shows no focus prompt. It holds cards, sub-tasks and drawer sections and talks
 to the PA through the prompt, with no Claude behind it: a POST to `/claude`
@@ -129,7 +136,7 @@ node kanban/ui/test_primitives.mjs # the React primitives against colHTML/cardSh
 python3 agents/plan-agent/test_planning_agent.py    # the schedule, the picker, the runner
 python3 companion/test_companion.py   # notify.py and digest.py; the Electron app is retired
 python3 core/test_notify_due.py    # desktop banners: the rules, the state file, the queue and its lock
-python3 kanban/test_bucket_brief.py # the brief routes — no board, no browser
+python3 kanban/test_bucket_brief.py # the brief routes and /api/bucket-agents — no board, no browser
 python3 kanban/test_board_access.py # signed-in mode and board access — starts its own servers
 python3 kanban/test_chat_spend.py   # the shared board's daily chat ledger and its limits
 python3 kanban/test_pa_check.py     # the second check on a PA reply's changes, with a fake model
@@ -138,9 +145,9 @@ python3 kanban/test_server_chat_live.py # the real CLI with the shared board's s
 # the ones below need the board: scripts/test-board.sh --all runs every one
 node kanban/test_schedule.mjs
 node kanban/test_board_link.mjs   # a banner's link naming its board
-node kanban/test_one_board.mjs     # handing a task over, the two reviews, whose move it is
+node kanban/test_one_board.mjs     # handing a task to its bucket's agent (plan-first, free-rein, not set up), the two reviews, whose move it is
 node kanban/test_signed_in.mjs     # signed in: the name, the Mac-only parts gone, sharing a list
-node kanban/test_subtasks.mjs      # sub-tasks in the drawer, and the agents' tick queue
+node kanban/test_subtasks.mjs      # sub-tasks in the drawer, and the agents' tick queue (no auto-approval of a plan)
 node kanban/test_board.mjs         # drag, drop, sort, add, Done as a heading, string card vs React one
 node kanban/test_chats.mjs
 node kanban/test_projects.mjs
@@ -154,7 +161,7 @@ node kanban/test_reports.mjs       # both halves, and the window picker over the
 node kanban/test_recurring_roll.mjs # where a recurring card lands when its date turns over
 node kanban/test_archiving.mjs     # the only thing that rewrites todo.md on a timer
 node kanban/test_save_guard.mjs    # the preconditions on PUT /data/todo.md
-node kanban/test_bucket_brief.mjs  # the Brief button, and the sheet behind it
+node kanban/test_bucket_brief.mjs  # the Brief button, the sheet behind it, the agent format round trip (frontmatter, eight sections, mode and start)
 ```
 
 **`test_phone.mjs`** runs twice — a 400px window and a 1400px one, both through

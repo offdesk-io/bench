@@ -41,6 +41,7 @@ function load(text, name, opts){
   markClean('');
   state.migratedOnly = false;
   checkAgentsSetup();
+  loadBucketAgents();
   renderView();
   if (renamed) { markDirty(); $('#status').textContent = 'renamed “Parked” to “Backlog” — save to apply'; }
   if (minted) { markDirty(); $('#status').textContent = 'gave ' + minted + ' task' + (minted === 1 ? '' : 's') +

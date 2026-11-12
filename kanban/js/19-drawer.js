@@ -23,7 +23,10 @@ fetch('/people.json', { cache: 'no-store' })
 /* One host per dropdown: PICK_SPECS says what each draws. `onPick` is the
    field's own callback where it has no hidden <select> to hand the value to. */
 const PICK_SPECS = {};
-function delegateSelectHTML(value, dis, id){
+/* The Delegate to value of an agent that cannot take work yet; choosing it
+   says what is missing and changes nothing. */
+const NOT_SET_UP = '__not-set-up';
+function delegateSelectHTML(value, dis, id, bucketAgent){
   id = id || 'f-to';
   const cur = String(value || '').trim();
   const opt = (v, label) => '<option value="' + esc(v) + '"' + (v === cur ? ' selected' : '') + '>' + esc(label || v) + '</option>';
@@ -38,22 +41,30 @@ function delegateSelectHTML(value, dis, id){
      resolves on cards, but a task is not handed to it here; it stays offered
      only when this task already names it. */
   const board = everyone.filter(p => !/@offdesk\.invalid$/i.test(p.email) || p.email === cur);
-  const known = new Set(AGENT_NAMES.concat(peopleNames, emails));
+  const known = new Set(AGENT_NAMES.concat(bucketAgentData.buckets.map(b => b.name), peopleNames, emails));
   const people = peopleNames.filter(n => emails.indexOf(String(n).toLowerCase()) < 0);
   if (cur && !agentOf(cur) && !known.has(cur)) people.unshift(cur);
   const label = v => isPersonEmail(v) ? assigneeLabel(v) : v;
-  /* No agents offered on a list that has none set up yet (agentsSetUp(),
-     27-agents.js), unless this field already names one, which stays as
-     written. */
-  /* An agent whose handover level is Off (handoverLevel(), 04-tier-two-the-
-     one-thing.js) is left out the same way. */
-  const any = agentsSetUp() || !!agentOf(cur);
-  const offered = AGENT_NAMES.filter(a => agentOf(cur) === a || (any && handoverLevel(a) !== 'off'));
-  const agents = offered.map(a => agentOf(cur) === a ? cur : a);
+  /* The one agent a task can be handed to is its bucket's, so that is the one
+     offered (`bucketAgent`, from bucketAgentOfTask()). One whose brief is not
+     filled in yet is listed all the same, saying it is not set up and what is
+     missing, so the owner sees why there is nothing to pick. An agent the task
+     already names, a bucket's or one of the two old ones, stays as written. */
+  const curAgent = agentOf(cur);
+  const agents = [], offered = [];
+  if (curAgent) { agents.push(cur); offered.push(curAgent); }
+  if (bucketAgent && bucketAgent.name !== curAgent) {
+    if (bucketAgent.ready) { agents.push(bucketAgent.name); offered.push(bucketAgent.name); }
+    else {
+      agents.push(NOT_SET_UP);
+      offered.push(bucketAgent.name + ' not set up' + (bucketAgentMissingText(bucketAgent) ? ': ' + bucketAgentMissingText(bucketAgent) : ''));
+    }
+  }
   PICK_SPECS[id] = {
     value: cur, ro: !!dis, label: 'Delegate to',
     options: [{ value: '', label: 'Nobody' }]
-      .concat(agents.map((v, i) => ({ value: v, label: offered[i], group: 'Agents', iconHtml: agentAvatarHTML(v, 18) })))
+      .concat(agents.map((v, i) => ({ value: v, label: offered[i], group: 'Agents',
+                                     iconHtml: v === NOT_SET_UP ? undefined : agentAvatarHTML(v, 18) })))
       .concat(board.map(p => ({ value: p.email, label: personName(p.email), group: 'People',
                                 iconHtml: personAvatarHTML(p.email, personFullName(p.email), 18) })))
       .concat(people.map(p => ({ value: p, label: label(p), group: 'People', iconHtml: assigneeAvatarHTML(p, 18) || undefined })))
@@ -1346,9 +1357,9 @@ function openDrawer(id, focusTitle){
     /* One question, one field: who does the work. Left on Nobody for anything
        the owner is doing themself, which is most of the list. A <select> cannot
        hold an image, so the avatar sits beside it instead. */
-    delegateHTML: delegateSelectHTML(t.to, dis) +
-      (agentsSetUp() || agentOf(t.to)
-        ? '<span class="help">The Plan agent plans it and stops. The Implement agent carries it out.</span>'
+    delegateHTML: delegateSelectHTML(t.to, dis, 'f-to', bucketAgentOfTask(t)) +
+      (bucketAgentOfTask(t) || agentOf(t.to)
+        ? '<span class="help">The bucket’s agent does the work. Plan first, it waits for your yes to the plan; free rein, it starts straight away. You review what it makes.</span>'
         : '') +
       (!DRAWER_HIDDEN.chatwith && chat.available() && !ro
         ? '<button type="button" class="btn outline small" id="f-chatwith">New chat with this task</button>'
@@ -1411,17 +1422,25 @@ function openDrawer(id, focusTitle){
   $('#f-title').oninput  = e => { t.title = e.target.value; touch(); };
   $('#f-to').onchange = e => {
     const was = agentOf(t.to);
+    if (e.target.value === NOT_SET_UP) {
+      const a = bucketAgentOfTask(t);
+      showToast((a ? a.name : 'This bucket’s agent') + ' is not set up' +
+        (a && bucketAgentMissingText(a) ? ', it still needs ' + bucketAgentMissingText(a) : '') + '. Fill in its brief first.', 'blocked');
+      openDrawer(id);
+      return;
+    }
     /* Choosing an agent is the handover: the sub-tasks are laid out on the card
-       and it moves to Doing. See handOver() in 04-tier-two-the-one-thing.js. */
+       and it moves to Doing. See handOver() in 04-tier-two-the-one-thing.js.
+       A bucket agent starts itself (on assignment or on its schedule); only the
+       two old agents are started from here. */
     if (agentOf(e.target.value)) {
       const laid = handOver(t, e.target.value);
-      if (laid) queueAgentStart(agentOf(e.target.value) === 'Plan agent' ? 'plan' : 'implement');
+      const to = agentOf(e.target.value), old = legacyAgent(to);
+      if (laid && old) queueAgentStart(old === 'Plan agent' ? 'plan' : 'implement');
       touch();
       openDrawer(id);
       if (laid) {
-        $('#status').textContent = 'handed to the ' + agentOf(e.target.value) + ' — sub-tasks added, and the card is in Doing' +
-          (agentOf(e.target.value) === 'Plan agent' && handoverLevel('Plan agent') === 'just-do-it'
-            ? '; the plan will be approved when it lands' : '');
+        $('#status').textContent = 'handed to the ' + to + ' — sub-tasks added, and the card is in Doing';
         $('#status').classList.add('dirty');
       }
       return;
@@ -1740,7 +1759,7 @@ function openSubtaskDrawer(found){
     plainSection('Title', '<input type="text" id="s-title" value="' + esc(f.title) + '"' + dis + '>') +
     reviewHTML +
     '<div class="field"><span>State</span>' + stepPickerHTML('s-substate', SUB_STATES, now, ro, 'State') + '</div>' +
-    '<div class="field"><span>Assigned to</span>' + delegateSelectHTML(f.to, dis, 's-to') + '</div>' +
+    '<div class="field"><span>Assigned to</span>' + delegateSelectHTML(f.to, dis, 's-to', bucketAgentOfTask(t)) + '</div>' +
     '<div class="grid2">' +
       field('impact', 'Impact', stepSliderHTML('s-impact', IMPACT_STOPS, inh.impact, ro, 'Impact')) +
       '<div class="field"><span>Effort</span>' + stepSliderHTML('s-effort', EFFORT_STOPS, f.effort, ro, 'Effort') + '</div>' +
@@ -1824,8 +1843,11 @@ function openSubtaskDrawer(found){
       $('#f-approve').onclick = () => {
         const msg = approveReview(t, line);
         if (msg) { showToast(msg, 'blocked'); return; }
-        /* An approved plan is the Implement agent's cue. */
-        if (kind === 'plan') queueAgentStart('implement');
+        /* An approved plan is the Implement agent's cue, when it is the old one; a bucket agent takes its own. */
+        if (kind === 'plan') {
+          const doer = subSteps(t).find(x => x.slug === t.stableId + '-implement');
+          if (doer && legacyAgent(doer.to)) queueAgentStart('implement');
+        }
         subSendBackFor = null; refreshView(); again();
       };
       $('#f-sendback').onclick = () => { subSendBackFor = subSendBackFor === subId ? null : subId; again(); };

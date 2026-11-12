@@ -124,7 +124,7 @@ check('the Plan and Implement agents\' cards each carry a handover level, and th
     [...c.querySelectorAll('[data-handover-level] option')].map(o => o.value).join('/')).join(' ')`) ===
   'PA: Plan agent:plan-first/just-do-it/off Implement agent:just-do-it/off')
 check('Delegate to offers no agents', await evalJS(`!delegateSelectHTML('', '').includes('Plan agent')`))
-check('but keeps one a task already names', await evalJS(`delegateSelectHTML('Plan agent', '').includes('Implement agent')`))
+check('but keeps one a task already names', await evalJS(`delegateSelectHTML('Plan agent', '').includes('value="Plan agent"')`))
 await evalJS(`state.view = 'overview'; renderView()`)
 await wait(400)
 check('Overview leaves out Delegate to Claude', await evalJS(`!document.querySelector('#lists').textContent.includes('Delegate to Claude')`))

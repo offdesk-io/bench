@@ -270,7 +270,7 @@ check('a Figma link opens in the desktop app', await evalJS(`
 `) === 'figma://file/ABC123/Beta-screens?node-id=1-2')
 check('the reply now goes to the Implement agent', await evalJS(`
   document.querySelector('#act-send').textContent === 'Send to Implement agent'
-`))
+`), await evalJS(`document.querySelector('#act-send')?.textContent + '/' + subSteps(__t('Beta')).map(s=>s.clean+':'+s.to+':'+s.done).join(',')`))
 await evalJS(`closeSubPanel()`)
 
 /* ---- nothing written ---- */

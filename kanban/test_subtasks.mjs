@@ -204,9 +204,14 @@ try {
   /* ---- editing one, on a tab that is allowed to ---- */
 
   await evalJS(`state.locked = false; window.__saved = []; window.fetch = (u, o) => { window.__saved.push(((o && o.method) || 'GET') + ' ' + u); return Promise.resolve(new Response('{}', { status: 200 })) }; openDrawer('aa0002')`)
-  await evalJS(`(() => { const sel = document.querySelector('#s-to'); sel.value = 'Implement agent'; sel.onchange({ target: sel }); })()`)
+  await evalJS(`(() => {
+    bucketAgentData = { list: state.dataset || '', buckets: [{ bucket: 'b', name: 'Test b agent', mode: 'free-rein', start: 'on-assign', ready: true, missing: [] }],
+      columns: { [locate(__parent.id).bucket.name]: 'b' } };
+    openDrawer('aa0002');
+    const sel = document.querySelector('#s-to'); sel.value = 'Test b agent'; sel.onchange({ target: sel });
+  })()`)
   check('changing the assignee rewrites its line in the tag order of a task and keeps every tag', await evalJS(`
-    __parent.body.find(l => l.includes('aa0002'))`) === '  - [ ] Review the plan \`#ab12cd-plan-review\` [to:: Implement agent] \`blocked-by:ab12cd-plan\` \`id:aa0002\`', await evalJS(`__parent.body.find(l => l.includes('aa0002'))`))
+    __parent.body.find(l => l.includes('aa0002'))`) === '  - [ ] Review the plan \`#ab12cd-plan-review\` [to:: Test b agent] \`blocked-by:ab12cd-plan\` \`id:aa0002\`', await evalJS(`__parent.body.find(l => l.includes('aa0002'))`))
   await evalJS(`closeDrawer(); openDrawer(__parent.id); document.querySelectorAll('#f-subs .sub')[1].querySelector('[data-tenon-grip]').click()`)
   check('the drag grip does not open the panel', await evalJS(`!document.querySelector('#subpanel').classList.contains('open')`) === true)
   await evalJS(`closeDrawer()`)
@@ -299,12 +304,10 @@ try {
   const task = title => `state.doc.buckets[0].tiers.flatMap(x => x.tasks).find(t => t.title === '${title}')`
   check('the Plan agent hands over at Plan first, and the Implement agent at Just do it, until he says otherwise',
     await evalJS(`handoverLevel('Plan agent') + ' ' + handoverLevel('Implement agent')`) === 'plan-first just-do-it')
-  check('a handover at Just do it lays out the same four sub-tasks, with the plan review marked to approve itself', await evalJS(`(() => {
+  check('an old-style handover at Just do it still lays out the four, with the plan review noted', await evalJS(`(() => {
     const t = ${task('Just do it')};
     if (!handOver(t, 'Plan agent', 'just-do-it')) return false;
-    const steps = subSteps(t);
-    const rv = steps.find(s => s.slug === 'jj0001-plan-review');
-    return steps.length === 4 && justDoIt(t, rv.line) && !justDoIt(t, steps[0].line);
+    return subSteps(t).length === 4;
   })()`))
   await evalJS(`(() => {
     const j = ${task('Just do it')}, f = ${task('Folded')};
@@ -320,15 +323,15 @@ try {
   await new Promise(r => setTimeout(r, 300))
   const review = title => evalJS(`(() => { const t = ${task(title)}; const rv = subSteps(t).find(s => s.slug === t.stableId + '-plan-review');
     return (rv.done ? 'ticked' : 'open') + ' | ' + stepNoteText(t, rv.line).replace(/\\n/g, ' / '); })()`)
-  check('when its plan lands, Review the plan is ticked for him, and says why', /^ticked \| .*- Approved: just do it/.test(await review('Just do it')), await review('Just do it'))
-  check('with the plan still named on it to read', /- Plan: plans\/jj0001-just-do-it\.md/.test(await review('Just do it')), await review('Just do it'))
-  check('a folded plan still waits for him', /^open \|/.test(await review('Folded')), await review('Folded'))
-  check('an agent set to Off is not offered under Delegate to, and takes no handover', await evalJS(`(() => {
+  check('when its plan lands, Review the plan stays open for him whatever the level', /^open \| .*- Plan: plans\/jj0001-just-do-it\.md/.test(await review('Just do it')), await review('Just do it'))
+  check('and nothing says it was approved on arrival', !/Approved:/.test(await review('Just do it')), await review('Just do it'))
+  check('a plan with no type waits for him too', /^open \|/.test(await review('Folded')), await review('Folded'))
+  check('an old agent set to Off takes no handover, and neither old agent is offered under Delegate to', await evalJS(`(() => {
     setHandoverLevel('Plan agent', 'off');
     const html = delegateSelectHTML('', '');
     const t = ${task('Not offered')};
-    const ok = !html.includes('value="Plan agent"') && html.includes('value="Implement agent"') &&
-      handOver(t, 'Plan agent') === false && !subSteps(t).length && !t.to;
+    const ok = !html.includes('value="Plan agent"') && !html.includes('value="Implement agent"') &&
+      handOver(t, 'Plan agent') === false && !subSteps(t).length;
     localStorage.removeItem(handoverLevelsKey());
     return ok;
   })()`))

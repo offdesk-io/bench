@@ -64,6 +64,7 @@ except ImportError:
 import project_folders
 import platform_calls
 import settings
+import bucket_agents
 import iso_countries
 import board_access
 # The planning agent's own two modules, imported the same way and for the same
@@ -268,6 +269,22 @@ def memory_path(kind, name=None, write=False):
     if not name:
         return os.path.join(dataset_dir(None), kind + ".md")
     return settings.memory_file(name, kind, DATA_ROOT, write)
+
+
+def bucket_agent_name(dataset, bucket):
+    """A bucket's agent as the board names it: "[List] [bucket] agent", the
+    list's name said once where the bucket already starts with it. The one
+    place the rule is written here; bucket_agents.agent_name takes over from it
+    once that exists."""
+    if hasattr(bucket_agents, "agent_name"):
+        return bucket_agents.agent_name(dataset, bucket)
+    list_words = [w for w in re.split(r"[-_\s]+", dataset) if w]
+    bucket_words = [w for w in re.split(r"[-_\s]+", bucket) if w]
+    if bucket_words[:len(list_words)] == list_words:
+        bucket_words = bucket_words[len(list_words):]
+    words = list_words + bucket_words + ["agent"]
+    name = " ".join(words)
+    return name[:1].upper() + name[1:]
 
 
 def people_path(name=None, write=False):
@@ -3171,6 +3188,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path == "/api/bucket-agents":
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            ds = (q.get("list") or [""])[0].strip() or current_dataset()
+            if not ds or ds not in list_datasets():
+                return self._json(404, {"error": "there is no list called %r" % (ds,)})
+            out = []
+            for b in bucket_agents.all_buckets(ds, DATA_ROOT):
+                out.append({"bucket": b["bucket"], "name": bucket_agent_name(ds, b["bucket"]),
+                            "mode": b["mode"], "start": b["start"],
+                            "ready": b["ready"], "missing": b["missing"]})
+            # Which bucket's agent each column of the board hands to: the
+            # column's name -> its bucket (stream), the way its brief is found.
+            columns = {}
+            for heading, label in bucket_headings(ds):
+                try:
+                    columns[label] = bucket_brief_path(heading, ds)[0]
+                except LookupError:
+                    pass
+            return self._json(200, {"buckets": out, "columns": columns})
         if path == "/people.json":
             try:
                 with open(people_path(), encoding="utf-8") as fh:

@@ -422,7 +422,7 @@ function quickSortBtn(){
 function quickSection(items){
   // The Implement agent's work belongs to Delegate to Claude, and Backlog is
   // not a real priority — neither belongs here.
-  const implementing = i => agentOf(i.to) === 'Implement agent';
+  const implementing = i => !!agentOf(i.to) && agentOf(i.to) !== 'Plan agent';
   const open = items.filter(i => !i.done && !implementing(i) && i.tier !== HELD_TIER);
   // Two separate reasons something is not a quick win yet: it waits on another
   // task, or its start date has not arrived. Neither is about the deadline —
@@ -1760,12 +1760,12 @@ async function drainAttachQueue(){
    was dealt with is removed by id, so a request that arrived while this ran is
    not written over.
 
-   The Plan agent's tick carries the plan's `type:`. For a pre-approved type the
-   review behind it is ticked here too, with a note saying so: those plans only
-   add new files to one project folder and send nothing, so they need no accept
-   step. The list is the board's, not the agent's, and must match PRE_APPROVED
-   in core/plan_types.py. */
-const PRE_APPROVED_TYPES = ['write-up', 'draft'];
+   Nothing approves a plan or a piece of work but the owner: a Review the plan
+   or Review the work sub-task is assigned to the owner, so no agent's tick
+   can reach it, and the board ticks none on the agent's behalf. The agent a
+   sub-task is assigned to is a bucket's agent ("Personal family agent"), or
+   one of the two old agents on a task handed over before buckets had their
+   own. */
 
 /* The other request on the queue: hand a task over. The Plan agent leaves one
    for a task carrying `[to::]` an agent with none of the sub-tasks a handover
@@ -1848,9 +1848,11 @@ async function drainTickQueueOnce(){
     items = await getJSON('/tick-queue.json');
   } catch (err) { return; }
   if (!Array.isArray(items) || !items.length) return;
+  /* A bucket agent's name is only an agent's once the list's buckets are known. */
+  await bucketAgentsLoaded();
 
   const dealt = [];
-  let ticked = 0, refused = 0, moved = 0, approved = 0, handed = 0, drafts = 0;
+  let ticked = 0, refused = 0, moved = 0, handed = 0, drafts = 0;
   for (const it of items) {
     if (!it || !it.id) continue;
     if (it.handover) {
@@ -1892,28 +1894,8 @@ async function drainTickQueueOnce(){
         setStepNoteText(t, rv.line, now.concat('- Plan: plans/' + rel).filter(Boolean).join('\n'));
       }
     }
-    const kind = String(it.type || '').trim().toLowerCase();
-    /* Review the plan ticks itself for a pre-approved type, and for any plan on
-       a task handed over at Just do it (handOver(), 04-tier-two-the-one-thing.js).
-       A folded plan arrives with no type, and waits for the owner either way. */
-    const rv = who === 'Plan agent' && kind && f.slug && t.stableId
-      ? subSteps(t).find(x => x.slug === t.stableId + '-plan-review' && (x.blockedBy || []).indexOf(f.slug) > -1)
-      : null;
-    const why = !rv ? ''
-      : PRE_APPROVED_TYPES.indexOf(kind) > -1 ? 'pre-approved type (' + kind + ')'
-      : justDoIt(t, rv.line) ? 'just do it' : '';
-    if (why) {
-      const g = readSub(t, rv.line);
-      if (g && !g.done && !agentOf(g.to)) {
-        g.done = true; g.doneOn = ymd(today()); g.doing = false;
-        writeSub(t, rv.line, g);
-        const now = stepNoteText(t, rv.line).split('\n').filter(l => !/^- Approved:/i.test(l));
-        setStepNoteText(t, rv.line, now.concat('- Approved: ' + why).filter(Boolean).join('\n'));
-        approved++;
-      }
-    }
     dealt.push(it.id);
-    if (who === 'Implement agent' && !t.done) {
+    if ((who === 'Implement agent' || /-implement$/.test(f.slug || '')) && !t.done) {
       const cur = locate(t.id);
       if (cur && cur.tier.name !== WAIT_COL && cur.tier.name !== DONE_COL) {
         cur.tier.tasks.splice(cur.index, 1);
@@ -1929,7 +1911,6 @@ async function drainTickQueueOnce(){
     $('#status').textContent = (ticked
       ? 'agents ticked ' + ticked + ' sub-task' + (ticked === 1 ? '' : 's') +
         (moved ? ', ' + moved + ' card' + (moved === 1 ? '' : 's') + ' into ' + WAIT_COL : '') +
-        (approved ? ', ' + approved + ' plan' + (approved === 1 ? '' : 's') + ' approved on arrival' : '') +
         ' — save to apply'
       : '') + (refused ? (ticked ? '; ' : '') + refused + ' request' + (refused === 1 ? '' : 's') + ' refused' : '');
   }

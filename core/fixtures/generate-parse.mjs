@@ -137,7 +137,8 @@ const stepsFor = d => {
 /* What agentOf() makes of whatever `[to::]` holds: an agent's canonical
    spelling, or '' for a person or nobody. Both suites check todo.py's agent_of
    against it. */
-const AGENT_INPUTS = ['Plan agent', 'Implement agent', 'plan AGENT', '  Implement agent ',
+const AGENT_INPUTS = ['Personal family agent', 'personal family AGENT', '  Work people agent ', 'agent', ' agent', 'Not an agent here',
+  'Plan agent', 'Implement agent', 'plan AGENT', '  Implement agent ',
   'Jordan', '', 'Planning Agent', 'Claude',
   /* 23 Oct 2026: a person given a task on a shared board is stored by email,
      and an email is a person, however it is spelt. */
