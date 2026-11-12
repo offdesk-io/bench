@@ -271,6 +271,33 @@ def test_json():
         check("today_status names whether it's a working day",
               out["today_status"]["working"], True)   # 2026-09-07 is a Monday
 
+        # The calendar is the list's own profile's when the list is kept apart.
+        saved = os.environ.get("TODOS_DATA_ROOT")
+        os.environ["TODOS_DATA_ROOT"] = tmp
+        try:
+            os.makedirs(os.path.join(tmp, "demo"))
+            demo = os.path.join(tmp, "demo", "todo.md")
+            with open(demo, "w", encoding="utf-8") as fh:
+                fh.write(DOC)
+            with open(os.path.join(tmp, "profile.md"), "w", encoding="utf-8") as fh:
+                fh.write("# PA profile\n\n## About\n\n- Holidays: UK\n")
+            with open(os.path.join(tmp, "demo", "profile.md"), "w", encoding="utf-8") as fh:
+                fh.write("# PA profile\n\n## About\n\n- Holidays: PT\n")
+            with open(os.path.join(tmp, "settings.json"), "w", encoding="utf-8") as fh:
+                json.dump({"boards": {"demo": {"memory_root": None}}}, fh)
+            portugal_day = dt.date(2026, 6, 10)
+            check("today_status follows a kept-apart list's own calendar",
+                  digest.to_json(digest.build(portugal_day, path=demo))["today_status"]["working"], False)
+            os.remove(os.path.join(tmp, "settings.json"))
+            os.remove(os.path.join(tmp, "demo", "profile.md"))
+            check("and an inheriting list the owner's",
+                  digest.to_json(digest.build(portugal_day, path=demo))["today_status"]["working"], True)
+        finally:
+            if saved is None:
+                os.environ.pop("TODOS_DATA_ROOT", None)
+            else:
+                os.environ["TODOS_DATA_ROOT"] = saved
+
         broken = digest.build(DAY, path=os.path.join(tmp, "missing.md"))
         check("a missing file reports an error rather than raising",
               digest.to_json(broken)["error"] is not None, True)

@@ -854,6 +854,19 @@ class ProfileTest(unittest.TestCase):
         self.assertEqual(self.op.holiday_regions(self.root), ("GB:GB-SCT",))
         self.assertEqual(self.op.board_holiday_regions(os.path.join(self.root, "demo"), self.root), ("PT:",))
 
+    def test_a_lists_calendar_comes_from_its_own_profile(self):
+        self.settings({"boards": {"demo": {"memory_root": None}}})
+        for name in ("work", "demo"):
+            os.makedirs(os.path.join(self.root, name))
+        with open(os.path.join(self.root, "demo", "profile.md"), "w", encoding="utf-8") as fh:
+            fh.write("# PA profile\n\n## About\n\n- Holidays: PT\n")
+        here = lambda name: os.path.join(self.root, name, "todo.md")
+        self.assertEqual(self.op.list_holiday_regions(here("demo"), self.root), ("PT",))
+        self.assertEqual(self.op.list_holiday_regions(here("work"), self.root), ("GB:GB-SCT",))
+        # A todo.md that is not data/<list>/todo.md reads the global profile.
+        elsewhere = os.path.join(self.root, "demo", "copy", "todo.md")
+        self.assertEqual(self.op.list_holiday_regions(elsewhere, self.root), ("GB:GB-SCT",))
+
     def test_a_signed_in_persons_own_file_still_comes_first(self):
         self.settings({"boards": {"demo": {"memory_root": None}}})
         self.op.write_basics(self.root, "Jerome", address=self.JEROME, board="demo")

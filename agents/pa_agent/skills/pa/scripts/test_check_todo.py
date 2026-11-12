@@ -172,7 +172,45 @@ def test_a_tag_with_no_handover_says_the_plan_agent_will_hand_it_over():
           "The board gives it an id" in text.get(11, ""), True)
 
 
+def test_the_calendar_is_the_checked_lists():
+    """A list with no memory folder of its own reads its own profile's
+    holidays, never the owner's; an inheriting list keeps the owner's."""
+    import datetime as dt
+    import json
+    import shutil
+    tmp = tempfile.mkdtemp(prefix="check-todo-cal-")
+    saved = os.environ.get("TODOS_DATA_ROOT")
+    os.environ["TODOS_DATA_ROOT"] = tmp
+    try:
+        for name in ("work", "demo"):
+            os.makedirs(os.path.join(tmp, name))
+            open(os.path.join(tmp, name, "todo.md"), "w").close()
+        with open(os.path.join(tmp, "profile.md"), "w", encoding="utf-8") as fh:
+            fh.write("# PA profile\n\n## About\n\n- Holidays: UK\n")
+        with open(os.path.join(tmp, "demo", "profile.md"), "w", encoding="utf-8") as fh:
+            fh.write("# PA profile\n\n## About\n\n- Holidays: PT\n")
+        with open(os.path.join(tmp, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"boards": {"demo": {"memory_root": None}}}, fh)
+        portugal_day, bank_holiday = dt.date(2026, 6, 10), dt.date(2026, 8, 31)
+        check_todo.use_board(os.path.join(tmp, "work", "todo.md"))
+        check("an inheriting list keeps the owner's calendar",
+              (bool(check_todo.working_day_problem(portugal_day)), bool(check_todo.working_day_problem(bank_holiday))),
+              (False, True))
+        check_todo.use_board(os.path.join(tmp, "demo", "todo.md"))
+        check("a list kept apart reads its own profile's calendar",
+              (bool(check_todo.working_day_problem(portugal_day)), bool(check_todo.working_day_problem(bank_holiday))),
+              (True, False))
+    finally:
+        check_todo.REGIONS = None
+        if saved is None:
+            os.environ.pop("TODOS_DATA_ROOT", None)
+        else:
+            os.environ["TODOS_DATA_ROOT"] = saved
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
+    test_the_calendar_is_the_checked_lists()
     test_a_tag_with_no_handover_says_the_plan_agent_will_hand_it_over()
     test_blocked_by_an_archived_slug_is_not_dangling()
     test_missing_archive_reads_as_empty_not_an_error()

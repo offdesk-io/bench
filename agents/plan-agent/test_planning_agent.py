@@ -1365,16 +1365,42 @@ def test_runner():
     check("the runner's lock is the path the board checks",
           hooks.lock_path("work"), os.path.join(ROOT, "data", ".plan-agent-work.lock"))
     opts = hooks.options({"task": type("T", (), {"bucket": "Design System"})()}, {"id": "work"})
-    check("the planner gets the workspace folder added", all(d in opts["dirs"] for d in plan.EXTRA_DIRS), True)
+    check("the planner gets the workspace folder added", all(d in opts["dirs"] for d in plan.extra_dirs("work")), True)
     check("and no Bash among its tools", "Bash" in opts["tools"], False)
 
     # The agents may be told to read files in the workspace folder.
     # Without --add-dir claude -p cannot see any of them,
     # and the plans get quietly thinner rather than failing.
     src = open(os.path.join(HERE, "hooks.py"), encoding="utf-8").read()
-    check("hooks.py widens the sandbox to the workspace folder", '"dirs": list(plan.EXTRA_DIRS)' in src, True)
-    check("and that folder is the profile's, if it names one", plan.EXTRA_DIRS,
-          [__import__("owner_profile").workspace_folder()] if __import__("owner_profile").workspace_folder() else [])
+    check("hooks.py widens the sandbox to the workspace folder", '"dirs": plan.extra_dirs(target["id"])' in src, True)
+
+    # And the folder is the one the list's own profile names: the owner's
+    # while the list inherits, never the owner's for a list kept apart.
+    work = tempfile.mkdtemp(prefix="workspace-")
+    os.makedirs(os.path.join(paths.DATA_ROOT, "demo"), exist_ok=True)
+    open(os.path.join(paths.DATA_ROOT, "demo", "todo.md"), "w").close()
+    profile = os.path.join(paths.DATA_ROOT, "profile.md")
+    conf = os.path.join(paths.DATA_ROOT, "settings.json")
+    try:
+        check("no profile, no workspace folder", plan.extra_dirs("work"), [])
+        with open(profile, "w", encoding="utf-8") as fh:
+            fh.write("# PA profile\n\n## Setup\n\n- Workspace folder: %s\n" % work)
+        check("an inheriting list gets the owner's workspace folder", plan.extra_dirs("work"), [work])
+        with open(conf, "w", encoding="utf-8") as fh:
+            fh.write('{"boards": {"demo": {"memory_root": null}}}')
+        check("a list with no memory folder does not", plan.extra_dirs("demo"), [])
+        opts = hooks.options({"task": type("T", (), {"bucket": "X", "body": ""})()}, {"id": "demo"})
+        check("and its planner is not handed it", work in opts["dirs"], False)
+        with open(os.path.join(paths.DATA_ROOT, "demo", "profile.md"), "w", encoding="utf-8") as fh:
+            fh.write("# PA profile\n\n## Setup\n\n- Workspace folder: %s/demo-only\n" % work)
+        check("it gets its own profile's", plan.extra_dirs("demo"), [work + "/demo-only"])
+        check("and the other list still the owner's", plan.extra_dirs("work"), [work])
+    finally:
+        for f in (profile, conf):
+            if os.path.exists(f):
+                os.remove(f)
+        shutil.rmtree(os.path.join(paths.DATA_ROOT, "demo"), ignore_errors=True)
+        shutil.rmtree(work, ignore_errors=True)
     planners = os.path.join(ROOT, "agents", "plan-agent")
     for p in sorted(os.listdir(planners)):
         if not p.endswith("-agent.md"):

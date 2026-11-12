@@ -186,6 +186,17 @@ def board_holiday_regions(board_dir, root=None):
                            os.path.basename(os.path.normpath(board_dir)))
 
 
+def list_holiday_regions(todo_path, root=None):
+    """board_holiday_regions() for the list whose todo.md is at `todo_path`,
+    when that is data/<list>/todo.md under the data root; anything else, a
+    copy elsewhere or a test's file, reads the global profile as before."""
+    root = root or data_root()
+    board_dir = os.path.dirname(os.path.abspath(todo_path))
+    if os.path.realpath(os.path.dirname(board_dir)) != os.path.realpath(root):
+        return holiday_regions(root)
+    return board_holiday_regions(board_dir, root)
+
+
 def facts_file(root=None, address=None, board=None):
     """The owner's facts file as an absolute path, or None when unset or missing."""
     value = read(root, address, board).get("facts file")
@@ -195,19 +206,19 @@ def facts_file(root=None, address=None, board=None):
     return path if os.path.isfile(path) else None
 
 
-def _folder(key, root=None):
-    value = read(root).get(key)
+def _folder(key, root=None, board=None):
+    value = read(root, board=board).get(key)
     return os.path.expanduser(value) if value else None
 
 
-def workspace_folder(root=None):
+def workspace_folder(root=None, board=None):
     """The parent folder the agents may read beyond this repo, or None."""
-    return _folder("workspace folder", root)
+    return _folder("workspace folder", root, board)
 
 
-def improve_agent_folder(root=None):
+def improve_agent_folder(root=None, board=None):
     """Where improve-agent lives, or None."""
-    return _folder("improve agent folder", root)
+    return _folder("improve agent folder", root, board)
 
 
 TEMPLATE = os.path.join(ROOT, "agents", "pa_agent", "profile.example.md")
