@@ -34,6 +34,11 @@ place, data/<board>/notify-queue.json, is drained as well: it is where lines go
 when there is no notifier folder, and where a throwaway data root (the test
 runner's) keeps its own (queue_file()).
 
+A board whose `banners` is false in settings.json's `boards` (core/settings.py)
+is skipped whole: no due banner, no catch-up, nothing written to its state, and
+whatever its queues hold is taken off unposted, so turning it back on does not
+bring a backlog with it. companion/notify.py queues nothing for it meanwhile.
+
 Everything that needs a clock or a calendar takes it as an argument, so the
 tests run on a fake one. Only `post` and `start` touch the machine.
 """
@@ -54,6 +59,7 @@ except ImportError:          # no flock off a Unix
     fcntl = None
 
 import bench_root
+import settings
 import todo
 
 STATE_FILE = "notify-state.json"
@@ -331,6 +337,12 @@ RETRY_AFTER = dt.timedelta(minutes=10)
 STATUS = {"last_tick": None}
 
 
+def quiet_boards(data_root, boards):
+    """The boards in `boards` whose banners settings.json switches off."""
+    own = settings.load(data_root).get("boards", {})
+    return {b for b in boards if (own.get(b) or {}).get("banners") is False}
+
+
 def next_banner(data_root, boards, now, is_working, read_text=None):
     """When the next due banner goes out: the earliest one still to come today
     across `boards`, else 09:00 on the next working day (the first moment a
@@ -338,7 +350,10 @@ def next_banner(data_root, boards, now, is_working, read_text=None):
     read_text = read_text or read_plain
     end = dt.datetime.combine(now.date(), dt.time(23, 59, 59))
     soonest = None
+    quiet = quiet_boards(data_root, boards)
     for board in boards:
+        if board in quiet:
+            continue
         board_dir = os.path.join(data_root, board)
         text = read_text(os.path.join(board_dir, "todo.md"))
         if text is None:
@@ -386,7 +401,11 @@ def run_tick(data_root, boards, now, is_working, post, read_text=read_plain, ret
 
     for stale in [k for k in retries if k.split("|", 1)[0] < now.date().isoformat()]:
         del retries[stale]
+    quiet = quiet_boards(data_root, boards)
     for board in boards:
+        if board in quiet:
+            _drop_queues(data_root, board)
+            continue
         board_dir = os.path.join(data_root, board)
         text = read_text(os.path.join(board_dir, "todo.md"))
         tasks = todo.parse_doc(text) if text is not None else []
@@ -415,6 +434,16 @@ def run_tick(data_root, boards, now, is_working, post, read_text=read_plain, ret
                         done.append(entry)
                 _remove(qdir, done)
     return sent
+
+
+def _drop_queues(data_root, board):
+    """Take every line off a quiet board's queues, unposted."""
+    for qdir in queue_dirs(data_root, board):
+        path = os.path.join(qdir, QUEUE_FILE)
+        if not os.path.isfile(path):
+            continue
+        with queue_lock(path):
+            _remove(qdir, _read_queue(path))
 
 
 # ---- posting and the thread ---------------------------------------------------------------

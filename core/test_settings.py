@@ -335,6 +335,16 @@ class SettingsTest(unittest.TestCase):
         self.write({"boards": {"home": {"memory_root": own}}})
         self.assertIsNone(settings.board_memory_root("work", self.root))
 
+    def test_banners_on_unless_a_board_says_false(self):
+        self.assertTrue(settings.banners_on("work", self.root))
+        self.write({"boards": {"work": {"banners": False}, "home": {"banners": "no"}}})
+        self.assertFalse(settings.banners_on("work", self.root))
+        self.assertTrue(settings.banners_on("home", self.root))
+        self.assertTrue(settings.banners_on("other", self.root))
+        self.assertEqual(settings.load(self.root)["boards"], {"work": {"banners": False}})
+        # Banners alone leave the memory folder inherited.
+        self.assertTrue(settings.inherits_memory("work", self.root))
+
     def test_write_boards_stays_in_the_global_folder(self):
         data = os.path.join(self.root, "data")
         os.makedirs(data)

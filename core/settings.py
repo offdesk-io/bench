@@ -49,9 +49,12 @@ nothing raises.
   profile is `<folder>/me/profile.md`; null, it has none and keeps everything
   in `data/<list>/`. A list with a folder of its own or none never reads the
   owner's `data/profile.md` (core/owner_profile.py). Unset, the key is absent
-  from what load() returns and nothing changes.
+  from what load() returns and nothing changes. `banners` false keeps the
+  list quiet: no due banners, catch-ups included, and the lines agents queue
+  for it are dropped rather than posted (core/notify_due.py,
+  companion/notify.py). True, or absent, is today's behaviour.
 
-    "boards": {"demo": {"memory_root": null}}
+    "boards": {"demo": {"memory_root": null, "banners": false}}
 
 Daily budgets are kept out of this file, in the agents engine's fences file
 (`data/agents/fences.json`, `$AGENTS_FENCES`), because the engine reads them
@@ -110,7 +113,7 @@ def _memory_value(value):
 
 # The keys a list's entry in `boards` may hold beyond `memory_root`, each a
 # true-or-false that defaults to true.
-BOARD_FLAGS = ()
+BOARD_FLAGS = ("banners",)
 
 
 def _board_entry(entry):
@@ -201,6 +204,15 @@ def board_memory_root(dataset, root=None):
     if "memory_root" not in entry:
         return memory_root(root)
     return _folder(entry["memory_root"])
+
+
+def _flag(dataset, key, root=None):
+    return board(dataset, root).get(key, True)
+
+
+def banners_on(dataset, root=None):
+    """False when `boards` switches the list's desktop banners off."""
+    return _flag(dataset, "banners", root)
 
 
 def projects_root(dataset, root=None):
