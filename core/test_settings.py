@@ -244,6 +244,37 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.people_path("work", self.root),
                          os.path.join(self.root, "work", "people.md"))
 
+    def test_a_hidden_list_has_no_memory_folder_by_default(self):
+        self.board("_demo")
+        mem = self.memory()
+        self.write({"memory_root": mem})
+        self.assertIsNone(settings.board_memory_root("_demo", self.root))
+        self.assertFalse(settings.inherits_memory("_demo", self.root))
+        here = os.path.join(self.root, "_demo", "about.md")
+        self.assertEqual(settings.memory_file("_demo", "about", self.root), here)
+        self.assertEqual(settings.memory_file("_demo", "about", self.root, write=True), here)
+        self.assertFalse(os.path.exists(os.path.join(mem, "bench", "_demo")))
+        self.board("work")
+        self.assertEqual(settings.board_memory_root("work", self.root), mem)
+
+    def test_a_hidden_list_keeps_a_memory_folder_that_is_already_there(self):
+        self.board("_demo")
+        mem = self.memory()
+        os.makedirs(os.path.join(mem, "bench", "_demo"))
+        self.write({"memory_root": mem})
+        self.assertEqual(settings.board_memory_root("_demo", self.root), mem)
+        self.assertTrue(settings.inherits_memory("_demo", self.root))
+        there = os.path.join(mem, "bench", "_demo", "about.md")
+        self.assertEqual(settings.memory_file("_demo", "about", self.root, write=True), there)
+
+    def test_a_hidden_list_with_its_own_setting_uses_it(self):
+        self.board("_demo")
+        mem, own = self.memory(), os.path.join(self.root, "OWN")
+        os.makedirs(own)
+        self.write({"memory_root": mem, "boards": {"_demo": {"memory_root": own}}})
+        self.assertEqual(settings.board_memory_root("_demo", self.root), own)
+        self.assertFalse(settings.inherits_memory("_demo", self.root))
+
     def test_memory_file_set_reads_the_memory_copy(self):
         self.board("work")
         mem = self.memory()

@@ -6,6 +6,7 @@ and leaves the rest alone. Temp data root and temp memory folder only.
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -77,6 +78,14 @@ with tempfile.TemporaryDirectory() as tmp:
     put(os.path.join(root, "solo", "people.md"), "# Solo\n")
     put(os.path.join(root, "apart", "todo.md"), TODO)
     put(os.path.join(root, "apart", "profile.md"), "# Own profile\n")
+    # hidden boards: no folder by default, and one that already has a folder
+    put(os.path.join(root, "_demo", "todo.md"), TODO + CTX)
+    put(os.path.join(root, "_demo", "people.md"), "# Demo\n")
+    put(os.path.join(root, "_kept", "todo.md"), TODO)
+    put(os.path.join(root, "_kept", "people.md"), "# Kept\n")
+    os.makedirs(os.path.join(mem, "bench", "_kept"))
+    # an empty Context section
+    put(os.path.join(root, "empty", "todo.md"), TODO + "## Context\n\n")
     # global profile
     put(os.path.join(root, "profile.md"), "# Profile\n")
     put(os.path.join(mem, "me", "profile.md"), "# Profile\n")
@@ -93,6 +102,8 @@ with tempfile.TemporaryDirectory() as tmp:
                  "same as context.md -> would remove from todo.md", "-Memory version", "+Data version"):
         check("says: " + want, want in out, out)
     check("finds the hidden board", "_hidden" in out)
+    check("a hidden board with no memory folder is skipped", re.search(r"_demo\n  no memory folder, skipped", out) is not None, out)
+    check("an empty Context section is left alone", "empty -> left alone" in out, out)
     r = run(root, "--apply")
     check("--apply alone is refused", r.returncode != 0 and "Stop the board" in r.stdout and snapshot(tmp) == before)
 
@@ -128,6 +139,13 @@ with tempfile.TemporaryDirectory() as tmp:
           repr(get(os.path.join(root, "_hidden", "todo.md"))))
     check("null-memory board untouched", get(os.path.join(root, "solo", "people.md")) == "# Solo\n"
           and get(os.path.join(root, "solo", "todo.md")) == TODO + CTX)
+    check("hidden board with no folder untouched", get(os.path.join(root, "_demo", "people.md")) == "# Demo\n"
+          and get(os.path.join(root, "_demo", "todo.md")) == TODO + CTX
+          and not os.path.exists(os.path.join(mem, "bench", "_demo")))
+    check("hidden board with a folder already there is merged",
+          get(os.path.join(mem, "bench", "_kept", "people.md")) == "# Kept\n")
+    check("empty section: todo.md kept, no context.md", get(os.path.join(root, "empty", "todo.md")) == TODO + "## Context\n\n"
+          and not os.path.exists(os.path.join(mem, "bench", "empty", "context.md")))
     check("global profile, same in both, removed from data/", not os.path.exists(os.path.join(root, "profile.md")))
     check("a board's own profile moved to its memory folder",
           get(os.path.join(own, "me", "profile.md")) == "# Own profile\n"

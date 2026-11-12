@@ -206,19 +206,36 @@ def board(dataset, root=None):
     return dict(load(root).get("boards", {}).get(dataset) or {})
 
 
+def _hidden_has_none(dataset, root=None):
+    """True for a hidden list (its name starts with "_") that takes the global
+    memory folder by default, which is set, and has nothing in it yet: such a list has no
+    memory folder, and nothing here ever makes one. Once
+    <global>/bench/<list>/ exists the list keeps using it. An entry in
+    `boards` with a `memory_root` of its own is never this case."""
+    if not str(dataset).startswith("_") or "memory_root" in board(dataset, root):
+        return False
+    memory = memory_root(root)
+    if not memory:
+        return False    # no global folder: nothing to keep out of, the list reads as before
+    return not os.path.isdir(os.path.join(memory, "bench", dataset))
+
+
 def inherits_memory(dataset, root=None):
     """True when the list takes the global memory folder, which is when its
-    entry in `boards` names no `memory_root` of its own."""
-    return "memory_root" not in board(dataset, root)
+    entry in `boards` names no `memory_root` of its own, and it is not a hidden
+    list with nothing in that folder (_hidden_has_none)."""
+    return "memory_root" not in board(dataset, root) and not _hidden_has_none(dataset, root)
 
 
 def board_memory_root(dataset, root=None):
     """The list's memory folder as an absolute path: its own when `boards`
-    names one, none when that says null, else the global one. None when there
-    is none or the folder is not there."""
+    names one, none when that says null, else the global one. A hidden list
+    (name starts with "_") has none by default unless the global folder
+    already holds <memory>/bench/<list>/. None when there is none or the
+    folder is not there."""
     entry = board(dataset, root)
     if "memory_root" not in entry:
-        return memory_root(root)
+        return None if _hidden_has_none(dataset, root) else memory_root(root)
     return _folder(entry["memory_root"])
 
 

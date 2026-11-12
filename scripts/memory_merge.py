@@ -143,7 +143,10 @@ def plan(root):
                 steps.append(s)
         todo_path = os.path.join(root, board, "todo.md")
         body = section_text(read(todo_path) or "")
-        if body is not None:
+        if body == "":
+            steps.append({"label": "## Context in todo.md", "do": "keep",
+                          "say": "empty -> left alone, no context.md written"})
+        elif body is not None:
             there = read(os.path.join(base, "context.md"))
             if there is None:
                 there = read(os.path.join(root, board, "context.md"))  # about to move
