@@ -66,7 +66,9 @@ async function evalJS (expr) {
 }
 const wait = ms => new Promise(r => setTimeout(r, ms))
 
-await wait(2500)
+// Poll for the page rather than sleeping: a fixed wait fails when the machine is busy.
+for (let i = 0; i < 120 && !(await evalJS(`document.readyState === 'complete' && typeof state !== 'undefined' && !!state.doc`).catch(() => false)); i++) await new Promise(r => setTimeout(r, 250))
+await new Promise(r => setTimeout(r, 400))
 check('the board loaded', await evalJS(`typeof renderAgentsView === 'function' && typeof BoardUI.AgentsApp === 'function'`))
 
 // LOCK FIRST, then fixtures. Nothing below can write anything.
@@ -110,8 +112,8 @@ check('the tab is locked', await evalJS(`state.locked === true`))
    the agents out. */
 await wait(800)
 check('a list with no agent counts as not set up', await evalJS(`state.agentsSetup === false && agentsSetUp() === false`))
-check('Agents is one of the view tabs', await evalJS(`viewDefs().some(d => d.id === 'agents')`))
-await evalJS(`state.view = 'agents'; renderView()`)
+check('Agents is a tab of the Settings page, not of the top bar', await evalJS(`!viewDefs().some(d => d.id === 'agents') && settingsTabs().some(t => t[0] === 'agents')`))
+await evalJS(`openSettingsPage('agents')`)
 await wait(400)
 check('the tab offers setup instead of the hour tracks', await evalJS(`!!document.querySelector('#lists .agentsetup [data-agent-setup]') && !document.querySelector('#lists .agents-ui')`))
 if (process.env.SHOT_SETUP) {
@@ -212,13 +214,13 @@ check('the tab lists this list\'s bucket planners under the cards', await evalJS
   return el.querySelector('.planner-bucket')?.textContent === 'Tasks' &&
     el.querySelector('.planner-name')?.textContent === 'fallback planner'
 })()`))
-check('the Agents tab hides the bucket filter strip, theme pills and edit-buckets pencil; other views bring them back', await evalJS(`(() => {
+check('the Settings page swaps the bucket strip for its own tabs and hides the edit-buckets pencil; other views bring them back', await evalJS(`(() => {
   const wasLocked = state.locked, wasView = state.view
   state.locked = false
-  state.view = 'agents'; renderFilterBar()
-  const hidden = document.querySelector('#bucketFilters').classList.contains('hidden') &&
+  state.view = 'agents'; renderView()
+  const hidden = document.querySelector('#bucketFilters [data-value=agents]') !== null &&
     document.querySelector('#themeBar').classList.contains('hidden') &&
-    document.querySelector('#editBuckets').classList.contains('hidden')
+    getComputedStyle(document.querySelector('#editBuckets')).display === 'none'
   state.view = 'board'; renderFilterBar()
   const back = !document.querySelector('#bucketFilters').classList.contains('hidden') &&
     !document.querySelector('#editBuckets').classList.contains('hidden')
@@ -261,8 +263,8 @@ check('and no list counts as set up, delegated tasks included', await evalJS(`((
   t.to = 'Plan agent'; const on = agentsSetUp(); t.to = ''; return on === false;
 })()`))
 check('Delegate to offers no agents', await evalJS(`!delegateSelectHTML('', '').includes('Plan agent')`))
-check('the Data menu leaves out Run the Plan agent now, and the Settings page leaves out Spend and Schedules', await evalJS(`syncFolderButton();
-  $('#runAgentBtn').classList.contains('hidden') && !settingsTabs().some(t => t[0] === 'spend' || t[0] === 'schedules')`))
+check('the Data menu leaves out Run the Plan agent now, and the Settings page keeps its four tabs', await evalJS(`syncFolderButton();
+  $('#runAgentBtn').classList.contains('hidden') && settingsTabs().map(t => t[0]).join() === 'memory,settings,agents,backups'`))
 check('Settings leaves out the agent options', await evalJS(`loadSettingsDraft(false).then(d => {
   const html = settingsFormHTML(d.draft, [], false);
   return !html.includes('data-agent-options') && html.includes('Agents are off on this machine');
@@ -273,7 +275,7 @@ check('a hand-over set to start now starts nothing', await evalJS(`(async () => 
 })()`))
 await evalJS(`state.agentsReady = null; state.agentsMissing = ''; syncFolderButton(); state.view = 'board'; renderView()`)
 await wait(300)
-check('with the answer unknown, nothing is hidden', await evalJS(`settingsTabs().some(t => t[0] === 'spend') && !$('#runAgentBtn').classList.contains('hidden')`))
+check('with the answer unknown, nothing is hidden', await evalJS(`settingsTabs().some(t => t[0] === 'agents') && !$('#runAgentBtn').classList.contains('hidden')`))
 check('Run the Plan agent now asks first', await evalJS(`(() => {
   $('#runAgentBtn').click();
   const asked = !!modalEl && modalEl.textContent.includes('Run the Plan agent now?');

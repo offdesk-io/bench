@@ -200,22 +200,33 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   // Settings is a page now: five tabs where the bucket tabs were, and the buckets come back.
   const tabNames = `[...document.querySelectorAll('#bucketFilters .tenon-toggle-group__option')].map(b => b.dataset.value).join()`
   check('Settings is a page on the Settings tab, not a pop-up', await evalJS(`state.view === 'settings' && settingsTab === 'settings' && !modalEl && !!document.querySelector('#settingsPage')`))
-  check('the five tabs replace the bucket tabs', await evalJS(tabNames) === 'memory,settings,spend,schedules,backups', await evalJS(tabNames))
+  check('the four tabs replace the bucket tabs', await evalJS(tabNames) === 'memory,settings,agents,backups', await evalJS(tabNames))
   check('and the Settings tab is the one pressed', await evalJS(`document.querySelector('#bucketFilters [data-value=settings]').getAttribute('aria-pressed') === 'true'`))
   check('the hash names the page and its tab', await evalJS(`location.hash.startsWith('#settings/settings')`))
   check('the Data menu has no Backups or Spend and schedules', await evalJS(`!$('#backupsBtn') && !$('#refCardsBtn') && !!$('#settingsBtn') && !!$('#runAgentBtn')`))
   check('Memory is not in the top bar', await evalJS(`![...document.querySelectorAll('#viewToggle [data-view]')].some(b => b.dataset.view === 'memory')`))
-  for (const [tab, probe] of [['memory', '#memView'], ['spend', '#refCardsRoot #usageOut'], ['schedules', '#refCardsRoot #schedOut'], ['backups', '#backupsRoot']]) {
+  for (const [tab, probe] of [['memory', '#memView'], ['agents', '#lists .agentsview'], ['backups', '#backupsRoot']]) {
     await evalJS(`document.querySelector('#bucketFilters [data-value=${tab}]').click()`)
     await wait(1200)
     check('the ' + tab + ' tab draws its content', await evalJS(`!!document.querySelector(${JSON.stringify(probe)})`), tab)
   }
-  await evalJS(`openSettingsPage('spend')`)
+  // Spend and Schedules are panels of the Agents tab, and their old links open it.
+  await evalJS(`openSettingsPage('agents')`)
+  await wait(1200)
+  check('Agents holds Token Session and the clock card as panels', await evalJS(`!!document.querySelector('.agentsview #refCardsRoot #usageOut') && !!document.querySelector('.agentsview #refCardsRoot #schedOut')`))
+  check('Spend and Schedules are no longer tabs', await evalJS(`!document.querySelector('#bucketFilters [data-value=spend]') && !document.querySelector('#bucketFilters [data-value=schedules]')`))
+  for (const old of ['spend', 'schedules']) {
+    await evalJS(`state.view = 'board'; renderView(); history.replaceState(null, '', '#settings/${old}'); window.dispatchEvent(new HashChangeEvent('hashchange'))`)
+    await wait(800)
+    check('#settings/' + old + ' opens the Agents tab', await evalJS(`state.view === 'settings' && settingsTab === 'agents' && location.hash.startsWith('#settings/agents')`), old)
+  }
+  check('the Settings page leaves out the delegated-to-an-agent button', await evalJS(`getComputedStyle(document.querySelector('#bucketBar')).display !== 'none' && ![...document.querySelectorAll('#bucketBar button, #bucketBar [role=button]')].some(b => b.offsetParent !== null && /delegated to an agent/.test(b.textContent))`))
+  await evalJS(`openSettingsPage('settings')`)
   await wait(800)
-  check('Spend alone shows one card', await evalJS(`!!document.querySelector('#refCardsRoot #usageOut') && !document.querySelector('#refCardsRoot #schedOut')`))
+  check('and the panel is left-aligned', await evalJS(`(() => { const p = document.querySelector('#lists .tenon-column'); const l = document.querySelector('#lists').getBoundingClientRect(); return !!p && Math.abs(p.getBoundingClientRect().left - l.left) < 2 })()`))
   await evalJS(`document.querySelector('#viewToggle [data-view=board]').click()`)
   await wait(800)
-  check('leaving brings the bucket tabs back', await evalJS(tabNames) !== 'memory,settings,spend,schedules,backups' && await evalJS(`!document.querySelector('#bucketBar').classList.contains('bucketbar--page')`), await evalJS(tabNames))
+  check('leaving brings the bucket tabs back', await evalJS(tabNames) !== 'memory,settings,agents,backups' && await evalJS(`!document.querySelector('#bucketBar').classList.contains('bucketbar--page')`), await evalJS(tabNames))
   await evalJS(`$('#settingsBtn').click()`)
   await wait(800)
   check('Settings opens with Agent options collapsed', await evalJS(`settingsRoot().querySelector('[data-agent-options]').open`) === false)

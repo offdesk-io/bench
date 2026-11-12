@@ -67,7 +67,7 @@ unlock the tab, because handing a task over, approving and draining the agents'
 queue all edit the document. Each installs a `fetch` that tears every non-GET out
 before it does, records what was attempted, and ends by asserting nothing
 reached `todo.md`; the queue tests stub `/tick-queue.json` rather than read a
-file. `kanban/test_schedule.mjs` (the Spend and Schedules tabs) does the same.
+file. `kanban/test_schedule.mjs` (the Spend and Schedules panels of the Agents tab) does the same.
 
 **Bucket agents in the browser suites.** A task is handed to its bucket's agent,
 which `/api/bucket-agents` names and says is ready or not. The scratch list has

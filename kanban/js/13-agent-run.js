@@ -1,7 +1,7 @@
 'use strict';
 
 /* =========================================================================
-   4b2b. The Plan agent's run, and the Spend and Schedules tabs.
+   4b2b. The Plan agent's run, and the Spend and Schedules panels.
 
    This file was 13-plans.js, the Plans view. Plans stopped
    being a board of its own when an agent's part of a task became sub-tasks on the
@@ -77,24 +77,30 @@ async function startNightAgentRun(){
 
 /* Token Session and the clock card, both reference rather than decision — the
    chart is a glance at spend, the clock card only changes when the plist does —
-   so each has a tab on the Settings page, Spend and Schedules.
+   so they are two panels under the Agents tab of the Settings page.
 
    The body is one React tree, painted by paintRefCards(). Each renderer keeps
    its own slice of what it shows and paints only if the page is open, so a
    fetch that lands after it has gone costs nothing. */
-function drawRefCards(tab){
-  /* One React tree in the body, drawn by paintRefCards() in 14-schedule.js. */
-  leaveRefCards();
-  refCardsShow = tab === 'schedules' ? 'schedules' : 'spend';
-  $('#lists').innerHTML = '<div id="refCardsRoot"></div>';
+/* True while the panels' React tree is mounted; the board view hides #lists
+   without emptying it, so the host can outlive the tree. */
+let refCardsDrawn = false;
+
+function drawRefCards(){
+  /* One React tree in the Agents tab's #refCardsRoot, drawn by paintRefCards()
+     in 14-schedule.js: Token Session and the clock card, two panels. */
+  if (refCardsDrawn || !$('#refCardsRoot')) return;
+  refCardsDrawn = true;
+  refCardsShow = undefined;
   paintRefCards();
-  if (refCardsShow === 'schedules') { renderSched(); return; }
+  renderSched();
   renderUsage();
   if (lastNightAgent) renderRunResults(lastNightAgent);
   readNightAgent();
 }
 
 function leaveRefCards(){
+  refCardsDrawn = false;
   const host = $('#refCardsRoot');
   if (host) BoardUI.unmount(host);
 }

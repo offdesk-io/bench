@@ -817,7 +817,7 @@ function renderView(){
   if (state.view === 'plans') state.view = 'board';
   // Memory and Backups were views of their own: they are tabs of the Settings
   // page now, and anything that still names them lands there.
-  if (state.view === 'memory' || state.view === 'backups') { settingsTab = state.view; state.view = 'settings'; }
+  if (state.view === 'memory' || state.view === 'agents' || state.view === 'backups') { settingsTab = state.view; state.view = 'settings'; }
   const isSettings = state.view === 'settings';
   // Projects has no tab, but a #projects link still draws its list.
   const isProjects = state.view === 'projects';
@@ -845,7 +845,7 @@ function renderView(){
   if (def.id === 'reports' && lastRenderedView !== 'reports') forgetWrittenReports();
   if (lastRenderedView === 'settings' && def.id !== 'settings') leaveSettingsPage();
   lastRenderedView = def.id;
-  if (def.id !== 'agents') leaveAgentsView();
+  if (def.id !== 'settings') leaveAgentsView();
 
   renderViewTabs(defs);
 
@@ -862,7 +862,6 @@ function renderView(){
   // on every tab rather than popping in and out as the owner switches between them.
   $('#headline').classList.add('hidden');
   if (def.id === 'projects') { renderFilterBar(); renderProjectsView(); return; }
-  if (def.id === 'agents') { renderFilterBar(); renderAgentsView(); return; }
   if (def.id === 'settings') { renderSettingsPage(); return; }
   renderSections(def.id);
 }
@@ -873,7 +872,6 @@ function renderView(){
 function refreshView(){
   if (state.view === 'board') renderBoard();
   else if (state.view === 'projects') renderProjectsView();
-  else if (state.view === 'agents') renderAgentsView();
   else if (state.view === 'settings') refreshSettingsPage();
   else renderSections(state.view);
   updateArchiveChip();
@@ -941,18 +939,6 @@ function renderFilterBar(){
   // Follows the strip it belongs to, and goes with it in a preview or the demo,
   // where the file behind it is not one that can be written to.
   $('#editBuckets').classList.toggle('hidden', state.locked);
-  // The Agents tab has no buckets to filter — there is nothing under it for
-  // the strip, its theme pills or the edit-buckets pencil to narrow. Hidden
-  // here, after renderTabs() has drawn them (still needed for syncHash() and
-  // to keep the strip's own content current), rather than skipped above, so
-  // whichever view comes next finds them already right and just un-hides
-  // them the same way it always has.
-  const onAgents = state.view === 'agents';
-  $('#bucketFilters').classList.toggle('hidden', onAgents);
-  if (onAgents) {
-    $('#themeBar').classList.add('hidden');
-    $('#editBuckets').classList.add('hidden');
-  }
   renderPhoneChrome();
 }
 

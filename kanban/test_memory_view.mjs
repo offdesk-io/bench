@@ -71,12 +71,14 @@ async function shot (file, w, h, mobile) {
 const sections = `[...document.querySelectorAll('#memView .memsec')].map(s => s.dataset.mem).join(',')`
 
 try {
-  await wait(2500)
+  // Poll for the page rather than sleeping: a fixed wait fails when the machine is busy.
+  for (let i = 0; i < 120 && !(await evalJS(`document.readyState === 'complete' && typeof state !== 'undefined' && !!state.doc`).catch(() => false)); i++) await new Promise(r => setTimeout(r, 250))
+  await new Promise(r => setTimeout(r, 400))
   check('the board loaded on #settings/memory', await evalJS(`state.view === 'settings' && settingsTab === 'memory' && !!document.querySelector('#memView')`),
     await evalJS(`location.hash + ' / ' + state.view`))
   check('Memory is a tab of the Settings page, not of the top bar', await evalJS(`!viewDefs().some(d => d.id === 'memory') && settingsTabs().some(t => t[0] === 'memory')`))
   await wait(500)
-  check('the sections are in order', await evalJS(sections) === 'about,people,buckets,context,profile', await evalJS(sections))
+  check('the sections are in order', await evalJS(sections) === 'about,people,context,profile,buckets', await evalJS(sections))
   check('an empty Company says so with an Edit button', await evalJS(`(() => {
     const s = document.querySelector('[data-mem=about]');
     return /No company description yet/.test(s.textContent) && !!s.querySelector('[data-mem-edit=about]');
@@ -181,43 +183,36 @@ try {
   await wait(600)
   check('a reload reads it back from context.md', await evalJS(`/Ana is away until Friday/.test(${$q('[data-mem=context]')}.textContent)`))
 
-  // --- the index -----------------------------------------------------------
+  // --- panels, no index ----------------------------------------------------
   await evalJS(`state.locked = true; renderMemoryView()`)
   await wait(800)
-  const want = `document.querySelectorAll('#memView .memsec').length + document.querySelectorAll('#memView .membucket[id], #memView h4[data-mem-sub]').length`
-  const links = `document.querySelectorAll('nav[aria-label="On this page"] a[data-mem-jump]').length`
-  check('the index is a nav named "On this page"', await evalJS(`!!document.querySelector('#memView > nav[aria-label="On this page"]')`))
-  check('the index has one link per section and subsection', await evalJS(links) === await evalJS(want) && await evalJS(links) >= 5,
-    `${await evalJS(links)} links, ${await evalJS(want)} targets`)
-  check('every link points at an element with that id', await evalJS(`[...document.querySelectorAll('[data-mem-jump]')].every(a => document.getElementById(a.dataset.memJump) && a.getAttribute('href') === '#' + a.dataset.memJump)`))
-  check('at least one entry is current (a subsection and its section may both be)', await evalJS(`document.querySelectorAll('.memindex a[aria-current="true"]').length`) >= 1)
-  const hashBefore = await evalJS(`location.hash`)
-  await evalJS(`document.querySelector('[data-mem-jump="mem-profile"]').click()`)
-  await wait(800)
-  check('clicking a link leaves location.hash alone', await evalJS(`location.hash`) === hashBefore, await evalJS(`location.hash`))
-  check('and scrolls the target into view', await evalJS(`(() => { const r = document.getElementById('mem-profile').getBoundingClientRect(); return r.top < innerHeight })()`))
-  const linksBefore = await evalJS(links)
+  check('there is no floating index', await evalJS(`!document.querySelector('.memindex') && !document.querySelector('nav[aria-label="On this page"]')`))
+  check('every section is a panel in the Overview\'s column markup', await evalJS(`[...document.querySelectorAll('#memView .memsec')].every(s => s.classList.contains('tenon-column') && !!s.querySelector('.tenon-column__title') && !!s.querySelector('.tenon-column__body'))`))
+  check('the five panels sit in one left-aligned stack', await evalJS(`(() => {
+    const host = document.querySelector('#memView'), r = host.getBoundingClientRect();
+    const mid = document.querySelector('#lists').getBoundingClientRect();
+    return host.classList.contains('pview') && Math.abs(r.left - mid.left) < 2
+  })()`))
+  check('Buckets is one panel holding every brief', await evalJS(`document.querySelectorAll('#memView [data-mem=buckets] .membucket').length === memData.buckets.length && document.querySelectorAll('#memView [data-mem=buckets]').length === 1`))
+  // an empty subsection under a brief or in the profile says so, in the style of "No brief yet."
+  await evalJS(`(() => {
+    memData.buckets = [{ heading: 'Foo', name: 'Foo', exists: true, filled: true,
+      text: '# Foo\\n\\nWhat lands here.\\n\\n## The processes I run in this bucket\\n\\n> hint only\\n\\n## Who is involved\\n\\n## What good looks like\\n\\nShips on time.' }];
+    memData.profile = { name: 'Sam', about: {}, sections: { setup: '', writing: '- British English', recorder: '', habits: '' }, hints: {} };
+    memDraw();
+  })()`)
+  const heads = `[...document.querySelectorAll('#memView [data-mem=buckets] .memtext h4')].map(h => h.textContent + (h.nextElementSibling && h.nextElementSibling.classList.contains('memempty') ? ':empty' : '')).join('|')`
+  const headText = await evalJS(heads)
+  check('a brief heading with nothing under it shows an empty line', /The processes I run in this bucket:empty/.test(headText) && /Who is involved:empty/.test(headText) && !/What good looks like:empty/.test(headText), headText)
+  check('profile sections with nothing in them show an empty line', await evalJS(`(() => {
+    const hs = [...document.querySelectorAll('#memView [data-mem=profile] h4[data-mem-sub]')];
+    const empty = h => h.nextElementSibling && h.nextElementSibling.classList.contains('memempty');
+    return hs.length === 4 && hs.map(h => empty(h)).join() === 'true,false,true,true'
+  })()`))
   await evalJS(`state.locked = false; memEditing = 'about'; memDraw()`)
-  check('an open edit form adds no index entries', await evalJS(`!!document.querySelector('#memView textarea')`) && await evalJS(links) === linksBefore)
-  await evalJS(`memEditing = null; memDraw()`)
-  // the index stays put while the page scrolls
-  await evalJS(`(() => { const sp = document.createElement('div'); sp.id = 'memSpacer'; sp.style.height = '4000px'; document.querySelector('.memcontent').appendChild(sp); })()`)
-  await evalJS(`scrollTo(0, 0)`)
-  await wait(300)
-  const navTop = () => evalJS(`document.querySelector('.memindex').getBoundingClientRect().top`)
-  await evalJS(`document.scrollingElement.scrollTo(0, 800)`)
-  await wait(400)
-  const navTopStart = await navTop()
-  await evalJS(`document.scrollingElement.scrollTo(0, document.scrollingElement.scrollHeight)`)
-  await wait(500)
-  const navTopEnd = await navTop()
-  const scrolled = await evalJS(`document.scrollingElement.scrollTop`)
-  const hdrBottom = await evalJS(`document.getElementById('hdr').getBoundingClientRect().bottom`)
-  check('the page really scrolled', scrolled > 500, String(scrolled))
-  check('the index is in the same place at the bottom as part way down', Math.abs(navTopEnd - navTopStart) < 1.5,
-    `${navTopStart} -> ${navTopEnd}`)
-  check('and sits inside the viewport, below the header', navTopEnd >= hdrBottom - 1 && navTopEnd < await evalJS(`innerHeight`), `top ${navTopEnd}, header bottom ${hdrBottom}`)
-  await evalJS(`document.getElementById('memSpacer').remove(); scrollTo(0, 0)`)
+  check('an open edit form still opens', await evalJS(`!!document.querySelector('#memView [data-mem=about] textarea')`))
+  await evalJS(`memEditing = null; memLoad()`)
+  await wait(600)
 
   // two bucket headings that slug the same
   await evalJS(`memData.buckets = [
@@ -226,12 +221,11 @@ try {
   ]; memDraw()`)
   check('buckets that slug alike get distinct ids', await evalJS(`(() => { const ids = [...document.querySelectorAll('.membucket')].map(a => a.id); return ids.length === 2 && ids[0] !== ids[1] })()`),
     await evalJS(`[...document.querySelectorAll('.membucket')].map(a => a.id).join(',')`))
-  check('and both have a working index link', await evalJS(`(() => { const l = [...document.querySelectorAll('[data-mem-jump^="mem-bucket-foo-bar"]')]; return l.length === 2 && l[0].dataset.memJump !== l[1].dataset.memJump && l.every(a => document.getElementById(a.dataset.memJump)) })()`))
   await evalJS(`memLoad()`)
   await wait(600)
 
   // each section says what it is for, filled or empty
-  const descs = `[...document.querySelectorAll('#memView .memsec')].map(s => s.dataset.mem + '=' + (s.querySelector(':scope > .memdesc') || {}).textContent).join('|')`
+  const descs = `[...document.querySelectorAll('#memView .memsec')].map(s => s.dataset.mem + '=' + (s.querySelector(':scope > .tenon-column__body > .memdesc') || {}).textContent).join('|')`
   const wantDescs = {
     about: 'What this business does, in a few lines every agent reads first.',
     people: 'Who is who: role, team, who reports to whom, and the names that get confused.',
@@ -239,28 +233,24 @@ try {
     context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone.",
     profile: 'Facts about you that agents work from: how you work, write and want things done.'
   }
-  const wantStr = ['about', 'people', 'buckets', 'context', 'profile'].map(k => k + '=' + wantDescs[k]).join('|')
+  const wantStr = ['about', 'people', 'context', 'profile', 'buckets'].map(k => k + '=' + wantDescs[k]).join('|')
   check('each section shows its description', await evalJS(descs) === wantStr, await evalJS(descs))
-  check('descriptions are not index entries', await evalJS(`document.querySelectorAll('.memindex a').length === document.querySelectorAll('#memView .memsec, #memView .membucket[id], #memView h4[data-mem-sub]').length`))
 
-  // every section empty: each still renders, with a placeholder and an index entry
+  // every section empty: each still renders, with a placeholder
   await evalJS(`(() => {
     memData.about = { text: '' }; memData.people = []; memData.buckets = []; memData.profile = {};
     memData.context = { text: '', exists: false };
     const span = memContextSpan(); if (span) span.arr.splice(span.at, span.end - span.at);
     memDraw();
   })()`)
-  check('with everything empty every section still renders', await evalJS(sections) === 'about,people,buckets,context,profile', await evalJS(sections))
+  check('with everything empty every section still renders', await evalJS(sections) === 'about,people,context,profile,buckets', await evalJS(sections))
   check('empty sections keep their description', await evalJS(descs) === wantStr)
   check('each carries a placeholder', await evalJS(`[...document.querySelectorAll('#memView .memsec')].every(s => s.querySelector('.memempty'))`))
-  check('and keeps its index entry', await evalJS(`[...document.querySelectorAll('#memView .memsec')].every(s => document.querySelector('.memindex a[data-mem-jump="' + s.id + '"]'))`))
   check('Edit still works from an empty section', await evalJS(`!!document.querySelector('[data-mem=about] [data-mem-edit=about]') && !!document.querySelector('[data-mem=people] [data-mem-edit=people]')`))
   await evalJS(`memLoad()`)
   await wait(600)
-  check('the observer is running in the view', await evalJS(`memObserver !== null`))
   await evalJS(`state.view = 'board'; renderView()`)
   await wait(600)
-  check('leaving the view disconnects the observer', await evalJS(`memObserver === null`))
   await evalJS(`openSettingsPage('memory')`)
   await wait(500)
 

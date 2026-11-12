@@ -107,7 +107,9 @@ const body = title => evalJS(`${card(title)}.body.join(' / ')`)
 const lastPost = () => evalJS(`(window.__posted.filter(p => p.startsWith('POST /tick-queue.json')).pop() || '').split(' ').slice(2).join(' ')`)
 
 try {
-  await new Promise(r => setTimeout(r, 2500))
+  // Poll for the page rather than sleeping: a fixed wait fails when the machine is busy.
+  for (let i = 0; i < 120 && !(await evalJS(`document.readyState === 'complete' && typeof state !== 'undefined' && !!state.doc`).catch(() => false)); i++) await new Promise(r => setTimeout(r, 250))
+  await new Promise(r => setTimeout(r, 400))
   check('the board loaded', await evalJS(`typeof drainTickQueue === 'function' && typeof drainMove === 'function'`))
 
   /* ---- on another list, nothing moves ---- */

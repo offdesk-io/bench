@@ -5,7 +5,7 @@
 
    Three things around this app run on a schedule rather than on demand: the
    Plan agent's wakes, the desktop banners, and the weekly backup
-   thread inside this server. The halves live in the Spend and Schedules tabs of
+   thread inside this server. The halves live in the Spend and Schedules panels of the Agents tab of
    the Settings page — renderSched() draws the jobs into their own card and
    renderUsage() draws the token chart, both inside the page drawRefCards()
    (13-agent-run.js) opens. Nothing here holds a view id or a route, just the
