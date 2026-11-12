@@ -5,7 +5,7 @@
    ========================================================================= */
 
 /* The names Delegate to offers after the two agents, read from the tables in
-   data/<dataset>/people.md by /people.json so nobody keeps a second list. Asked
+   people.md (the memory folder's, or data/<dataset>/) by /people.json so nobody keeps a second list. Asked
    for once per page load. Empty until it lands, or for good where there is no
    server (the demo build), and then the dropdown offers the agents alone. */
 let peopleNames = [];

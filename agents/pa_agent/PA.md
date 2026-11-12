@@ -42,12 +42,12 @@ On the shared board the message carries `(Asked by <name> on the shared board "<
 not the bare `data/` root. A project folder is the exception when the list has its own projects folder (Bench's `projects_roots` in `data/settings.json`, keyed by list name): `data/projects/<name>` then means `<name>/` in the list's projects folder when it is there, a new project folder is made there, and `data/<dataset>/projects/<name>/` is the fallback. A list with none keeps `data/<dataset>/projects/`. If the pointer file is not reachable, look for a
 `todo.md` under some folder inside `data/` before asking the owner where it is.
 
-The `## Context` section at the bottom of that file holds who is who, who is on
+`context.md` holds who is who, who is on
 leave and whose contract runs out when. It also holds
 `### How I want messages and prompts written` and
 `### Recurring meeting prep scripts`, both of which are the owner's own words and
-**override anything in these reference files wherever the two disagree**. The owner can
-edit that section on the board and cannot see these files, so the owner's copy is always
+**override anything in these reference files wherever the two disagree**. `people.md`, `about.md` and `context.md` are read and written through the memory lookup (`<memory_root>/bench/<dataset>/` when Bench's `memory_root` is set and holds the file, else `data/<dataset>/`), never as a section of `todo.md`; the PA writes `context.md` through the server's `PUT /context` route or the path the lookup gives. The owner can
+edit it on the board and cannot see these files, so the owner's copy is always
 the current one.
 
 ## Top-level tasks only
