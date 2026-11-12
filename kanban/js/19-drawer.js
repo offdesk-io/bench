@@ -41,7 +41,7 @@ function delegateSelectHTML(value, dis, id, bucketAgent){
      resolves on cards, but a task is not handed to it here; it stays offered
      only when this task already names it. */
   const board = everyone.filter(p => !/@offdesk\.invalid$/i.test(p.email) || p.email === cur);
-  const known = new Set(AGENT_NAMES.concat(bucketAgentData.buckets.map(b => b.name), peopleNames, emails));
+  const known = new Set(AGENT_NAMES.concat(bucketAgentsNow().buckets.map(b => b.name), peopleNames, emails));
   const people = peopleNames.filter(n => emails.indexOf(String(n).toLowerCase()) < 0);
   if (cur && !agentOf(cur) && !known.has(cur)) people.unshift(cur);
   const label = v => isPersonEmail(v) ? assigneeLabel(v) : v;
