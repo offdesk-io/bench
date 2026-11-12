@@ -1,16 +1,14 @@
-"""The kinds of work a plan can be, and which of them may run without the owner.
+"""The kinds of work a plan can be, and how each is carried out.
 
-Decided in IMPROVEMENTS.md, "The implementing agent only runs
-with the owner in the room because nothing says which kinds of work it can do
-alone". The Plan agent writes one of these as `type:` in a plan's frontmatter,
-`write_plan()` in agents/bucket-agent/plans.py reads it back.
+A plan-first bucket's agent writes one of these as `type:` in a plan's
+frontmatter, and `write_plan()` in agents/bucket-agent/plans.py reads it back.
 
-No type is approved on arrival any more: the owner ticks every Review the plan.
-What a type still decides is how the bucket agents' runner
-(agents/bucket-agent/hooks.py) carries an approved plan out: `code` on a branch,
-`figma` not at all unattended, and the rest as new files in the task's project
-folder. The retired Implement agent's runner (agents/implement-agent/hooks.py)
-still reads UNATTENDED.
+No type is approved on arrival: the owner ticks every Review the plan, and no
+type runs before that. Once it is ticked, the bucket agents' runner
+(eligible() and options() in agents/bucket-agent/hooks.py) carries out every
+type but one: `code` on an `implement/<date>` branch, `figma` never unattended
+(it waits for the `do` skill), and every other type, `other` included, as new
+files in the task's project folder.
 """
 
 TYPES = ("write-up", "draft", "prompt", "data", "deck", "figma", "code", "other")
@@ -22,16 +20,16 @@ FILES = ("write-up", "draft")
 # never over a file, and save a new version as `name-v2.md` beside the original.
 GUARDED = ("prompt", "data", "deck")
 
-# What the retired Implement agent's runner took on alone, once the plan's
-# review was ticked. Figma is left out: see FIGMA_REFUSAL in
-# agents/bucket-agent/hooks.py.
+# Read only by the retired Implement agent's runner (agents/implement-agent/),
+# which took these on alone and nothing else. The bucket agents' runner does not
+# read it: it refuses figma alone (FIGMA_REFUSAL in agents/bucket-agent/hooks.py).
 UNATTENDED = FILES + GUARDED + ("code",)
 
 
 def read(value):
     """A `type:` value as written by an agent, as one of TYPES.
 
-    Strict on purpose: a word that is not on the list is `other`, which nothing
-    runs alone, rather than a guess at which type it meant."""
+    Strict on purpose: a word that is not on the list is `other`, which is never
+    carried out as code or Figma, rather than a guess at which type it meant."""
     v = (value or "").strip().strip("`\"'").lower()
     return v if v in TYPES else "other"

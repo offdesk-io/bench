@@ -143,8 +143,9 @@ def work(text, known, day=None):
     with what it waits on ticked, in in_order()'s order.
 
     Each is a dict: `task`, `sub` (the sub-task), `kind` (plan or implement),
-    `agent` (the definition), `plan_rel`, `feedback`, and `skip`, a reason it
-    is set aside or None.
+    `agent` (the definition), `plan_rel`, `feedback`, `review_done` (the
+    task's Review the plan sub-task is there and ticked), and `skip`, a reason
+    it is set aside or None.
     """
     day = day or dt.date.today()
     tasks = todo.parse_doc(text)
@@ -152,6 +153,7 @@ def work(text, known, day=None):
     out = []
     for t in in_order([t for t in tasks if not t.done and t.stable_id], day):
         steps = todo.split_body(t)[1]
+        review_done = any(s["task"].slug == t.stable_id + "-plan-review" and s["task"].done for s in steps)
         for s in steps:
             sub = s["task"]
             kind = next((k for k in KINDS if sub.slug == "%s-%s" % (t.stable_id, k)), None)
@@ -166,7 +168,8 @@ def work(text, known, day=None):
             elif t.start and (todo.parse_date(t.start) or day) > day:
                 skip = STARTS_WHY % t.start
             out.append({"task": t, "sub": sub, "kind": kind, "agent": agent,
-                        "plan_rel": plan_rel(steps, t), "feedback": feedback(steps, t), "skip": skip})
+                        "plan_rel": plan_rel(steps, t), "feedback": feedback(steps, t),
+                        "review_done": review_done, "skip": skip})
     return out
 
 

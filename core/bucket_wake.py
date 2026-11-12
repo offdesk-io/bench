@@ -19,12 +19,18 @@ ways: one run at a time per board from this thread, no start while the
 runner's own lock for the board is held by a live process (a scheduled run,
 or Run now on the dashboard), and the runner taking that same lock itself.
 
+One thread per data root: a second board server started on the same data
+(a second checkout, a second copy of the app) finds the root claimed by a lock
+held for the first server's lifetime and starts none of its own, so the two
+never start runs side by side.
+
 It never starts on a throwaway data root (TODOS_DATA_ROOT set, the test
 runner's), with BENCH_AGENTS=0, off a Mac, or where `claude` cannot be found:
 the agents have only ever run on the owner's Mac, and the agency server runs
 the board too.
 """
 
+import fcntl
 import json
 import os
 import re
@@ -145,10 +151,46 @@ def tick(data_root, boards, running, seen, log=print, pending=ask_pending, start
     return started
 
 
+# The open lock file of the data root this process claimed, kept for its lifetime.
+_CLAIMED = {}
+
+
+def claim(data_root):
+    """Take `.bucket-wake.lock` in the data root for this process's lifetime.
+    True when it is now ours. False when another live process holds it, or this
+    one already does, so one process never runs two threads either. The lock
+    goes with the process, so a server that dies leaves nothing to clear."""
+    path = os.path.join(data_root, ".bucket-wake.lock")
+    if path in _CLAIMED:
+        return False
+    try:
+        fh = open(path, "a")
+    except OSError:
+        return False
+    try:
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        fh.close()
+        return False
+    _CLAIMED[path] = fh
+    return True
+
+
+def release(data_root):
+    """Give the data root back. For the tests; a server never calls it."""
+    fh = _CLAIMED.pop(os.path.join(data_root, ".bucket-wake.lock"), None)
+    if fh:
+        fh.close()
+
+
 def start(data_root, list_boards=None, log=print):
     """Start the daemon thread that ticks every minute. Returns it, or None
-    when this machine should not run agents (see enabled())."""
+    when this machine should not run agents (see enabled()) or another server
+    already runs the wake on this data root (claim())."""
     if not enabled():
+        return None
+    if not claim(data_root):
+        log("bucket agents: another board server already starts the on-assign agents on %s" % data_root)
         return None
     list_boards = list_boards or (lambda: _dataset.names(data_root))
     guard = threading.Lock()
