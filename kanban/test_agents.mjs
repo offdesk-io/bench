@@ -74,7 +74,7 @@ check('the board loaded', await evalJS(`typeof renderAgentsView === 'function' &
 // LOCK FIRST, then fixtures. Nothing below can write anything.
 await evalJS(`(() => {
   state.locked = true; state.lockedLabel = 'test';
-  const real = window.fetch;
+  const real = agentsFetchInner;
   window.__real = real;
   window.__blocked = [];
   window.__stateReads = 0;
@@ -86,11 +86,13 @@ await evalJS(`(() => {
         targets: [target('work', 'work', true, [1, 2, 3]), target('personal', 'personal', false, [])] },
       { id: 'implement-agent', key: 'implement-agent', name: 'Implement agent', blurb: 'Carries out agreed plans.',
         targets: [target('work', 'work', false, [4])] },
+      { id: 'bucket-agent', key: 'bucket-agent', name: 'Bucket agents', blurb: 'One agent per bucket.',
+        targets: [target('work', 'work', true, [1, 2, 3]), target('personal', 'personal', false, [])] },
     ],
   };
   const json = (body, status) => Promise.resolve(new Response(JSON.stringify(body),
     { status, headers: { 'Content-Type': 'application/json' } }));
-  window.fetch = (url, opts) => {
+  agentsFetchInner = (url, opts) => {
     const method = (opts && opts.method) || 'GET';
     if (method !== 'GET') {
       window.__blocked.push(method + ' ' + url + ' ' + ((opts && opts.body) || ''));
@@ -120,11 +122,8 @@ if (process.env.SHOT_SETUP) {
   const shot = await send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(process.env.SHOT_SETUP, Buffer.from(shot.result.data, 'base64'))
 }
-check('and still shows the cards', await evalJS(`document.querySelectorAll('#agentsCards .agentcard').length === 3`))
-check('the Plan and Implement agents\' cards each carry a handover level, and the PA\'s does not', await evalJS(`
-  [...document.querySelectorAll('#agentsCards .agentcard')].map(c => c.dataset.agentCard + ':' +
-    [...c.querySelectorAll('[data-handover-level] option')].map(o => o.value).join('/')).join(' ')`) ===
-  'PA: Plan agent:plan-first/just-do-it/off Implement agent:just-do-it/off')
+check('and still shows the cards: the PA and the Bucket agents', await evalJS(`[...document.querySelectorAll('#agentsCards .agentcard h3')].map(h => h.textContent).join() === 'PA,Bucket agents'`))
+check('no card carries the dead handover level control', await evalJS(`!document.querySelector('#agentsCards [data-handover-level]') && !document.querySelector('#agentsCards').textContent.includes('Just do it')`))
 check('Delegate to offers no agents', await evalJS(`!delegateSelectHTML('', '').includes('Plan agent')`))
 check('but keeps one a task already names', await evalJS(`delegateSelectHTML('Plan agent', '').includes('value="Plan agent"')`))
 await evalJS(`state.view = 'overview'; renderView()`)
@@ -184,7 +183,7 @@ check('tasks go under the processes', /## The processes I run in this bucket\n\n
 check('how it works and the output go under what good looks like', /## What good looks like here\n\nHow the agent should work: Ask before.*\n\nWhat the output looks like: A PDF per client/.test(sent.text || ''))
 check('an unanswered question leaves the template\'s guidance', /## What already does it\n\nWhich of my skills/.test(sent.text || ''))
 check('the brief no longer carries the empty marker', !(sent.text || '').includes('NOT FILLED IN YET'))
-check('it ends on the Plan agent\'s card', await evalJS(`!!(modalEl && modalEl.querySelector('.agentcard.on[data-agent-card="Plan agent"]'))`))
+check('it ends on the Bucket agents card', await evalJS(`!!(modalEl && modalEl.querySelector('.agentcard.on[data-agent-card="Bucket agents"]'))`))
 check('and the list now counts as set up', await evalJS(`agentsSetUp() === true`))
 if (process.env.SHOT_DONE) {
   const shot = await send('Page.captureScreenshot', { format: 'png' })
@@ -202,18 +201,35 @@ await evalJS(`state.agentsSetup = true; state.view = 'agents'; renderView()`)
 await wait(1200)
 check('it mounts the shared component', await evalJS(`!!document.querySelector('#lists #agentsRoot .agents-ui.agents-root.embedded')`))
 check('titled Agents', await evalJS(`document.querySelector('#agentsRoot h1')?.textContent === 'Agents'`))
-check('it shows both agents', await evalJS(`(() => { const t = document.querySelector('#agentsRoot').textContent; return t.includes('Plan agent') && t.includes('Implement agent') })()`))
+check('it shows one Bucket agents entry', await evalJS(`(() => { const t = document.querySelector('#agentsRoot').textContent; return t.includes('Bucket agents') })()`))
+check('and hides the Plan and Implement agents', await evalJS(`(() => { const t = document.querySelector('#agentsRoot').textContent; return !t.includes('Plan agent') && !t.includes('Implement agent') })()`))
 check('it read /agents-api, not the dashboard routes', await evalJS(`window.__stateReads > 0`))
-check('the list view draws an hour track per target', await evalJS(`document.querySelectorAll('#agentsRoot .trow .hours .hr').length === 72`))
+check('the list view draws an hour track per target', await evalJS(`document.querySelectorAll('#agentsRoot .trow .hours .hr').length === 48`))
 check('and the ruler over them', await evalJS(`!!document.querySelector('#agentsRoot .rulerwrap .ruler')`))
-check('a card per agent under it', await evalJS(`[...document.querySelectorAll('#agentsCards .agentcard h3')].map(h => h.textContent).join(',') === 'PA,Plan agent,Implement agent'`))
+check('a card per agent under it', await evalJS(`[...document.querySelectorAll('#agentsCards .agentcard h3')].map(h => h.textContent).join(',') === 'PA,Bucket agents'`))
 check('each card says does, cannot and needs', await evalJS(`[...document.querySelectorAll('#agentsCards .agentcard')].every(c => [...c.querySelectorAll('dt')].map(d => d.textContent).join('|') === 'Does|Cannot|Needs from you' && [...c.querySelectorAll('dd')].every(d => d.textContent.length > 20))`))
-check('the tab lists this list\'s bucket planners under the cards', await evalJS(`(() => {
-  const el = document.querySelector('#agentsPlanners .planners li')
-  if (!el) return false
-  return el.querySelector('.planner-bucket')?.textContent === 'Tasks' &&
-    el.querySelector('.planner-name')?.textContent === 'fallback planner'
+/* The bucket list under the switch and hours: a ready bucket, one that is not, and a free-rein one. */
+await evalJS(`bucketAgentData = { list: state.dataset || '', columns: {}, on: true, hours: [], buckets: [
+  { bucket: 'Tasks', name: 'Test tasks agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] },
+  { bucket: 'Notes', name: 'Test notes agent', mode: 'free-rein', start: 'scheduled', ready: true, missing: [] },
+  { bucket: 'Money', name: 'Test money agent', mode: 'plan-first', start: 'on-assign', ready: false, missing: ['marker', 'may_touch'] }] };
+  bucketAgentLoad = Promise.resolve(); refreshBucketPlanners()`)
+await wait(300)
+const rowText = name => evalJS(`(document.querySelector('#agentsPlanners [data-bucket-agent="${name}"]') || {}).textContent || ''`)
+check('the tab lists each bucket agent under the switch and hours', await evalJS(`document.querySelectorAll('#agentsPlanners [data-bucket-agent]').length === 3`))
+check('a ready plan-first bucket reads plan first, starts when assigned', /Test tasks agent.*plan first · starts when assigned/.test(await rowText('Test tasks agent')))
+check('a free-rein scheduled bucket reads free rein, scheduled', /Test notes agent.*free rein · scheduled/.test(await rowText('Test notes agent')))
+check('a bucket that is not ready says what is missing', /Test money agent.*not set up: the NOT FILLED IN YET line is still in the brief, what it may touch/.test(await rowText('Test money agent')))
+check('every row links to its bucket brief', await evalJS(`[...document.querySelectorAll('#agentsPlanners [data-bucket-brief]')].map(b => b.dataset.bucketBrief).join() === 'Tasks,Notes,Money'`))
+check('start wording follows the bucket agent', await evalJS(`bucketAgentStartWords({ start: 'on-assign' }) === 'starts when assigned' &&
+  bucketAgentStartWords({ start: 'scheduled' }) === "starts in this board's hours"`))
+check('a scheduled bucket is outside the board\'s hours when the hour is not one of them', await evalJS(`(() => {
+  const h = new Date().getHours();
+  bucketAgentData.hours = [(h + 5) % 24]; const out = bucketAgentInHours();
+  bucketAgentData.hours = [h]; const inn = bucketAgentInHours();
+  bucketAgentData.hours = []; return !out && inn;
 })()`))
+check('through the fetch the page uses, the old agents are gone and the bucket agent stays', await evalJS(`window.fetch('/agents-api/state.json').then(r => r.json()).then(j => j.agents.map(a => a.id).join())`) === 'bucket-agent')
 check('the Settings page swaps the bucket strip for its own tabs and hides the edit-buckets pencil; other views bring them back', await evalJS(`(() => {
   const wasLocked = state.locked, wasView = state.view
   state.locked = false
@@ -237,7 +253,7 @@ if (process.env.SHOT) {
 await evalJS(`document.querySelector('#agentsRoot .trow .hours button.hr[data-hour="5"]').click()`)
 await wait(500)
 const posted = await evalJS(`window.__blocked.join('\\n')`)
-check('an hour click posts to /agents-api/apply', /POST \/agents-api\/apply \{"agent":"plan-agent","target":"personal","changes":\{"hours":\[5\]\}\}/.test(posted), posted.slice(0, 200))
+check('an hour click posts to /agents-api/apply', /POST \/agents-api\/apply \{"agent":"bucket-agent","target":"personal","changes":\{"hours":\[5\]\}\}/.test(posted), posted.slice(0, 200))
 
 /* ---- nothing leaks into the board ---- */
 check('its .count styles stay inside the view', await evalJS(`(() => {
@@ -263,7 +279,7 @@ check('and no list counts as set up, delegated tasks included', await evalJS(`((
   t.to = 'Plan agent'; const on = agentsSetUp(); t.to = ''; return on === false;
 })()`))
 check('Delegate to offers no agents', await evalJS(`!delegateSelectHTML('', '').includes('Plan agent')`))
-check('the Data menu leaves out Run the Plan agent now, and the Settings page keeps its four tabs', await evalJS(`syncFolderButton();
+check('the Data menu leaves out Run the bucket agents now, and the Settings page keeps its four tabs', await evalJS(`syncFolderButton();
   $('#runAgentBtn').classList.contains('hidden') && settingsTabs().map(t => t[0]).join() === 'memory,settings,agents,backups'`))
 check('Settings leaves out the agent options', await evalJS(`loadSettingsDraft(false).then(d => {
   const html = settingsFormHTML(d.draft, [], false);
@@ -271,14 +287,14 @@ check('Settings leaves out the agent options', await evalJS(`loadSettingsDraft(f
 })`))
 check('a hand-over set to start now starts nothing', await evalJS(`(async () => {
   window.__blocked = []; queueAgentStart('plan'); await flushAgentStarts();
-  return !window.__blocked.some(b => b.includes('/planning_agent/run'));
+  return !window.__blocked.some(b => b.includes('/agents-api/run'));
 })()`))
 await evalJS(`state.agentsReady = null; state.agentsMissing = ''; syncFolderButton(); state.view = 'board'; renderView()`)
 await wait(300)
 check('with the answer unknown, nothing is hidden', await evalJS(`settingsTabs().some(t => t[0] === 'agents') && !$('#runAgentBtn').classList.contains('hidden')`))
-check('Run the Plan agent now asks first', await evalJS(`(() => {
+check('Run the bucket agents now asks first', await evalJS(`(() => {
   $('#runAgentBtn').click();
-  const asked = !!modalEl && modalEl.textContent.includes('Run the Plan agent now?');
+  const asked = !!modalEl && modalEl.textContent.includes('Run the bucket agents now?');
   closeModal(); return asked;
 })()`))
 
@@ -287,6 +303,8 @@ const status = await evalJS(`window.__real('/agents-status.json').then(r => r.js
 check('the server says whether agents can run here', /"ready": ?(true|false)/.test(status) && /"claude": ?(true|false)/.test(status), status)
 const real = await evalJS(`window.__real('/agents-api/state.json').then(r => r.json()).then(j => (j.agents || []).map(a => a.id).sort().join(','))`)
 check('the server lists only this repo agents', real === 'bucket-agent,implement-agent,plan-agent', real)
+const hidden = await evalJS(`window.fetch('/agents-api/state.json').then(r => r.json()).then(j => (j.agents || []).map(a => a.id).sort().join(','))`)
+check('and the page hides the two old ones', hidden === 'bucket-agent', hidden)
 const refused = await evalJS(`window.__real('/agents-api/run', { method: 'POST', body: '{}', headers: { 'Content-Type': 'application/json' } }).then(r => r.status)`)
 check('a POST naming no agent is refused', refused === 404, String(refused))
 

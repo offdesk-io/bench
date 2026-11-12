@@ -85,16 +85,16 @@ await evalJS(`(window.painted = () => new Promise(
 await evalJS(`(() => {
   state.locked = true;
   state.lockedLabel = 'schedule test';
-  const real = window.fetch;
+  const real = agentsFetchInner;
   window.__blocked = [];
   const now = Date.now();
   const iso = ms => new Date(ms).toISOString();
   const day = ms => new Date(ms).toISOString().slice(0, 10);
   window.__jobs = [
-    { id:'plan-agent', name:'Plan agent', armed:false, state:'not installed',
-      what:'Plans every task delegated to the Plan agent, one agent each.',
+    { id:'bucket-agent', name:'Bucket agents', armed:false, state:'not installed',
+      what:'Runs each bucket agent that is scheduled, in the board hours.',
       schedule:'12 wakes, 19:00–06:00', next:'', last:'',
-      recent:[], hint:'ln -s agents/plan-agent/x.plist ~/Library/LaunchAgents/' },
+      recent:[], hint:'ln -s agents/bucket-agent/x.plist ~/Library/LaunchAgents/' },
     { id:'banners', name:'Desktop banners', armed:true, state:'running',
       what:'A banner when a task or sub-task falls due, one the next working day if it is still open, and the lines agents queue.',
       schedule:'every minute while the board is running', next:'',
@@ -102,7 +102,12 @@ await evalJS(`(() => {
     { id:'weekly-backup', name:'Weekly backup', armed:true, state:'running, in this server',
       what:'One snapshot of todo.md a week.', schedule:'every 30 minutes',
       next:'', last:'todo-backup-week-2026-W36.md',
-      recent:['todo-backup-week-2026-W36.md'], hint:'' }
+      recent:['todo-backup-week-2026-W36.md'], hint:'' },
+    // The retired agents' jobs: the page leaves them out.
+    { id:'plan-agent', name:'Plan agent', armed:false, state:'not installed', what:'Retired.',
+      schedule:'', next:'', last:'', recent:[], hint:'' },
+    { id:'implement-agent', name:'Implement agent', armed:false, state:'not installed', what:'Retired.',
+      schedule:'', next:'', last:'', recent:[], hint:'' }
   ];
   window.__usage = {
     available:true, days:30, baseline:30,
@@ -135,7 +140,7 @@ await evalJS(`(() => {
   window.__plans = [];
   window.__queue = {};
   window.__nightAgent = { live:false, done:[], failed:[] };
-  window.fetch = (url, opts) => {
+  agentsFetchInner = (url, opts) => {
     const method = (opts && opts.method) || 'GET';
     if (method !== 'GET') { window.__blocked.push(method + ' ' + url); return Promise.resolve(new Response('{}', {status:200})); }
     const u = String(url);
@@ -176,7 +181,9 @@ check('the clock card is its own column, stacked under Token Session', await eva
       card.previousElementSibling.querySelector('h3').textContent === 'Token Session' })()
 `))
 const jobs = await evalJS(`document.querySelectorAll('#schedOut .schedjob').length`)
-check('one row per scheduled job', jobs === 3, `${jobs} rows`)
+check('one row per scheduled job, the retired agents\' left out', jobs === 3, `${jobs} rows`)
+check('the first row is the Bucket agents, and no row names the old agents', await evalJS(`document.querySelector('#schedOut .schedjob').textContent.includes('Bucket agents') &&
+  !/Plan agent|Implement agent/.test(document.querySelector('#schedOut').textContent)`))
 
 check('an unarmed job says so and gives the command', await evalJS(`
   document.querySelector('#schedOut .schedjob .schedstate').textContent === 'not installed' &&

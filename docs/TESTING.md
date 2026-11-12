@@ -34,7 +34,7 @@ script:
 It refuses to start if the data root resolves inside the repo's own `data/`.
 With the three `TODOS_*` variables unset, `server.py` behaves exactly as it
 always has. `agents/plan-agent/paths.py` and `core/tick_queue.py` read
-`TODOS_DATA_ROOT` too, since the server calls into them, and Run the Plan agent
+`TODOS_DATA_ROOT` too, since the server calls into them, and Run the bucket agents
 now refuses on a scratch root rather than start a real run.
 
 A suite run on its own, without `BOARD_PORT`, still goes to 8765 and prints a
@@ -216,3 +216,17 @@ from the stub and leave it out of what counts as a write.
 Never write into a real list under `data/` from a test, not even a
 small, temporary one — that's real content, private and irreplaceable in a way
 `data/_test/` deliberately isn't.
+
+## The Agents tab and the bucket agents
+
+`test_agents.mjs` stubs `/agents-api/state.json` by swapping `agentsFetchInner`
+(27-agents.js), the fetch the page's own wrapper passes on to, and leaves
+`window.fetch` alone. The wrapper is what drops `plan-agent` and
+`implement-agent` from that state and from `/schedule.json`, so a suite that
+stubbed `window.fetch` directly would skip it. `test_agents.mjs` and
+`test_schedule.mjs` both feed the old agents through the stub and assert they
+never reach the page. The bucket list under the switch and hours is drawn from
+`bucketAgentData`, which the suite fills with a ready plan-first bucket, a ready
+free-rein scheduled one and one that is not set up. `test_agent_runs.mjs` awaits
+`bucketAgentLoad` after `load()` before setting its own `bucketAgentData`,
+since every load asks the server for the real one and would overwrite it.

@@ -453,15 +453,24 @@ function locate(id){
 
    agentOf() in core/todo.js reads any `[to::]` ending in " agent" as an agent,
    which is what a tick, a card's face and the Delegate to filter ask it. */
-let bucketAgentData = { list: null, buckets: [], columns: {} };
+let bucketAgentData = { list: null, buckets: [], columns: {}, hours: [], on: true };
 let bucketAgentLoad = null;
 function loadBucketAgents(){
   const list = state.dataset || '';
   bucketAgentLoad = (async () => {
     let got = null;
     try { got = await getJSON('/api/bucket-agents?list=' + encodeURIComponent(list)); } catch (err) { got = null; }
+    /* The board's switch and hours come from the runner's own state, through
+       the agents engine; best effort, and absent in the demo build. */
+    let on = true, hours = [];
+    try {
+      const st = await getJSON('/agents-api/state.json');
+      const ag = ((st && st.agents) || []).find(a => a.id === 'bucket-agent');
+      const tg = ag && (ag.targets || []).find(x => x.id === list);
+      if (tg) { on = !!tg.on; hours = tg.hours || []; }
+    } catch (err) { /* keep the defaults */ }
     const had = bucketAgentData.buckets.length;
-    bucketAgentData = { list, buckets: (got && got.buckets) || [], columns: (got && got.columns) || {} };
+    bucketAgentData = { list, buckets: (got && got.buckets) || [], columns: (got && got.columns) || {}, hours, on };
     /* Only a redraw when something on screen can have changed. */
     if (state.doc && (had || bucketAgentData.buckets.length)) refreshView();
   })();
@@ -494,6 +503,11 @@ const BUCKET_AGENT_MISSING = {
 };
 function bucketAgentMissingText(a){
   return (a.missing || []).map(m => BUCKET_AGENT_MISSING[m] || m).join(', ');
+}
+/* Whether a scheduled bucket agent may start now: the board's agents are on
+   and this hour is one of its hours. */
+function bucketAgentInHours(){
+  return bucketAgentData.on !== false && bucketAgentData.hours.indexOf(new Date().getHours()) > -1;
 }
 const LEGACY_AGENTS = ['Plan agent', 'Implement agent'];
 function legacyAgent(to){ return LEGACY_AGENTS.indexOf(agentOf(to)) > -1 ? agentOf(to) : ''; }

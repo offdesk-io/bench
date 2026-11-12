@@ -1,7 +1,7 @@
 'use strict';
 
 /* =========================================================================
-   4b2b. The Plan agent's run, and the Spend and Schedules panels.
+   4b2b. The bucket agents' run, and the Spend and Schedules panels.
 
    This file was 13-plans.js, the Plans view. Plans stopped
    being a board of its own when an agent's part of a task became sub-tasks on the
@@ -9,7 +9,7 @@
    (openPlanReader() in 19-drawer.js), and where it stands is the state of those
    sub-tasks. What survives here is the two things that were only ever reached
    from that view and are not about plans: the tabs with Token Session and the
-   jobs that run on a clock, and the button that starts the Plan agent now.
+   jobs that run on a clock, and the button that starts the bucket agents now.
 
    The tabs are on the Settings page; the button is in the Data menu. Nothing
    here touches todo.md.
@@ -46,20 +46,19 @@ function renderRunResults(n){
 }
 
 /* Spending money is a deliberate press and then a second one. The confirm says
-   what it will cost and what it will do, because "run the agent" does not
-   convey either — and the one thing worth being clear about is that it plans
-   and never executes, which is true of the agent whatever hour it runs at. */
+   what it will cost and what it will do, because "run the agents" does not
+   convey either. It starts the Bucket agents' run for the open board, the one
+   the Agents tab's own Run now starts. */
 function confirmNightAgentRun(){
-  showModal('Run the Plan agent now?', 'It normally waits for the small hours',
+  showModal('Run the bucket agents now?', 'Scheduled buckets normally wait for the board’s hours',
     '<div class="repdoc">' +
-      '<p>It will work through every task with an open Plan sub-task assigned to it, ' +
-      'in the order they sit on the board, one agent each, and leave a plan for each ' +
-      'behind its review.</p>' +
-      '<p>Up to <strong>$12</strong> across the batch and <strong>$2</strong> a task, ' +
-      'stopping early if either runs out. It ignores the clock and the usage window, ' +
-      'so it will spend in whatever window is open now — including the one you are ' +
-      'working in.</p>' +
-      '<p>Nothing it writes is carried out. Every plan waits for you.</p>' +
+      '<p>It works through every task on <strong>' + esc(state.dataset || 'this board') + '</strong> with an open ' +
+      'step assigned to one of its bucket agents, in the order they sit on the board, ' +
+      'and leaves a plan or the work behind a review for each.</p>' +
+      '<p>It stays inside the daily spending caps, ignores the clock and the usage window, ' +
+      'so it will spend in whatever window is open now, including the one you are working in.</p>' +
+      '<p>Nothing is sent, merged or pushed. A plan-first bucket waits for you to approve its plan, ' +
+      'and you always review the work.</p>' +
     '</div>',
     [{ label:'Run it', primary:true, run: startNightAgentRun },
      { label:'Cancel' }]);
@@ -67,11 +66,11 @@ function confirmNightAgentRun(){
 
 async function startNightAgentRun(){
   try {
-    await postJSON('/planning_agent/run');
+    await postJSON('/agents-api/run', { agent: 'bucket-agent', action: 'run', target: state.dataset });
     watchRunStartedHere();
-    showToast('The agent is running.', 'good');
+    showToast('The bucket agents are running.', 'good');
   } catch (err) {
-    showToast('Could not start it: ' + (err.message || err), 'bad');
+    showToast('Could not start them: ' + (err.message || err), 'bad');
   }
 }
 
@@ -105,4 +104,5 @@ function leaveRefCards(){
   if (host) BoardUI.unmount(host);
 }
 
+$('#runAgentBtn').textContent = 'Run the bucket agents now';
 $('#runAgentBtn').onclick = () => { closeDataMenu(); confirmNightAgentRun(); };
