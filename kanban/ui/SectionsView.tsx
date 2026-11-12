@@ -1,4 +1,4 @@
-/* Overview, Matrix and Timeline — the three views `renderSections()` in
+/* Overview, Reports, Matrix and Timeline — the three views `renderSections()` in
  * `kanban/js/18-timeline.js` composes, as components. `refSection()`'s job —
  * wrapping a section in the same `Column` every board column already is —
  * moves here; `$('#lists').innerHTML = '<div class="lists ...">' + html +
@@ -86,50 +86,18 @@ export interface OverviewViewProps {
   bigRocks: SectionBody & { open: boolean }
   thisWeek: SectionBody & { open: boolean }
   quickWins: SectionBody & { open: boolean }
-  /** null until the list has an agent set up (agentsSetUp() in
-   *  27-agents.js): there is nobody to delegate to yet, so the column would
-   *  only ever say so. */
-  delegate: (SectionBody & { open: boolean }) | null
-  /** null when todo.md's own Context section is empty — dropped rather than
-   *  drawn blank, the one section here with nothing to count. */
-  context: (SectionBody & { open: boolean }) | null
-  /** Tasks finished and Written reports, the two columns that were the Reports
-   *  tab until 19 Sep 2026. null before a document is loaded — there is nothing
-   *  to count yet and the written half has not been asked for. */
-  reports: ReportsColumnsProps | null
 }
 
-/* The split grid's tracks are listed out rather than left to repeat(),
-   because repeat() cannot take a computed count reliably across browsers —
-   splitGridCSS()'s own reasoning in 18-timeline.js, ported rather than
-   reused, since a CSS custom-property string is not a shape React's style
-   prop takes. Each track carries its own floor beside its CSS, since the four
-   widths here are no longer one number times a count: Context is prose in full
-   sentences rather than cards and reads as a ribbon at card width, and the two
-   report columns are wider again. */
+/* Three reference columns, each on its own track with a 380px floor. The row
+   fills the window evenly at desktop width and scrolls sideways below the floor
+   (and snaps one column per screen on a phone, see board.css). Context moved to
+   the Memory page and Delegate to Claude is no longer drawn, so nothing else
+   shares the row. */
 const REF_TRACK = { css: 'minmax(380px,1fr)', min: 394 }
-const CTX_TRACK = { css: 'minmax(540px,1.5fr)', min: 554 }
-/* Tasks finished is two reference columns wide, exactly: 380 twice plus the
-   14px gap between them, so it lines up with the pairs beside it rather than
-   being merely bigger than them. It grows twice as fast too, 2fr against their
-   1fr. Written reports keeps the floor it had as a tab, a reading width and no
-   more. */
-const FINISHED_TRACK = { css: 'minmax(774px,2fr)', min: 788 }
-const WRITTEN_TRACK = { css: 'minmax(420px,600px)', min: 434 }
 
 export function OverviewView(props: OverviewViewProps) {
-  const { bigRocks, thisWeek, quickWins, delegate, context, reports } = props
-  /* Tasks finished leads the row. What got done is the thing to read before
-     picking up anything else, and the four reference columns are what you pick
-     up from — so the row runs backwards through the week rather than starting
-     at the biggest rock. Written reports stays at the far end, where it is the
-     long read rather than the glance. */
-  const tracks: { css: string; min: number }[] = []
-  if (reports) tracks.push(FINISHED_TRACK)
-  tracks.push(REF_TRACK, REF_TRACK, REF_TRACK)
-  if (delegate) tracks.push(REF_TRACK)
-  if (context) tracks.push(CTX_TRACK)
-  if (reports) tracks.push(WRITTEN_TRACK)
+  const { bigRocks, thisWeek, quickWins } = props
+  const tracks = [REF_TRACK, REF_TRACK, REF_TRACK]
   const gridStyle: CSSProperties = {
     gridTemplateColumns: tracks.map(t => t.css).join(' '),
     minWidth: tracks.reduce((n, t) => n + t.min, 0) + 'px',
@@ -138,28 +106,43 @@ export function OverviewView(props: OverviewViewProps) {
   return (
     <>
       <div className="lists split" style={gridStyle}>
-        {reports ? <TasksFinishedColumn {...reports} /> : null}
         <Section title="Big rocks" hint="High impact, L effort. Needs protected time."
           body={bigRocks} collapsible collapseKey="ov:Big rocks" open={bigRocks.open} />
         <Section title="This week" hint={<>Everything tagged <code>week</code>, soonest first.</>}
           body={thisWeek} collapsible collapseKey="ov:This week" open={thisWeek.open} />
         <Section title="Quick wins"
-          hint={<>Yours to do: meeting agendas, <code>effort:S</code> and written messages.{delegate ? <> Anything delegated
-            to the Implement agent sits in Delegate instead.</> : null}</>}
+          hint={<>Yours to do: meeting agendas, <code>effort:S</code> and written messages.</>}
           body={quickWins} collapsible collapseKey="ov:Quick wins" open={quickWins.open} />
-        {delegate ? (
-          <Section title="Delegate to Claude"
-            hint={<>Everything delegated to the Implement agent, worth doing first at the top.</>}
-            body={delegate} collapsible collapseKey="ov:Delegate to Claude" open={delegate.open} />
-        ) : null}
-        {context ? (
-          <Section title="Context" hint="Standing facts, not tasks. Edit these in todo.md."
-            body={context} collapsible collapseKey="ov:Context" open={context.open} />
-        ) : null}
-        {reports ? <WrittenReportsColumn {...reports} /> : null}
       </div>
       <ListNote />
     </>
+  )
+}
+
+/* ---- Reports ---- */
+
+export interface ReportsViewProps {
+  /** null before a document is loaded: there is nothing to count yet. */
+  reports: ReportsColumnsProps | null
+}
+
+/* Tasks finished is two reference columns wide, exactly: 380 twice plus the
+   14px gap between them, and it grows twice as fast, 2fr against Written
+   reports' 1fr, so the pair fills the window. */
+const FINISHED_TRACK = { css: 'minmax(774px,2fr)', min: 788 }
+const WRITTEN_TRACK = { css: 'minmax(420px,1fr)', min: 434 }
+
+export function ReportsView({ reports }: ReportsViewProps) {
+  if (!reports) return null
+  const gridStyle: CSSProperties = {
+    gridTemplateColumns: FINISHED_TRACK.css + ' ' + WRITTEN_TRACK.css,
+    minWidth: FINISHED_TRACK.min + WRITTEN_TRACK.min + 'px',
+  }
+  return (
+    <div className="lists split" style={gridStyle}>
+      <TasksFinishedColumn {...reports} />
+      <WrittenReportsColumn {...reports} />
+    </div>
   )
 }
 

@@ -301,7 +301,7 @@ more than keeping the build.
 
 When there is no server to read a list from, the board falls back to
 `kanban/demo.md`, an invented list committed to the repo, with the messages and
-prompts written out so Quick wins and Delegate to Claude have something in them.
+prompts written out so Quick wins and the other Overview columns have something in them.
 The page is a front end for `server.py`: it fetches `data/todo.md` on load, saves
 with a `PUT` back to the same path, and asks the server for `/backups.json` and
 `/archive`. `data/` is gitignored, so a static copy has no list to read, and the
@@ -514,7 +514,6 @@ Everything else is worked out from tags at render time, never stored twice:
 | Quick wins | `[effort:: S]` grouped by who does it (`[to:: ]`), plus any step with a written message, plus every recurring meeting with an agenda written on it. Anything waiting on an unfinished blocker, or whose `start:` has not arrived, is left out. |
 | Big rocks | `[impact:: high]` and `[effort:: L]` |
 | Dependency chain | `blocked-by:`, resolved against `#slug` |
-| Delegate to Claude | `[to:: Implement agent]`, ordered by `rank:` |
 
 These used to be sections written into the file by hand, which meant they drifted
 from the tasks they described. Deriving them removed that whole class of bug.
@@ -526,13 +525,11 @@ reports** answer what got done, which is what a one-to-one or an end-of-quarter
 write-up actually asks for and which nothing here could tell you without
 counting ticks by hand.
 
-They sit at the two ends of
-Overview's row — Tasks finished leading it at twice a reference column's
-width, Written reports closing it. Reading what got done meant leaving the page
-that says what is next, and the two questions are asked together often enough —
-in a one-to-one, on a Monday, at the end of a quarter — that the trip between
-them was the whole friction. Overview's row scrolls sideways to hold them, and
-both fold like every other column on it.
+They have a page of their own, the Reports tab right after Overview, with
+Tasks finished at twice a reference column's width and Written reports beside
+it. Overview holds three columns, Big rocks, This week and Quick wins, so it
+reads as the list of what to pick up. Both report columns fold like the ones on
+Overview, and an old `#reports` link opens the tab.
 
 The first report is **Counted from the list**, broken down by bucket. It leads
 with the total, set large enough to read from across the desk, because that
@@ -665,8 +662,7 @@ a `feedback:` note under it, which the next night reads as an instruction.
 
 The files are in `data/<dataset>/plans/`, one per task, listed by the server at
 `/plans.json`. Replanning a task rewrites its own file in place, with a `History`
-section keeping the earlier revisions. A plan whose task is no longer on the list
-gets a line in Overview's Context column.
+section keeping the earlier revisions.
 
 The full account of how the planning agent decides what to plan and when it is
 allowed to spend is in [agents/plan-agent/README.md](agents/plan-agent/README.md). The short version

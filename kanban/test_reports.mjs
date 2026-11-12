@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-/* Reports — the counted half and the written half, now the last two columns of
- * Overview.
+/* Reports — the counted half and the written half, now the Reports page, the
+ * second tab after Overview.
  *
  *   python3 kanban/server.py &          # or BOARD_PORT=... at one already up
  *   node kanban/test_reports.mjs
@@ -146,17 +146,17 @@ await evalJS(`(() => {
   state.locked = true;
   reportWindow = '30';
   invalidateArchiveEntries();
-  /* The page opens on Overview, so the real /reports.json was already read
+  /* The page may have opened on Reports, so the real /reports.json was already read
      before the stub above went in. Clearing the cache is what makes the next
      render ask again, and ask the stub. */
   forgetWrittenReports();
 })()`)
 check('the tab is locked', await evalJS(`state.locked === true`))
 
-await evalJS(`state.view = 'overview'; renderView()`)
+await evalJS(`state.view = 'reports'; renderView()`)
 await new Promise(r => setTimeout(r, 700))
 
-/* ---- the two columns, at the end of Overview's own row ---- */
+/* ---- the two columns, on the Reports page ---- */
 
 check('counted leads the row and written closes it', await evalJS(`(() => {
   const t = [...document.querySelectorAll('.lists.split .tenon-column .tenon-column__head h3')].map(h => h.textContent);
@@ -179,7 +179,7 @@ check('the window picker is in the counted column’s head, not its body', await
   !${countedCol}.querySelector('.tenon-column__body #reportWindow')
 `))
 
-/* Every column on Overview folds, these two included — and a <summary> folds
+/* Every column on Reports folds, these two included — and a <summary> folds
    on any click inside it that nothing cancels, which is what the delegated
    guard in 09-columns.js is for. */
 check('picking a window does not fold the column it is in', await evalJS(`(() => {
