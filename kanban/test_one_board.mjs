@@ -94,6 +94,7 @@ try {
       ''
     ].join('\\n'), 'demo.md', {});
     state.locked = false;
+    lastSaveAt = Date.now() + 10 * 60 * 1000;   // unlocked for the tick-queue drains, so hold autosave off from this instant; the fetch stub would only log its PUT
     window.__task = title => state.doc.buckets[0].tiers.flatMap(x => x.tasks).find(t => t.title === title);
     window.__tier = title => locate(__task(title).id).tier.name;
     window.__step = (title, id) => __task(title).body.find(l => l.includes(id));
@@ -246,7 +247,6 @@ try {
     const t = __task('Epsilon');
     const rv = subSteps(t).find(s => s.clean === 'Review the plan');
     setStepNoteText(t, rv.line, '');
-    lastSaveAt = Date.now() + 10 * 60 * 1000;   // hold autosave off; the fetch stub would only log it
     window.__queueGets = 0;
     const was = window.fetch;
     window.fetch = (u, o) => {
