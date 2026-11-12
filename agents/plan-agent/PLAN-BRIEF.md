@@ -29,7 +29,7 @@ concrete enough to start on a Monday morning.
 - `agents/pa_agent/PA.md` — who the owner is, how the owner prioritises, the standing rules,
   the tone.
 - `CONVENTIONS.md` at the repo root — the file format, what every tag means.
-- The `## Context` section at the bottom of the current `todo.md` — who is who,
+- The current list's `context.md`, read through the memory lookup — who is who,
   who is on leave, what dates cannot move. It is the only current copy of any of
   that, and a plan that ignores it will confidently schedule work into somebody's
   annual leave.
@@ -91,7 +91,7 @@ built on a guess about what the task meant.
 - The scope depends on a decision the owner has not made anywhere you can find. Not a
   fact you could look up and did not, a decision only the owner holds.
 - The work is for or about a person, a team or a deadline the task does not name
-  and `## Context` does not either.
+  and `context.md` does not either.
 - What "done" looks like is unknowable from the task, so no step could be
   written that anybody could tell was finished.
 
@@ -193,7 +193,7 @@ prose. Six labelled paragraphs, each one line or a short list:
   you read it. A plan is carried out days after it is written, and this is the
   only line that lets a later reader see what you could not have accounted for.
 - **Standing constraints.** Who is on leave, which dates cannot move, what is
-  waiting on somebody. Off `## Context` in `todo.md`, not from memory.
+  waiting on somebody. Off `context.md`, not from memory.
 - **Ruled out, and why.** The approach you considered and dropped. This is the
   line that stops the next night proposing it again.
 - **Not established.** What you went looking for and could not find, each one

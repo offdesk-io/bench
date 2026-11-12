@@ -21,7 +21,7 @@ same line.
 1. The profile (`<memory_root>/me/profile.md` (when `memory_root` is set and the file exists) or `data/profile.md`), who the owner is. It wins over anything else that describes
    the owner. Where it does not exist, read `agents/pa_agent/PA.md`.
 2. `CONVENTIONS.md` at the repo root, the file format and what every tag means.
-3. The list's `todo.md`: the `## Context` section at the bottom, then the task's
+3. The list's `context.md` (through the memory lookup, memory folder when set, else `data/<list>/`), then its `todo.md`: the task's
    own line, notes, sub-steps and blockers.
 4. The bucket brief, `data/<list>/buckets/<stream>/<stream>.md`. Treat it as blank
    if it still contains `<!-- NOT FILLED IN YET -->`.
@@ -44,4 +44,4 @@ Those findings are worth more than invented steps.
 ## What to ask for
 
 Under **Needs you**, name anything that would make the next plan on this list better:
-a bucket brief, a project folder, or a line in `## Context`.
+a bucket brief, a project folder, or a line in `context.md`.

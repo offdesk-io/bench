@@ -440,6 +440,11 @@ def about_path(name=None, write=False):
     return memory_path("about", name, write)
 
 
+def context_path(name=None, write=False):
+    """A board's Context: what changes week to week, in context.md."""
+    return memory_path("context", name, write)
+
+
 def _read_text(path):
     """(text, exists) for a file, ("", False) when it is not there."""
     try:
@@ -2942,6 +2947,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # Two files are written with PUT, so the line says which.
         what = ("a bucket brief" if "/bucket-brief" in first
                 else "the board's about text" if "PUT /about" in first
+                else "the board's context" if "PUT /context" in first
                 else "the board's people" if "PUT /people" in first
                 else "%s/%s/todo.md" % (DATA, current_dataset()))
         sys.stdout.write("saved %s\n" % what)
@@ -3170,9 +3176,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             # Signed in, the file's name alone: no folder on the server is shown.
             return self._json(200, {"text": text, "exists": exists,
                                     "path": os.path.basename(where) if AUTH else os.path.relpath(where, ROOT)})
+        if path == "/context.json":
+            ds = current_dataset()
+            where = context_path(ds)
+            text, exists = _read_text(where)
+            return self._json(200, {"text": text, "exists": exists,
+                                    "path": os.path.basename(where) if AUTH else os.path.relpath(where, ROOT)})
         if path == "/memory.json":
             ds = current_dataset()
             about, about_exists = _read_text(about_path(ds))
+            context, context_exists = _read_text(context_path(ds))
             people, _ = _read_text(people_path(ds))
             buckets = []
             for heading, label in bucket_headings(ds):
@@ -3186,6 +3199,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                                 "filled": bool(exists and planning_agent_plan.BRIEF_EMPTY not in text)})
             return self._json(200, {"board": ds,
                                     "about": {"text": about, "exists": about_exists},
+                                    "context": {"text": context, "exists": context_exists},
                                     "people": read_people(people),
                                     "buckets": buckets,
                                     "profile": profile_reply()})
@@ -4087,6 +4101,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         write_text_file(about_path(ds, write=True), text)
         return self._json(200, {"ok": True})
 
+    def _put_context(self):
+        """The board's Context, replaced whole in context.md. Same rules as
+        the company text."""
+        payload, refused = self._put_json_from_board()
+        if refused:
+            return
+        text = payload.get("text")
+        if not isinstance(text, str):
+            return self._json(400, {"error": "expected the text"})
+        ds = current_dataset()
+        if not ds:
+            return self._json(404, {"error": "no list you can see"})
+        write_text_file(context_path(ds, write=True), text)
+        return self._json(200, {"ok": True})
+
     def _put_people(self):
         """The board's team: the rows replace the people table in people.md,
         and the rest of the file stays as it is (write_people_table())."""
@@ -4186,6 +4215,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._put_bucket_brief()
         if self.path.split("?")[0] == "/about":
             return self._put_about()
+        if self.path.split("?")[0] == "/context":
+            return self._put_context()
         if self.path.split("?")[0] == "/people":
             return self._put_people()
         if self.path.split("?")[0] == "/settings.json":

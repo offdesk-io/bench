@@ -114,7 +114,7 @@ time in a session.
 
 ### 1. Read
 
-Read `data/.current`, then that dataset's `todo.md`, including `## Context`.
+Read `data/.current`, then that dataset's `todo.md` and its `context.md` through the memory lookup (`<memory_root>/bench/<dataset>/` when Bench's `memory_root` is set and holds the file, else `data/<dataset>/`).
 Then run the checker:
 
 ```bash
