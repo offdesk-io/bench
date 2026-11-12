@@ -4,7 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Bench</title>
-<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMDAgMTAwIj48dGV4dCB5PSIuOWVtIiBmb250LXNpemU9IjkwIj7inIU8L3RleHQ+PC9zdmc+">
+<!-- The Bench mark, from offdesk/brand/bench. Absolute like the stylesheets
+     below: /kanban/brand/ is where the file is here, and server.py and the
+     Vercel build both serve that folder at the same path. The SVG swaps to the
+     light-on-dark mark itself in a dark browser; the PNGs are for browsers
+     that ignore SVG favicons. -->
+<link rel="icon" href="/kanban/brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/kanban/brand/favicon-32.png" type="image/png" sizes="32x32" media="(prefers-color-scheme: light)">
+<link rel="icon" href="/kanban/brand/favicon-32-dark.png" type="image/png" sizes="32x32" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="/kanban/brand/apple-touch-icon.png">
 <!-- Tenon, the design system. Copied out of the installed package into
      kanban/dist/ by the vite build, beside board-ui.js, so the one path works
      both here and on Vercel, where there is no server and no node_modules.

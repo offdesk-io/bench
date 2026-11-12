@@ -2671,7 +2671,7 @@ def inside(base, segs):
 # included, is refused, along with folder listings.
 STATIC_FILES = ("kanban/index.html", "kanban/board.css", "kanban/demo.md",
                 "kanban/jira.demo.json", "kanban/icon.svg", "core/todo.js", "core/avatar.js")
-STATIC_FOLDERS = ("kanban/js/", "kanban/dist/")
+STATIC_FOLDERS = ("kanban/js/", "kanban/dist/", "kanban/brand/")
 
 
 def static_allowed(segs, trailing):
