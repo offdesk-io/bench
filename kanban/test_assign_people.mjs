@@ -129,7 +129,10 @@ try {
     renderView();
   })()`)
   check('signed in, the board\'s people load', await evalJS(`state.boardPeople.length === 5`))
-  await evalJS(`bucketAgentData.columns[locate(findTaskByKey('ap0001').id).bucket.name] = 'b'`)
+  // A load of the real (empty) list can land after the Mac case; wait for it, then set the data again.
+  await evalJS(`(async () => { await bucketAgentLoad;
+    bucketAgentData = { list: state.dataset || '', buckets: [{ bucket: 'b', name: 'Test b agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] }],
+      columns: { [locate(findTaskByKey('ap0001').id).bucket.name]: 'b' } }; })()`)
   const pick = await evalJS(`(() => { openDrawer(findTaskByKey('ap0001').id);
     const o = PICK_SPECS['f-to'].options; closeDrawer();
     return o.map(x => ({ v: x.value, l: x.label, g: x.group || '', i: x.iconHtml || '' })); })()`)
