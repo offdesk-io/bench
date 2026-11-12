@@ -260,13 +260,18 @@ def dataset_dir(name):
     return os.path.join(DATA_ROOT, name or ".no-list")
 
 
-def people_path(name=None):
-    # The memory folder's copy first when settings.json names one (see
-    # core/settings.py), else beside the list's todo.md.
+def memory_path(kind, name=None, write=False):
+    # A list's people, about or context file. With a memory folder in
+    # settings.json a read takes its copy when there is one and a write always
+    # goes there (settings.memory_file); without one, beside the list's todo.md.
     name = name or current_dataset()
     if not name:
-        return os.path.join(dataset_dir(None), "people.md")
-    return settings.people_path(name, DATA_ROOT)
+        return os.path.join(dataset_dir(None), kind + ".md")
+    return settings.memory_file(name, kind, DATA_ROOT, write)
+
+
+def people_path(name=None, write=False):
+    return memory_path("people", name, write)
 
 
 def publish_boards():
@@ -430,9 +435,9 @@ def write_text_file(path, text):
         raise
 
 
-def about_path(name=None):
+def about_path(name=None, write=False):
     """A board's free-text description of its company and team."""
-    return os.path.join(dataset_dir(name or current_dataset()), "about.md")
+    return memory_path("about", name, write)
 
 
 def _read_text(path):
@@ -3152,9 +3157,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(200, {"people": []})
         if path == "/about.json":
             ds = current_dataset()
-            text, exists = _read_text(about_path(ds))
+            where = about_path(ds)
+            text, exists = _read_text(where)
+            # Signed in, the file's name alone: no folder on the server is shown.
             return self._json(200, {"text": text, "exists": exists,
-                                    "path": os.path.relpath(about_path(ds), dataset_dir(ds) if AUTH else ROOT)})
+                                    "path": os.path.basename(where) if AUTH else os.path.relpath(where, ROOT)})
         if path == "/memory.json":
             ds = current_dataset()
             about, about_exists = _read_text(about_path(ds))
@@ -4069,7 +4076,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         ds = current_dataset()
         if not ds:
             return self._json(404, {"error": "no list you can see"})
-        write_text_file(about_path(ds), text)
+        write_text_file(about_path(ds, write=True), text)
         return self._json(200, {"ok": True})
 
     def _put_people(self):
@@ -4095,12 +4102,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         ds = current_dataset()
         if not ds:
             return self._json(404, {"error": "no list you can see"})
-        path = people_path(ds)
-        text, _ = _read_text(path)
+        # Read from wherever it is now, written to the memory folder when one is set.
+        text, _ = _read_text(people_path(ds))
         try:
             table = write_people_table(text, rows)
         except ValueError:
             return self._json(409, {"error": "people.md has more than one people table; tidy it by hand first"})
+        path = people_path(ds, write=True)
         write_text_file(path, table)
         text, _ = _read_text(path)
         return self._json(200, {"ok": True, "people": read_people(text)})

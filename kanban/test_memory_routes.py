@@ -19,6 +19,9 @@ What it holds to:
     is not there; the extra columns come back on /people.json;
   * /memory.json carries about, people, every bucket with its brief, and the
     profile, in one reply;
+  * with a memory folder in settings.json, about and people are read from
+    the data/ copy until the memory folder has its own, and every save lands
+    in the memory folder and leaves the data/ copy as it was;
   * a write that is not from the board is refused, and a person who cannot see
     a board gets the refusal the other per-board routes give.
 """
@@ -99,7 +102,9 @@ def in_process(root):
     server.current_dataset = lambda: "memory-test"
     server.planning_agent_plan.paths.DATA_ROOT = root
     os.environ["PLANNING_DATASET"] = "memory-test"
-    server.settings.people_path = lambda dataset, data_root=None: os.path.join(tmp, "people.md")
+    # The list's memory files are looked up under the data root, which is
+    # `root` here, so the real data/ and its settings.json are never read.
+    server.DATA_ROOT = root
     os.makedirs(os.path.join(tmp, "buckets", "people"))
     with open(os.path.join(tmp, "buckets", "people", "people.md"), "w", encoding="utf-8") as fh:
         fh.write("# People brief\n")
@@ -218,6 +223,41 @@ def in_process(root):
         ok("todo.md's Context is not in it", "Notes." not in json.dumps(got))
         with open(os.path.join(tmp, "todo.md"), encoding="utf-8") as fh:
             ok("and todo.md is untouched", fh.read() == LIST)
+
+        # --- with a memory folder ---------------------------------------------
+        memory = os.path.join(root, "MEMORY")
+        os.makedirs(memory)
+        with open(os.path.join(root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"memory_root": memory}, fh)
+        there = os.path.join(memory, "bench", "memory-test")
+        with open(os.path.join(tmp, "people.md"), "w", encoding="utf-8") as fh:
+            fh.write(PEOPLE_MD)
+        code, got = request(base, "GET", "/about.json")
+        ok("with a memory folder and no copy in it, about reads the list's own",
+           code == 200 and got["text"] == "A studio of four.\n\nWe build things.", "%s %s" % (code, got))
+        code, got = request(base, "GET", "/people.json")
+        ok("and so do people", [p["name"] for p in got["people"]] == ["Ana", "Anu"], str(got))
+        code, got = request(base, "PUT", "/about", {"text": "Moved."}, FROM_BOARD)
+        ok("an about save with a memory folder answers", code == 200, "%s %s" % (code, got))
+        with open(os.path.join(there, "about.md"), encoding="utf-8") as fh:
+            ok("and lands in the memory folder", fh.read() == "Moved.")
+        with open(os.path.join(tmp, "about.md"), encoding="utf-8") as fh:
+            ok("leaving the list's own copy as it was", fh.read() == "A studio of four.\n\nWe build things.")
+        code, got = request(base, "GET", "/about.json")
+        ok("the memory folder's copy is read from then on", got["text"] == "Moved.", str(got))
+        code, got = request(base, "PUT", "/people", {"people": rows}, FROM_BOARD)
+        ok("a people save with a memory folder answers", code == 200 and [p["name"] for p in got["people"]] == ["Ana", "Anu", "Bo"],
+           "%s %s" % (code, got))
+        with open(os.path.join(there, "people.md"), encoding="utf-8") as fh:
+            moved = fh.read()
+        ok("lands in the memory folder, keeping the rest of the file it was read from",
+           "| Bo | Engineer | Dev | Anu |" in moved and "## Often confused" in moved, moved)
+        with open(os.path.join(tmp, "people.md"), encoding="utf-8") as fh:
+            ok("and the list's own people.md is not written", fh.read() == PEOPLE_MD)
+        code, got = request(base, "GET", "/memory.json")
+        ok("memory.json reads both from the memory folder",
+           got["about"]["text"] == "Moved." and [p["name"] for p in got["people"]] == ["Ana", "Anu", "Bo"], str(got))
+        os.remove(os.path.join(root, "settings.json"))
     finally:
         httpd.shutdown()
         httpd.server_close()

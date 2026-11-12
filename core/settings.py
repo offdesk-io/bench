@@ -26,12 +26,15 @@ nothing raises.
   stop. False keeps the board silent. On by default.
 - `memory_root`: optional, a folder outside the repo that holds the owner's
   long-lived facts, shared with agents outside Bench. Set, the owner's profile
-  is read from `<memory_root>/me/profile.md` and each list's people from
-  `<memory_root>/bench/<list>/people.md`, each falling back to its old place
-  under `data/` when the file is not there, and Bench keeps
-  `<memory_root>/boards.md` listing its lists (see write_boards). Boards,
-  queues, locks, history and runs stay under `data/` either way. Unset, the key
-  is absent from what load() returns and nothing changes.
+  is read from `<memory_root>/me/profile.md`, and each list's people, company
+  text and context from `people.md`, `about.md` and `context.md` in
+  `<memory_root>/bench/<list>/` (see memory_file). Each read falls back to its
+  old place under `data/` when the file is not there, and every write of a
+  list's file goes to the memory folder. Bench also keeps
+  `<memory_root>/boards.md` listing its lists (see write_boards). Task lists,
+  buckets, plans, chats, queues, locks, history, backups and runs stay under
+  `data/` either way. Unset, the key is absent from what load() returns and
+  nothing changes.
 - `projects_roots`: optional, a map from a list's name to its projects folder,
   an existing folder that may sit outside the repo, one per list and never
   shared by two. For a list in it, a task's project is looked for at
@@ -187,17 +190,57 @@ def for_boards(saved, boards):
     return out
 
 
-def people_path(dataset, root=None):
-    """Where a list's people.md is read and written: the memory folder's copy,
-    `<memory_root>/bench/<list>/people.md`, when that file is there, else the
-    one beside the list's todo.md."""
+# ---- a list's memory files --------------------------------------------------
+#
+# A list's people, company text and context are facts that outlive the board,
+# so with a memory folder set they live in `<memory_root>/bench/<list>/`, where
+# agents outside Bench find them. A read takes the data/ copy while the memory
+# folder has none, so a list kept from before the setting loses nothing. A
+# write always lands in the memory folder and the data/ copy is never written
+# again: the first save moves the file in effect, and a later merge can retire
+# the copy left behind.
+
+MEMORY_FILES = ("people", "about", "context")
+
+
+def _known_list(dataset, root):
+    """Refuse a list name that is not a folder under `root` with a todo.md,
+    spelled exactly as on disk. Names arrive from requests, so nothing that
+    could climb out of `root` gets as far as a path."""
+    try:
+        names = os.listdir(root)
+    except OSError:
+        names = []
+    if (not isinstance(dataset, str) or dataset.startswith(".") or dataset not in names
+            or not os.path.isfile(os.path.join(root, dataset, "todo.md"))):
+        raise ValueError("there is no list called %r" % (dataset,))
+
+
+def memory_file(dataset, name, root=None, write=False):
+    """Where a list's `name` file (one of MEMORY_FILES) is read, or with
+    `write` where it is written. With no memory folder both are
+    `data/<list>/<name>.md`. With one, a read is `<memory_root>/bench/<list>/
+    <name>.md` when that file is there and the data/ copy when it is not, and
+    a write is always the memory folder's, its folder made here. Raises
+    ValueError for any other `name` or a list that is not under `root`."""
+    if name not in MEMORY_FILES:
+        raise ValueError("no memory file called %r" % (name,))
     root = root or data_root()
+    _known_list(dataset, root)
+    here = os.path.join(root, dataset, name + ".md")
     memory = memory_root(root)
-    if memory:
-        path = os.path.join(memory, "bench", dataset, "people.md")
-        if os.path.isfile(path):
-            return path
-    return os.path.join(root, dataset, "people.md")
+    if not memory:
+        return here
+    there = os.path.join(memory, "bench", dataset, name + ".md")
+    if write:
+        os.makedirs(os.path.dirname(there), exist_ok=True)
+        return there
+    return there if os.path.isfile(there) else here
+
+
+def people_path(dataset, root=None, write=False):
+    """A list's people.md, by memory_file()."""
+    return memory_file(dataset, "people", root, write)
 
 
 # ---- boards.md --------------------------------------------------------------

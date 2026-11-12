@@ -231,18 +231,67 @@ class SettingsTest(unittest.TestCase):
         with open(os.path.join(self.root, "settings.json")) as fh:
             self.assertNotIn("memory_root", json.load(fh))
 
-    def test_people_path_falls_back_to_the_list(self):
+    def board(self, name):
+        os.makedirs(os.path.join(self.root, name), exist_ok=True)
+        open(os.path.join(self.root, name, "todo.md"), "w").close()
+
+    def test_memory_file_unset_is_beside_the_list(self):
+        self.board("work")
+        for name in settings.MEMORY_FILES:
+            here = os.path.join(self.root, "work", name + ".md")
+            self.assertEqual(settings.memory_file("work", name, self.root), here)
+            self.assertEqual(settings.memory_file("work", name, self.root, write=True), here)
+        self.assertEqual(settings.people_path("work", self.root),
+                         os.path.join(self.root, "work", "people.md"))
+
+    def test_memory_file_set_reads_the_memory_copy(self):
+        self.board("work")
         mem = self.memory()
-        here = os.path.join(self.root, "work", "people.md")
-        self.assertEqual(settings.people_path("work", self.root), here)
         self.write({"memory_root": mem})
-        self.assertEqual(settings.people_path("work", self.root), here)
-        there = os.path.join(mem, "bench", "work", "people.md")
+        there = os.path.join(mem, "bench", "work", "about.md")
         os.makedirs(os.path.dirname(there))
         open(there, "w").close()
-        self.assertEqual(settings.people_path("work", self.root), there)
-        self.assertEqual(settings.people_path("home", self.root),
-                         os.path.join(self.root, "home", "people.md"))
+        open(os.path.join(self.root, "work", "about.md"), "w").close()
+        self.assertEqual(settings.memory_file("work", "about", self.root), there)
+
+    def test_memory_file_set_falls_back_to_the_list(self):
+        self.board("work")
+        mem = self.memory()
+        self.write({"memory_root": mem})
+        for name in settings.MEMORY_FILES:
+            self.assertEqual(settings.memory_file("work", name, self.root),
+                             os.path.join(self.root, "work", name + ".md"))
+        self.assertFalse(os.path.exists(os.path.join(mem, "bench")))
+
+    def test_memory_file_write_goes_to_the_memory_folder(self):
+        self.board("work")
+        mem = self.memory()
+        self.write({"memory_root": mem})
+        open(os.path.join(self.root, "work", "context.md"), "w").close()
+        there = os.path.join(mem, "bench", "work", "context.md")
+        self.assertEqual(settings.memory_file("work", "context", self.root, write=True), there)
+        self.assertTrue(os.path.isdir(os.path.dirname(there)))
+        self.assertEqual(settings.people_path("work", self.root, write=True),
+                         os.path.join(mem, "bench", "work", "people.md"))
+        # A memory folder that has gone counts as unset.
+        self.write({"memory_root": os.path.join(self.root, "gone")})
+        self.assertEqual(settings.memory_file("work", "context", self.root, write=True),
+                         os.path.join(self.root, "work", "context.md"))
+
+    def test_memory_file_refuses_what_is_not_a_list(self):
+        self.board("work")
+        os.makedirs(os.path.join(self.root, "notalist"))
+        mem = self.memory()
+        self.write({"memory_root": mem})
+        for bad in ("", None, 3, "..", ".", "../work", "work/..", "work/../work",
+                    "/etc", ".current", "notalist", "gone", "WORK", "work\0"):
+            for write in (False, True):
+                with self.assertRaises(ValueError, msg=repr(bad)):
+                    settings.memory_file(bad, "people", self.root, write)
+        for bad in ("profile", "todo", "../people", None):
+            with self.assertRaises(ValueError, msg=repr(bad)):
+                settings.memory_file("work", bad, self.root)
+        self.assertFalse(os.path.exists(os.path.join(mem, "bench")))
 
     def test_boards_md_lists_and_marks(self):
         text = settings.boards_md(["work", "home"], "work", "/C/bench/data", "/C/MEMORY")
