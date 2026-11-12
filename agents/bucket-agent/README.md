@@ -51,6 +51,11 @@ on-assign work and starts `run.py --now` for that board if so. The runner's own
 lock (`data/.bucket-agent-<list>.lock`) and the wake's one-process-per-board
 rule mean two runs on one board never overlap. An on-assign item that failed
 waits for a change or a Retry on the card rather than being tried every minute.
+On-assign runs count against the daily spending caps in
+`~/Code/AGENTS/fences.json` as a scheduled pass does, although the shared runner
+treats them as runs by hand: work the caps would not cover is skipped with that
+reason and picked up again once they allow it, and the spend is recorded either
+way.
 
 A bucket whose definition is not ready, or a board whose agents are off in
 Bench's Settings, is skipped with the reason. The briefings and written reports
@@ -69,7 +74,10 @@ run's work away and stops the run. It asks for ticks only through
 refuses Figma work unattended. Work that is not code may only add new files to
 the task's project folder, which `guard.py` checks afterwards. Code goes on an
 `implement/<date>` branch through improve-agent's git module and its registry
-of suites, as the Implement agent did.
+of suites, as the Implement agent did: a plan of type `code`, or free-rein work
+whose task's `Project:` note names a git repo. Either way the bucket's may-touch
+and never-touch sections are in the prompt, protected paths are thrown away,
+and nothing is pushed or merged.
 
 ```
 python3 agents/bucket-agent/run.py --dry-run [--target <list>]   what would run, no spend

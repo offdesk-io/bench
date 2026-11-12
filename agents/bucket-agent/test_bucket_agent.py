@@ -160,7 +160,17 @@ else:
         with open(os.path.join(m.group(1), "newsletter.md"), "w") as fh:
             fh.write("A draft.\n")
     text = "Wrote newsletter.md.\nSUMMARY: Wrote the draft.\nOUTCOME: done\n"
-print(json.dumps({"result": text, "session_id": "sess-1", "total_cost_usd": 0.01}))
+    r = re.search(r"You are in the repo at (.+), on the branch", prompt)
+    if r:
+        with open(os.path.join(r.group(1), "app.py"), "w") as fh:
+            fh.write("x = 2\n")
+        if os.environ.get("FAKE_PROTECTED"):
+            os.makedirs(os.path.join(r.group(1), "data"), exist_ok=True)
+            with open(os.path.join(r.group(1), "data", "real.json"), "w") as fh:
+                fh.write("{}")
+        text = "Set x to 2.\nSUMMARY: Set x to 2.\nOUTCOME: done\n"
+cost = float(os.environ.get("FAKE_COST") or "0.01")
+print(json.dumps({"result": text, "session_id": "sess-1", "total_cost_usd": cost}))
 '''
 
 
@@ -554,6 +564,153 @@ def test_on_assign_failure_waits():
     a.save_ledger("t", {})
 
 
+class Env(object):
+    """Set environment variables for a block, then put them back."""
+
+    def __init__(self, **values):
+        self.values, self.saved = values, {}
+
+    def __enter__(self):
+        for k, v in self.values.items():
+            self.saved[k] = os.environ.get(k)
+            os.environ[k] = v
+
+    def __exit__(self, *exc):
+        for k, v in self.saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def fences(**f):
+    write(os.environ["AGENTS_FENCES"], json.dumps(f))
+
+
+def test_spending_caps():
+    """An on-assign run counts against the daily caps, as a scheduled pass does."""
+    from agents_engine.runner import fences as runner_fences
+    reset_queue()
+    set_todo(doc(task("cap001", "Capped work", "T ops agent", kinds=("implement", "work-review"))))
+    item = hooks.items(TARGET)[0]
+    spent = runner_fences.spent(DAY, hooks.ID)
+    check("spend from earlier runs is recorded against the agent", spent > 0, True)
+    fences(agent_budgets={hooks.ID: spent + 1.0})
+    check("a run by hand is never held by the caps", why(item), None)
+    with Env(BUCKET_AGENT_TRIGGER="on-assign"):
+        check("an on-assign run is: the agent's own daily budget",
+              (why(item) or "").startswith("the daily spending cap is reached: bucket-agent's daily budget"), True)
+        n = len(calls())
+        run = run_board()
+        check("and nothing runs", (run["did"], len(calls())), ([], n))
+    got = hooks.pending(agent())["t"]
+    check("the on-assign wake is told to start nothing", got["run"], [])
+    check("and why, for its log line",
+          [w.startswith("the daily spending cap is reached") for _, w in got["skipped"]], [True])
+    fences(daily_budget=runner_fences.spent(DAY) + 1.0)
+    check("the machine's daily ceiling holds it too",
+          "machine's daily ceiling" in (hooks.pending(agent())["t"]["skipped"] or [["", ""]])[0][1], True)
+    fences(agent_budgets={hooks.ID: spent + 50.0})
+    check("once the cap allows, the work is picked up again", hooks.pending(agent())["t"]["run"], ["Capped work"])
+    with Env(BUCKET_AGENT_TRIGGER="on-assign", FAKE_COST="0.5"):
+        run = run_board()
+    check("and runs", [d["label"] for d in run["did"]], ["done"])
+    check("its spend is recorded as before", round(runner_fences.spent(DAY, hooks.ID) - spent, 2), 0.5)
+
+    # Mid-run: room for the first item and not the second.
+    reset_queue()
+    set_todo(doc(task("cap002", "First fits", "T ops agent", kinds=("implement", "work-review")),
+                 task("cap003", "Second does not", "T ops agent", kinds=("implement", "work-review"))))
+    fences(agent_budgets={hooks.ID: runner_fences.spent(DAY, hooks.ID) + hooks.IMPLEMENT_BUDGET + 0.5})
+    with Env(BUCKET_AGENT_TRIGGER="on-assign", FAKE_COST=str(hooks.IMPLEMENT_BUDGET)):
+        run = run_board()
+    check("an on-assign run stops when the next item would cross the cap",
+          ([d["title"] for d in run["did"]], (run["stopped"] or "").startswith("the daily spending cap")),
+          (["First fits"], True))
+    check("leaving the rest for later", [l["title"] for l in run["left"] if l["kind"] == "stopped"],
+          ["Second does not"])
+    os.remove(os.environ["AGENTS_FENCES"])
+
+
+def git(repo, *args):
+    return subprocess.run(["git"] + list(args), cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
+
+
+def test_free_rein_code():
+    """Free-rein work whose Project: note names a git repo goes on a branch,
+    through improve-agent's guards, as a `code` plan did."""
+    real_improve = next((p for p in (
+        os.path.join(bench_root.root(), "..", "AGENTS", "improve-agent", "improve"),
+        os.path.join(os.path.expanduser("~"), "Code", "AGENTS", "improve-agent", "improve"))
+        if os.path.isdir(p)), None)
+    if not real_improve:
+        print("  (skipped the code checks: improve-agent is not on this machine)")
+        return
+    improve = os.environ["IMPLEMENT_IMPROVE_DIR"]
+    repo = os.path.join(TMP, "repos", "r")
+    other = os.path.join(TMP, "repos", "unlisted")
+    for r in (repo, other):
+        os.makedirs(r)
+        git(r, "init", "-q", "-b", "main")
+        git(r, "config", "user.email", "t@example.com")
+        git(r, "config", "user.name", "Test")
+        write(os.path.join(r, "app.py"), "x = 1\n")
+        git(r, "add", "-A")
+        git(r, "commit", "-q", "-m", "start")
+    os.makedirs(improve, exist_ok=True)
+    os.symlink(os.path.realpath(real_improve), os.path.join(improve, "improve"))
+    real = os.path.realpath(repo)
+    write(os.path.join(improve, "registry.json"), json.dumps({"global": {}, "repos": [
+        {"name": "r", "path": real, "tests": [{"name": "ok", "cmd": "true"}], "protected": ["data/"]}]}))
+    write(os.path.join(DATA, "t", "project-folders.json"),
+          json.dumps({"folders": [os.path.realpath(os.path.join(TMP, "repos"))]}))
+    try:
+        reset_queue()
+        set_todo(doc(task("code01", "Change the app", "T ops agent", kinds=("implement", "work-review"),
+                          project=real),
+                     task("code02", "Change the other repo", "T ops agent", kinds=("implement", "work-review"),
+                          project=os.path.realpath(other))))
+        items = by_title(hooks.items(TARGET))
+        item = items["Change the app"]
+        check("free-rein work in a git repo is code", (item["type"], item["plan"]), ("code", ""))
+        check("and is taken", why(item), None)
+        check("a repo improve-agent's registry does not list is refused",
+              "not in improve-agent's registry" in (why(items["Change the other repo"]) or ""), True)
+        opts = hooks.options(item, TARGET)
+        check("code runs in the repo, with no Bash and no web",
+              (opts["cwd"], "Bash" in opts["disallowed"], "WebFetch" in opts["disallowed"]), (real, True, True))
+        set_todo(doc(task("code01", "Change the app", "T ops agent", kinds=("implement", "work-review"),
+                          project=real)))
+        run = run_board()
+        check("it is built on a branch", [d["label"] for d in run["did"]], ["built"])
+        prompt = calls()[-1]["prompt"]
+        check("the prompt asks for the task's change, inside may-touch and never-touch",
+              ("the task asks for" in prompt, "MAY-MARK" in prompt, "NEVER-MARK" in prompt), (True, True, True))
+        branch = "implement/%s" % DAY.isoformat()
+        check("the repo is put back on the branch it was on", git(repo, "rev-parse", "--abbrev-ref", "HEAD"), "main")
+        check("main is untouched", read(os.path.join(repo, "app.py")), "x = 1\n")
+        check("the commit is on the branch", git(repo, "show", "%s:app.py" % branch), "x = 2")
+        check("its message says it came from a free-rein task",
+              "as a free-rein bucket" in git(repo, "log", "-1", "--format=%B", branch), True)
+        check("nothing is pushed: the repo has no remote", git(repo, "remote"), "")
+        check("and the Implement tick is queued as its agent",
+              [(e["sub"], e["by"]) for e in tick_queue.read(paths.tick_queue_path())], [("codep1", "T ops agent")])
+
+        reset_queue()
+        git(repo, "branch", "-D", branch)
+        set_todo(doc(task("code03", "Write real data", "T ops agent", kinds=("implement", "work-review"),
+                          project=real)))
+        with Env(FAKE_PROTECTED="1"):
+            run = run_board()
+        got = run["did"][0]
+        check("a protected path is thrown away and set aside", (got["label"], got["set_aside"]), ("refused", True))
+        check("with nothing left behind", os.path.exists(os.path.join(repo, "data", "real.json")), False)
+        check("nor ticked", tick_queue.read(paths.tick_queue_path()), [])
+        check("and back on main", git(repo, "rev-parse", "--abbrev-ref", "HEAD"), "main")
+    finally:
+        shutil.rmtree(improve, ignore_errors=True)
+
+
 def test_wiring():
     spec = json.load(open(os.path.join(HERE, "agent.json"), encoding="utf-8"))
     check("agent.json is contract 1.7, id bucket-agent", (spec["contract"], spec["id"], spec["name"]),
@@ -578,7 +735,8 @@ def main():
     try:
         for fn in (test_names_and_queue, test_plan_first, test_replan_after_send_back, test_free_rein,
                    test_board_off, test_scheduled, test_todo_guard, test_figma_and_plan_checks, test_guard,
-                   test_handovers, test_wake, test_on_assign_failure_waits, test_wiring):
+                   test_handovers, test_wake, test_on_assign_failure_waits, test_spending_caps,
+                   test_free_rein_code, test_wiring):
             try:
                 fn()
             except Exception as exc:  # noqa: BLE001

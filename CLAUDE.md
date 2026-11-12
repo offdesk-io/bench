@@ -82,7 +82,8 @@ of it.
   board's hours on the agents dashboard, through the hourly wake. An on-assign
   one is started within a minute of a handover by `core/bucket_wake.py`, which
   the board server starts beside the banners, never under `TODOS_DATA_ROOT` or
-  with `BENCH_AGENTS=0`. Run `python3 agents/bucket-agent/test_bucket_agent.py`
+  with `BENCH_AGENTS=0`, and counts against the daily spending caps like a
+  scheduled pass. Run `python3 agents/bucket-agent/test_bucket_agent.py`
   after touching any of it.
 - **Figma work only runs with the owner in the room**, through the `do` skill
   (`agents/implement-agent/skills/do/`), where it can stop and ask.

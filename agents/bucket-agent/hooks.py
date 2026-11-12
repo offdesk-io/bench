@@ -17,15 +17,19 @@ agent's hooks (agents/plan-agent/) and the Implement agent's
   not ready, a board whose agents are off in Bench's Settings, and a
   `start: scheduled` bucket outside the board's hours (set on the agents
   dashboard; its switch off counts as outside them). An on-assign bucket is
-  started by core/bucket_wake.py as soon as it holds work, whatever the hours.
+  started by core/bucket_wake.py as soon as it holds work, whatever the hours,
+  and its runs count against the daily spending caps (`~/Code/AGENTS/fences.json`,
+  agents-engine's runner/fences.py) as a scheduled pass does: work the caps
+  would not cover is skipped and picked up again once they allow it.
 - **Plan** (plan-first only): the plan is written to `data/<list>/plans/` and
   the Plan sub-task's tick queued. The owner ticks Review the plan. No plan
   type is approved on arrival.
 - **Implement**: the work, inside the bucket's guidelines, what it may touch
   and what it must never touch, pasted into the prompt as the owner wrote them.
-  Code goes on an `implement/<date>` branch through improve-agent's git module;
-  Figma is refused; anything else adds new files to the task's project folder,
-  with guard.py putting back anything it was not allowed to do. Its tick is
+  Code goes on an `implement/<date>` branch through improve-agent's git module:
+  a plan of type `code`, or free-rein work whose task's `Project:` note names a
+  git repo. Figma is refused; anything else adds new files to the task's project
+  folder, with guard.py putting back anything it was not allowed to do. Its tick is
   queued, and Review the work stays the owner's.
 
 It never writes todo.md (plans.todo_moved() checks around every run), ticks
@@ -135,6 +139,27 @@ def on_assign():
     return os.environ.get(TRIGGER_ENV) == "on-assign"
 
 
+# Set while pending() asks what an on-assign run would take, so the answer
+# applies the spending caps the run itself would.
+_asking = {"pending": False}
+
+
+def _capped():
+    return on_assign() or _asking["pending"]
+
+
+def item_budget(item):
+    return plans.BUDGET_PER_TASK if item["kind"] == "plan" else IMPLEMENT_BUDGET
+
+
+def over_cap(budget, now=None):
+    """Why the daily spending caps would not cover an item of `budget`, or None.
+    The shared runner applies them to a scheduled pass; this applies them to an
+    on-assign run, which the runner starts as a run by hand."""
+    from agents_engine.runner import fences
+    return fences.stop_before(now or dt.datetime.now().astimezone(), budget, ID)
+
+
 # --------------------------------------------------------------------------
 # targets and the lock
 
@@ -187,6 +212,9 @@ def items(target):
             rel = plans.plan_filename(task)
         path = os.path.join(paths.plans_dir(), rel) if (kind == "implement" and rel) else ""
         front = plans.read_front(path) if path else {}
+        kind_of_work = plan_types.read(front.get("type")) if front else ""
+        if kind == "implement" and not front and agent["mode"] == "free-rein" and _names_repo(task):
+            kind_of_work = "code"
         h = hashlib.sha1()
         h.update(bucket_work.fingerprint(task).encode())
         h.update(("%s|%s|%s" % (kind, agent["mode"], agent["start"])).encode())
@@ -197,7 +225,7 @@ def items(target):
                     "task": task, "sub": sub.stable_id, "kind": kind, "agent": agent,
                     "name": agent["name"], "bucket": agent["bucket"], "start": agent["start"],
                     "plan": path, "plan_rel": rel, "front": front,
-                    "type": plan_types.read(front.get("type")) if front else "",
+                    "type": kind_of_work,
                     "feedback": row["feedback"], "skip": row["skip"]})
     pending = _pending({(i["name"], i["sub"]) for i in out if i["sub"]})
     for i in out:
@@ -238,6 +266,10 @@ def eligible(item, target):
         if row.get("last") == "failed" and row.get("fingerprint") == item["fingerprint"]:
             return {"why": "failed last time (%s). Retry it on the card, or change the task"
                     % (row.get("why") or "see the log"), "kind": "unchanged"}
+    if _capped():
+        capped = over_cap(item_budget(item))
+        if capped:
+            return "the daily spending cap is reached: %s. It runs once the cap allows" % capped
     if item["kind"] == "plan":
         if agent["mode"] != "plan-first":
             return "the %s is free-rein, so it does not plan: hand the task over again" % name
@@ -269,6 +301,14 @@ def pending(agent):
     {"run": [titles], "skipped": [[title, why]]}, on-assign buckets only."""
     from agents_engine.runner import core
     out = {}
+    _asking["pending"] = True
+    try:
+        return _pending_of(agent, core, out)
+    finally:
+        _asking["pending"] = False
+
+
+def _pending_of(agent, core, out):
     for target in agent.targets():
         todo_, left, _ = core.select(agent, target)
         items_ = {i["id"]: i for i in agent.items(target)[0]}
@@ -315,6 +355,16 @@ def project_folder(task):
     return os.path.join(project_folders.home(paths.data_dir()), plans.slugify(task.title)), None
 
 
+def _names_repo(task):
+    """Whether the task's `Project:` note names a git repo by absolute path, which
+    is what makes free-rein work code rather than files."""
+    ref = project_folders.note_ref(task.body)
+    if not ref or not os.path.isabs(ref):
+        return False
+    real, err = project_folders.resolve(ref, paths.data_dir())
+    return not err and os.path.exists(os.path.join(real, ".git"))
+
+
 def code_repo(task):
     """(repo, why not). The task's Project: folder, a git repo improve-agent's
     registry lists with its suites and protected paths."""
@@ -347,16 +397,25 @@ def before(target, todo_, dry):
         return {"note": OFF} if dry else {"skip": OFF}
     if dry:
         return None
-    _night[target["id"]] = {"planned": [], "folded": [], "done": [], "day": dt.date.today(),
+    _night[target["id"]] = {"planned": [], "folded": [], "done": [], "day": dt.date.today(), "queue": list(todo_),
                             "expiry": windows.current(state=windows.read_state(paths.window_path()))["expires"]}
     plans.log("start: %d to run%s" % (len(todo_), " (on-assign)" if on_assign() else ""))
     return {"where": os.path.relpath(paths.plans_dir(), ROOT)}
 
 
 def should_stop(target, run):
-    expiry = (_night.get(target["id"]) or {}).get("expiry")
+    night = _night.get(target["id"]) or {}
+    expiry = night.get("expiry")
     if expiry and expiry - dt.datetime.now().astimezone() < plans.FLOOR:
         return "under %d minutes of the usage window remaining" % (plans.FLOOR.seconds // 60)
+    # eligible() checked the caps for the first item; after it, spend has moved.
+    queue = night.get("queue") or []
+    n = len(run["did"])
+    if on_assign() and 0 < n < len(queue):
+        capped = over_cap(item_budget(queue[n]))
+        if capped:
+            plans.log("stopped: the daily spending cap is reached: %s" % capped)
+            return "the daily spending cap is reached: %s" % capped
     return None
 
 
@@ -525,7 +584,9 @@ the owner.
 CODE = """--- The code ---
 
 You are in the repo at %(repo)s, on the branch %(branch)s, which the harness
-cut for this run. Make the change the plan describes and only that change.
+cut for this run. Make the change %(what)s and only that change, inside what
+your bucket's definition says you may touch. What it says you must never touch
+stays untouched, even where the change seems to need it: say so in your reply.
 
 You have no Bash tool: you cannot run the tests, start a server or use git. The
 harness runs the repo's suites after you and commits what you leave. It never
@@ -563,7 +624,8 @@ def work_prompt(item, run):
     head = WORK_HEAD % {"what": what, "title": task.title, "bucket": task.bucket, "column": task.column,
                         "task": block, "feedback": said}
     if item["type"] == "code":
-        body = CODE % {"repo": run["repo"]["path"], "branch": run["branch"]}
+        body = CODE % {"repo": run["repo"]["path"], "branch": run["branch"],
+                       "what": "the plan describes" if item["plan"] else "the task asks for"}
     else:
         body = FILES % {"folder": run["folder"]}
     return head + body + FINISH
@@ -810,9 +872,9 @@ def _land_code(item, run, text):
             if changed:
                 gitwork.revert(path, branch)
             _report_into_plan(item, text, run["day"], "It changed nothing.")
-            return {"failed": "it could not carry the plan out as written: %s" % (summary or "no change made"),
+            return {"failed": "it could not carry the work out: %s" % (summary or "no change made"),
                     "set_aside": True, "label": "folded",
-                    "fix": "Read its report at the end of the plan, then send the plan back or use /do."}
+                    "fix": "Read its report, then send it back or use /do."}
         bad = [p for p in changed if gitwork.matches(p, repo.get("protected"))]
         if bad:
             gitwork.revert(path, branch)
@@ -820,7 +882,8 @@ def _land_code(item, run, text):
                               % ", ".join(bad[:5]), "set_aside": True, "label": "refused",
                     "fix": "Carry it out with /do."}
         tests, green = build.run_tests(repo)
-        lines = [summary, "", "Carried out unattended by the %s from an approved plan." % item["name"],
+        lines = [summary, "", "Carried out unattended by the %s %s." % (
+                     item["name"], "from an approved plan" if item["plan"] else "from the task, as a free-rein bucket"),
                  "It has no Bash tool and cannot merge or push, so this branch is a proposal.", ""]
         lines += ["  %-18s %s" % (t["name"], "ok" if t["ok"] else "FAILED") for t in tests] or \
                  ["  no suite covers this change"]
