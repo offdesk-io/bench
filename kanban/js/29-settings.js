@@ -599,16 +599,15 @@ async function openSharing(){
 }
 
 /* ---- The Settings page ------------------------------------------------------
-   Data > Settings opens one page in the board's own area, with six tabs drawn
+   Data > Settings opens one page in the board's own area, with four tabs drawn
    in the bucket bar while it is up: Memory (31-memory.js), Settings (this form),
-   Agents (27-agents.js), Spend and Schedules (the two cards of 14-schedule.js), Backups (15-backups.js).
+   Agents (27-agents.js, with Spend and Schedules, the two cards of 14-schedule.js,
+   as panels under it), Backups (15-backups.js).
    The URL is #settings/<tab>; an old #memory, #agents or #backups link opens its tab. */
 const SETTINGS_TABS = [
   ['memory', 'Memory', 'what Bench keeps about this board and you'],
   ['settings', 'Settings', 'your profile, models, folders and agent options'],
-  ['agents', 'Agents', 'when each agent runs, and what it does'],
-  ['spend', 'Spend', 'what the agents have spent, window by window'],
-  ['schedules', 'Schedules', 'what runs on a clock'],
+  ['agents', 'Agents', 'when each agent runs, what it does, what it has spent and what runs on a clock'],
   ['backups', 'Backups', 'every copy of this list the board has kept'],
 ];
 let settingsTab = 'settings';
@@ -616,20 +615,35 @@ let settingsTab = 'settings';
 let settingsHostEl = null;
 const settingsRoot = () => settingsHostEl || modalEl;
 
-/* The tabs on offer: where no agent can run, or on the shared board, Spend and
-   Schedules go (and Agents, on the shared board, which has none), and a folder opened from disk has no backups. */
+/* The tabs on offer: the shared board has no Agents tab, and a folder opened
+   from disk has no backups. */
 function settingsTabs(){
-  const noAgents = !!listFolder || state.agentsReady === false || !!state.who;
   return SETTINGS_TABS.filter(([k]) =>
-    !((k === 'spend' || k === 'schedules') && noAgents) && !(k === 'agents' && state.who) &&
-    !(k === 'backups' && listFolder));
+    !(k === 'agents' && state.who) && !(k === 'backups' && listFolder));
+}
+
+/* Spend and Schedules were tabs of their own; they are two panels of Agents now,
+   so a link or a call that names either lands there. */
+function settingsTabName(tab){
+  return tab === 'spend' || tab === 'schedules' ? 'agents' : tab;
+}
+
+/* One panel in Tenon's column markup, the one the Overview and Backups draw:
+   a title, an optional line under it, an optional action at the head's end. */
+function settingsPanelHTML(id, title, desc, bodyHTML, actionHTML){
+  return '<section class="tenon-column settingspanel" data-panel="' + escAttr(id) + '">' +
+    '<div class="tenon-column__head"><div class="tenon-column__head-row">' +
+      '<div class="tenon-column__head-start"><h3 class="tenon-column__title">' + esc(title) + '</h3></div>' +
+      '<div class="tenon-column__head-end">' + (actionHTML || '') + '</div></div>' +
+      (desc ? '<p class="tenon-column__desc">' + esc(desc) + '</p>' : '') + '</div>' +
+    '<div class="tenon-column__body">' + bodyHTML + '</div></section>';
 }
 
 /* A hash or a stray state.view that names the page, or one of the views that
    became its tabs. True when it did, with settingsTab and state.view set. */
 function adoptSettingsRoute(h){
   let tab = null;
-  if (h.view === 'settings') tab = SETTINGS_TABS.some(t => t[0] === h.bucketSlug) ? h.bucketSlug : settingsTab;
+  if (h.view === 'settings') tab = SETTINGS_TABS.some(t => t[0] === settingsTabName(h.bucketSlug)) ? settingsTabName(h.bucketSlug) : settingsTab;
   else if (h.view === 'memory' || h.view === 'agents' || h.view === 'backups') tab = h.view;
   if (!tab) return false;
   settingsTab = tab;
@@ -638,7 +652,7 @@ function adoptSettingsRoute(h){
 }
 
 function openSettingsPage(tab){
-  if (tab) settingsTab = tab;
+  if (tab) settingsTab = settingsTabName(tab);
   state.view = 'settings';
   syncHash(true);
   renderView();
@@ -668,7 +682,6 @@ function renderSettingsTabs(){
 function leaveSettingsPage(){
   leaveRefCards();
   settingsHostEl = null;
-  if (typeof memStopObserving === 'function') memStopObserving();
   const bar = $('#bucketBar');
   if (bar) {
     bar.classList.remove('bucketbar--page');
@@ -678,16 +691,13 @@ function leaveSettingsPage(){
 
 function renderSettingsPage(){
   renderSettingsTabs();
-  leaveRefCards();
   if (settingsTab !== 'agents') leaveAgentsView();
   settingsHostEl = null;
-  if (typeof memStopObserving === 'function') memStopObserving();
   syncHash();
   const tab = settingsTab;
   if (tab === 'memory') renderMemoryView();
   else if (tab === 'backups') renderBackupsView();
   else if (tab === 'agents') renderAgentsView();
-  else if (tab === 'spend' || tab === 'schedules') drawRefCards(tab);
   else drawSettingsTab();
 }
 
@@ -702,20 +712,23 @@ function refreshSettingsPage(){
 /* The Settings tab: the form of the pop-up, drawn in the page. */
 async function drawSettingsTab(){
   const lists = $('#lists');
-  lists.innerHTML = '<div class="settingspage" id="settingsPage"><p class="memempty">Reading settings…</p></div>';
+  const panel = body => '<div class="lists pview settingsview" style="--pcols:1">' +
+    settingsPanelHTML('settings', 'Settings', '', '<div class="settingspage" id="settingsPage">' + body + '</div>') + '</div>';
+  lists.innerHTML = panel('<p class="memempty">Reading settings…</p>');
   let loaded;
   try { loaded = await loadSettingsDraft(false); }
   catch (err) {
     if (state.view === 'settings' && settingsTab === 'settings')
-      lists.innerHTML = '<div class="settingspage"><p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p></div>';
+      lists.innerHTML = panel('<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>');
     return;
   }
   if (state.view !== 'settings' || settingsTab !== 'settings') return;
   const { draft, set } = loaded;
   const choices = (set.choices && set.choices.models) || [];
   const host = $('#settingsPage');
-  host.innerHTML = '<h3 class="settingspage__title">' + (draft.signedIn ? 'Your profile' : 'Settings') + '</h3>' +
-    settingsFormHTML(draft, choices, false) +
+  const title = lists.querySelector('.tenon-column__title');
+  if (title && draft.signedIn) title.textContent = 'Your profile';
+  host.innerHTML = settingsFormHTML(draft, choices, false) +
     '<div class="settingspage__actions"><button type="button" class="btn primary" data-settings-save>Save</button></div>';
   settingsHostEl = host;
   trackSettingsForm(draft, false);

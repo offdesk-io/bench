@@ -97,7 +97,7 @@ try {
     `(() => { const f = $('#whoami form'); return !$('#whoami').classList.contains('hidden') && f.method === 'post' && f.getAttribute('action') === '/auth/logout' })()`))
   check('the page knows it is signed in', await evalJS(`document.body.classList.contains('signed-in') && state.who.email === 'jerome@example.com'`))
   check('no Agents tab', await evalJS(`!settingsTabs().some(t => t[0] === 'agents') && !$('#viewToggle').textContent.includes('Agents')`))
-  check('no Spend and Schedules tabs', await evalJS(`!settingsTabs().some(t => t[0] === 'spend' || t[0] === 'schedules') && settingsTabs().some(t => t[0] === 'settings')`))
+  check('no Agents tab, and Memory, Settings and Backups remain', await evalJS(`settingsTabs().map(t => t[0]).join() === 'memory,settings,backups'`))
   check('the board loaded the list', await evalJS(`!!state.doc && !state.demo && state.dataset === 'offdesk'`))
 
   // --- a new list, shared with the team ---------------------------------------
@@ -126,7 +126,7 @@ try {
   const profileFile = join(data, 'users', execFileSync('python3', ['-c',
     'import hashlib,sys;print(hashlib.sha256(sys.argv[1].encode()).hexdigest()[:16])', 'jerome@example.com']).toString().trim() + '.profile.md')
   await evalJS(`$('#settingsBtn').click()`); await wait(800)
-  check('Settings is his profile', await evalJS(`!!settingsRoot() && settingsRoot().textContent.includes('Your profile') && settingsRoot().querySelector('[data-name]').value === 'Jérôme'`))
+  check('Settings is his profile', await evalJS(`!!settingsRoot() && document.querySelector('#lists .tenon-column__title').textContent === 'Your profile' && settingsRoot().querySelector('[data-name]').value === 'Jérôme'`))
   check('with his name and address, and no paths', await evalJS(
     `!!settingsRoot().querySelector('[data-about="addressing"]') && !settingsRoot().querySelector('[data-section]') && !settingsRoot().querySelector('[data-about="facts_file"]')`))
   check('and none of the server’s settings', await evalJS(`!settingsRoot().querySelector('[data-memory]') && !settingsRoot().querySelector('[data-chime]') && !settingsRoot().querySelector('[data-agent-options]')`))

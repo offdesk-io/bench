@@ -672,8 +672,8 @@ file says.
 
 ### Schedule
 
-**Spend** and **Schedules** are two tabs of the Settings page (Data, Settings), beside Memory,
-Settings and Backups, with **Run the Plan agent now** in the Data menu. Not tabs of the board,
+**Spend** and **Schedules** are two panels of the Agents tab of the Settings page (Data, Settings), beside Memory,
+Settings and Backups, with **Run the Plan agent now** in the Data menu. Not part of the board,
 because they are about the machinery around the list rather than about the list. Both only show
 when an agent can run on this machine, so not without Claude Code or `agents-engine`.
 

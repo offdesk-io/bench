@@ -338,8 +338,8 @@ function viewDefs(){
   ];
   return defs;
 }
-/* Settings isn't a view of the board either: Memory, Settings, Agents, Spend,
-   Schedules and Backups are the six tabs of one page, opened from the Data menu's
+/* Settings isn't a view of the board either: Memory, Settings, Agents and
+   Backups are the four tabs of one page, opened from the Data menu's
    Settings item, so it sits outside viewDefs() and its tabs but needs a
    #settings URL (the tab after a slash) and a renderView() case of its own. An
    old #memory, #agents or #backups link opens that tab (adoptSettingsRoute(), 29-settings.js).
