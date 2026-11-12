@@ -378,6 +378,60 @@ class SettingsTest(unittest.TestCase):
         with open(os.path.join(mem, "boards.md")) as fh:
             self.assertIn("- demo: `data/demo/`", fh.read())
 
+    def test_boards_validated(self):
+        self.lists("work", "demo")
+        own = self.projects("OWN")
+        ok = lambda d: settings.validate({"boards": d}, self.root)
+        self.assertIsNone(ok({"work": {"memory_root": own, "banners": False, "agents": True}}))
+        self.assertIsNone(ok({"demo": {"memory_root": None}, "work": {"memory_root": "inherit"}}))
+        self.assertIsNone(ok({"demo": None, "work": {}}))
+        self.assertIsNone(settings.validate({"boards": None}, self.root))
+        self.assertIn("object", ok(["work"]))
+        self.assertIn("no list called nobody", ok({"nobody": {}}))
+        self.assertIn("no list called ..", ok({"..": {}}))
+        self.assertIn("no list called .current", ok({".current": {}}))
+        self.assertIn("must be an object", ok({"work": True}))
+        self.assertIn("unknown setting chime", ok({"work": {"chime": False}}))
+        self.assertIn("unknown setting projects_roots", ok({"work": {"projects_roots": own}}))
+        self.assertIn("true or false", ok({"work": {"banners": "no"}}))
+        self.assertIn("true or false", ok({"work": {"agents": None}}))
+        self.assertIn("folder path", ok({"work": {"memory_root": ""}}))
+        self.assertIn("folder path", ok({"work": {"memory_root": 3}}))
+        self.assertIn("full path", ok({"work": {"memory_root": "OWN"}}))
+        self.assertIn("no folder", ok({"work": {"memory_root": os.path.join(self.root, "gone")}}))
+
+    def test_boards_save_per_list_and_per_key(self):
+        self.lists("work", "demo")
+        own = self.projects("OWN")
+        saved, err = settings.save(self.root, {"boards": {"demo": {"memory_root": None, "banners": False}}})
+        self.assertIsNone(err)
+        self.assertEqual(saved["boards"], {"demo": {"memory_root": None, "banners": False}})
+        # A key not sent stays, and a list not sent stays.
+        saved, _ = settings.save(self.root, {"boards": {"demo": {"agents": False}, "work": {"memory_root": own}}})
+        self.assertEqual(saved["boards"], {"demo": {"memory_root": None, "banners": False, "agents": False},
+                                           "work": {"memory_root": own}})
+        settings.save(self.root, {"models": {"plan": "opus"}})
+        self.assertEqual(settings.load(self.root)["boards"]["demo"]["agents"], False)
+        # True is the default and is not kept; "inherit" takes the folder away.
+        saved, _ = settings.save(self.root, {"boards": {"demo": {"banners": True, "memory_root": "inherit"}}})
+        self.assertEqual(saved["boards"]["demo"], {"agents": False})
+        self.assertTrue(settings.inherits_memory("demo", self.root))
+        # A refused save writes nothing.
+        before = settings.load(self.root)
+        saved, err = settings.save(self.root, {"boards": {"demo": {"agents": "off"}}})
+        self.assertIsNone(saved)
+        self.assertEqual(settings.load(self.root), before)
+        # Null clears a list, and with none left the key goes.
+        settings.save(self.root, {"boards": {"demo": None}})
+        saved, _ = settings.save(self.root, {"boards": {"work": {"memory_root": "inherit"}}})
+        self.assertNotIn("boards", saved)
+        with open(os.path.join(self.root, "settings.json")) as fh:
+            self.assertNotIn("boards", json.load(fh))
+
+    def test_inherit_written_by_hand_reads_as_inherit(self):
+        self.write({"boards": {"work": {"memory_root": "inherit", "agents": False}}})
+        self.assertTrue(settings.inherits_memory("work", self.root))
+
     def test_write_boards_stays_in_the_global_folder(self):
         data = os.path.join(self.root, "data")
         os.makedirs(data)

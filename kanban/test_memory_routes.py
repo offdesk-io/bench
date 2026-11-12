@@ -22,6 +22,11 @@ What it holds to:
   * with a memory folder in settings.json, about and people are read from
     the data/ copy until the memory folder has its own, and every save lands
     in the memory folder and leaves the data/ copy as it was;
+  * a board with a memory folder of its own, or none, reads and writes its
+    files and its profile there and never the owner's;
+  * the settings route takes `boards`, one key at a time, refuses unknown
+    lists, keys and folders, and marks boards.md; signed in it names only the
+    boards the person can see, with no path, and cannot be saved;
   * a write that is not from the board is refused, and a person who cannot see
     a board gets the refusal the other per-board routes give.
 """
@@ -287,6 +292,42 @@ def in_process(root):
            and os.path.isfile(os.path.join(tmp, "profile.md")), "%s %s" % (code, got))
         with open(os.path.join(memory, "me", "profile.md"), encoding="utf-8") as fh:
             ok("and the owner's profile is not written", "Demo" not in fh.read())
+
+        # --- the settings route takes boards -----------------------------------
+        os.environ["AGENTS_FENCES"] = os.path.join(root, "fences.json")
+        with open(os.path.join(root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"memory_root": memory}, fh)
+        code, got = request(base, "GET", "/settings.json")
+        ok("with no boards setting, settings carry none", code == 200 and "boards" not in got, "%s %s" % (code, got))
+        body = {"boards": {"memory-test": {"memory_root": own, "banners": False, "agents": False}}}
+        code, got = request(base, "PUT", "/settings.json", body, FROM_BOARD)
+        ok("boards can be saved", code == 200 and got.get("boards") == body["boards"], "%s %s" % (code, got))
+        code, got = request(base, "GET", "/settings.json")
+        ok("and read back", got.get("boards") == body["boards"], str(got))
+        with open(os.path.join(memory, "boards.md"), encoding="utf-8") as fh:
+            ok("boards.md marks the board's agents off", "- memory-test (current, agents off)" in fh.read())
+        code, got = request(base, "PUT", "/settings.json", {"boards": {"memory-test": {"memory_root": None}}}, FROM_BOARD)
+        ok("one key changes and the rest stay", code == 200 and got["boards"]["memory-test"] ==
+           {"memory_root": None, "banners": False, "agents": False}, "%s %s" % (code, got))
+        with open(os.path.join(root, "settings.json"), encoding="utf-8") as fh:
+            kept = fh.read()
+        for bad, why in (({"boards": {"nobody": {}}}, "no list called nobody"),
+                         ({"boards": {"memory-test": {"colour": "red"}}}, "unknown setting colour"),
+                         ({"boards": {"memory-test": {"memory_root": "relative"}}}, "full path"),
+                         ({"boards": {"memory-test": {"memory_root": os.path.join(root, "gone")}}}, "no folder"),
+                         ({"boards": {"memory-test": {"banners": "off"}}}, "true or false"),
+                         ({"boards": ["memory-test"]}, "must be an object")):
+            code, got = request(base, "PUT", "/settings.json", bad, FROM_BOARD)
+            ok("a bad boards value is refused: %s" % why, code == 400 and why in got.get("error", ""),
+               "%s %s" % (code, got))
+        with open(os.path.join(root, "settings.json"), encoding="utf-8") as fh:
+            ok("and nothing refused is written", fh.read() == kept)
+        code, _ = request(base, "PUT", "/settings.json", body, {"Content-Type": "application/json"})
+        ok("a settings write not from the board is refused", code == 403, "got %s" % code)
+        code, got = request(base, "PUT", "/settings.json", {"boards": {"memory-test": None}}, FROM_BOARD)
+        ok("null clears the board's settings", code == 200 and "boards" not in got, "%s %s" % (code, got))
+        with open(os.path.join(memory, "boards.md"), encoding="utf-8") as fh:
+            ok("and boards.md drops the mark", "- memory-test (current): " in fh.read())
         os.remove(os.path.join(root, "settings.json"))
     finally:
         httpd.shutdown()
@@ -302,9 +343,22 @@ def signed_in(root):
     with open(os.path.join(data, "tiago-own", "about.md"), "w", encoding="utf-8") as fh:
         fh.write("SECRET-ABOUT")
     outsider = {"X-Offdesk-Email": "nobody@example.com", "X-Offdesk-Name": "Nobody"}
+    own = os.path.join(root, "SERVER-ONLY-FOLDER")
+    os.makedirs(own)
+    with open(os.path.join(data, "settings.json"), "w", encoding="utf-8") as fh:
+        json.dump({"boards": {"offdesk": {"memory_root": own, "banners": False},
+                              "tiago-own": {"agents": False}}}, fh)
     srv = Server(data, "header")
     ok("the signed-in server starts", srv.wait())
     try:
+        code, body, _ = srv.ask("GET", "/settings.json", dict(JEROME))
+        got = json.loads(body) if code == 200 else {}
+        ok("signed in, boards name only those the person can see, and no path",
+           got.get("boards") == {"offdesk": {"memory_root": "SERVER-ONLY-FOLDER", "banners": False}}
+           and root not in body, "%d %s" % (code, body[:300]))
+        code, _, _ = srv.ask("PUT", "/settings.json", dict(TIAGO, **BOARD), {"boards": {"offdesk": {"agents": False}}})
+        ok("signed in, boards cannot be saved", code == 403, "got %d" % code)
+        os.remove(os.path.join(data, "settings.json"))
         code, body, _ = srv.ask("GET", "/memory.json", dict(TIAGO))
         ok("a person who can see a board reads its memory", code == 200, "%d %s" % (code, body[:200]))
         code, body, _ = srv.ask("PUT", "/about", dict(JEROME, **BOARD), {"text": "mine"})

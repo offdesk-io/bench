@@ -59,6 +59,11 @@ nothing raises.
 
     "boards": {"demo": {"memory_root": null, "banners": false, "agents": false}}
 
+  A save changes only the keys it sends for a list, and leaves every list it
+  does not name as it was. `memory_root` sent as "inherit" takes the list
+  back to the global folder, and a list sent as null loses its whole entry.
+  Lists are named as on disk, with a todo.md, and any other key is refused.
+
 Daily budgets are kept out of this file, in the agents engine's fences file
 (`data/agents/fences.json`, `$AGENTS_FENCES`), because the engine reads them
 there: `daily_budget` for all agents together, and `agent_budgets` keyed by the
@@ -117,6 +122,10 @@ def _memory_value(value):
 # The keys a list's entry in `boards` may hold beyond `memory_root`, each a
 # true-or-false that defaults to true.
 BOARD_FLAGS = ("banners", "agents")
+BOARD_KEYS = ("memory_root",) + BOARD_FLAGS
+# What a save takes as "back to the global memory folder", since null there
+# already means none.
+INHERIT = "inherit"
 AGENTS_OFF = "agents off"
 
 
@@ -125,7 +134,7 @@ def _board_entry(entry):
     nothing. A `memory_root` that is there but not a folder path reads as null,
     so a list meant to be kept apart never falls back to the owner's folder."""
     out = {}
-    if "memory_root" in entry:
+    if "memory_root" in entry and entry["memory_root"] != INHERIT:
         out["memory_root"] = _memory_value(entry["memory_root"])
     for key in BOARD_FLAGS:
         if isinstance(entry.get(key), bool):
@@ -446,6 +455,9 @@ def validate(data, root=None):
     err = _folder_error("memory_root", data.get("memory_root"))
     if err:
         return err
+    err = _boards_error(data.get("boards"), root or data_root())
+    if err:
+        return err
     roots = data.get("projects_roots")
     if roots is None:
         return None
@@ -485,6 +497,36 @@ def validate(data, root=None):
         if key in seen:
             return "%s and %s cannot share one projects folder" % (seen[key], name)
         seen[key] = name
+    return None
+
+
+def _boards_error(boards, base):
+    """An error for a `boards` value a save was sent, or None."""
+    if boards is None:
+        return None
+    if not isinstance(boards, dict):
+        return "boards must be an object of list name to its settings"
+    for name, entry in boards.items():
+        if (not name or name.startswith(".") or os.sep in name
+                or not os.path.isfile(os.path.join(base, name, "todo.md"))):
+            return "boards: there is no list called %s" % name
+        if entry is None:
+            continue
+        if not isinstance(entry, dict):
+            return "boards.%s must be an object, or null to clear it" % name
+        for key, value in entry.items():
+            if key not in BOARD_KEYS:
+                return "boards.%s: unknown setting %s" % (name, key)
+            if key in BOARD_FLAGS and not isinstance(value, bool):
+                return "boards.%s.%s must be true or false" % (name, key)
+        value = entry.get("memory_root")
+        if value is None or value == INHERIT:
+            continue
+        if not isinstance(value, str) or not value.strip():
+            return 'boards.%s.memory_root must be a folder path, null for none, or "inherit"' % name
+        err = _folder_error("boards.%s.memory_root" % name, value)
+        if err:
+            return err
     return None
 
 
@@ -551,6 +593,33 @@ def save(root, data):
             merged["projects_roots"] = roots
         else:
             merged.pop("projects_roots", None)
+    # Per list and per key: what is sent changes, what is not stays.
+    if isinstance(data.get("boards"), dict):
+        boards = merged.get("boards")
+        boards = dict(boards) if isinstance(boards, dict) else {}
+        for name, entry in data["boards"].items():
+            if entry is None:
+                boards.pop(name, None)
+                continue
+            own = boards.get(name)
+            own = dict(own) if isinstance(own, dict) else {}
+            for key, value in entry.items():
+                if key == "memory_root" and value == INHERIT:
+                    own.pop(key, None)
+                elif key == "memory_root":
+                    own[key] = _memory_value(value)
+                elif value is True:
+                    own.pop(key, None)      # the default
+                else:
+                    own[key] = value
+            if own:
+                boards[name] = own
+            else:
+                boards.pop(name, None)
+        if boards:
+            merged["boards"] = boards
+        else:
+            merged.pop("boards", None)
     merged["version"] = 1
     target = path(root)
     os.makedirs(os.path.dirname(target), exist_ok=True)

@@ -4136,7 +4136,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         saved, err = settings.save(DATA_ROOT, body)
         if err:
             return self._json(400, {"error": err})
-        if "memory_root" in body:
+        # boards.md names the memory folder and marks a list with its agents off.
+        if "memory_root" in body or "boards" in body:
             publish_boards()
         return self._json(200, settings_reply(saved))
 
