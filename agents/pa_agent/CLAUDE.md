@@ -17,7 +17,8 @@ There is one writer and everything else feeds it.
 | `pa-mobile` | The phone surface over any of the above. Asks in multiple choice, renders from its own templates, writes through `pa`. |
 | `pa-checkout` | Walks Doing and Reviewing. Reviews and asks; `pa` writes. |
 | `pa-focus` | Walks To do and Doing, trimming what is not really in flight. Reviews and asks; `pa` writes. |
-| `pa-review-plans` | Triages the planning agent's plans. Writes plan statuses through the board's own routes, hands task notes to `pa`. |
+| `pa-bucket-setup` | Interviews the owner about one bucket and writes its agent's definition into the bucket's own file, then runs `core/bucket_agents.py` to say whether it is ready. Never writes `todo.md`. |
+| `pa-review-plans` | Triages the bucket agents' plans. Writes plan statuses through the board's own routes, hands task notes to `pa`. |
 | `do` | Hands an agreed plan to `implement-agent`. That agent never writes the list, so its requested changes come back through `pa`. |
 | `pa-attach` | Files a conversation against a task through `attach-queue.json`, which the board drains. Touches nothing else. |
 | `pa-reports` | Makes a report off the list from its catalogue of types and sends it. Reads only; screenshots go through a locked headless board. |
@@ -45,9 +46,9 @@ has the one writer.
 
 ## What lives where
 
-- `PA.md` — standing behaviour, read by every skill and by the planning agent's six
-  planners and `implement-agent`. It stayed a plain file rather than folding into
-  `pa` precisely because those seven read it and never write anything.
+- `PA.md` — standing behaviour, read by every skill and by the bucket agents
+  and `implement-agent`. It stayed a plain file rather than folding into
+  `pa` precisely because those read it and never write anything.
 - `../../CONVENTIONS.md` — the file format.
 - `skills/pa/scripts/check_todo.py` — the mechanical checker. It lived under
   `pa-checkin` and moved with the writing.

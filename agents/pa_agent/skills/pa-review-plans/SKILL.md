@@ -1,9 +1,9 @@
 ---
 name: pa-review-plans
-description: Go through the plans the planning agent wrote against the owner's master to-do list, at data/<dataset>/todo.md in the Bench checkout (<dataset> named by data/.current), one plan at a time, and turn the owner's reaction to each into an approval or a note on the task it belongs to. Use whenever the owner asks what the agent came up with overnight, what is waiting for review, to go through, read, review, assess or triage the plans, or says something like "what did it plan", "any good plans this morning", "let's go through last night's", "review the overnight plans", "what's the agent suggesting", or names one task and asks what the plan for it says. Also use when the owner wants to tell the agent it got something wrong, since the way to do that is a feedback note on the task and this is the skill that writes one. Do not use it to run the planning agent, which is Run the Plan agent now in the board's Data menu, and do not use it for a general status read of the list, which is pa-checkin, or for a re-prioritisation, which is pa.
+description: Go through the plans the bucket agents wrote against the owner's master to-do list, at data/<dataset>/todo.md in the Bench checkout (<dataset> named by data/.current), one plan at a time, and turn the owner's reaction to each into an approval or a note on the task it belongs to. Use whenever the owner asks what the agent came up with overnight, what is waiting for review, to go through, read, review, assess or triage the plans, or says something like "what did it plan", "any good plans this morning", "let's go through last night's", "review the overnight plans", "what's the agent suggesting", or names one task and asks what the plan for it says. Also use when the owner wants to tell the agent it got something wrong, since the way to do that is a feedback note on the task and this is the skill that writes one. Do not use it to run a bucket agent, which the board does, and do not use it for a general status read of the list, which is pa-checkin, or for a re-prioritisation, which is pa.
 ---
 
-# Reviewing what the planning agent proposed
+# Reviewing what the bucket agents proposed
 
 `$BENCH_ROOT` is the Bench checkout: the `BENCH_ROOT` environment variable, or `~/Code/bench` when unset. Before running any command or reading any file below, `cd "${BENCH_ROOT:-$HOME/Code/bench}"`. Paths in this skill are relative to the checkout.
 
@@ -13,7 +13,7 @@ A plan proposes and never executes, so nothing in this session is a status repor
 
 ## Where a plan is
 
-A plan is no longer a card on a board of its own. Handing a task to the Plan agent lays four sub-tasks out on the task's card: Plan, Review the plan, Implement, Review the work, each blocked by the one before. When the plan is written the agent's Plan sub-task is ticked, through the board's queue, and the **Review the plan** sub-task carries a `Plan:` note pointing at the file, `data/<dataset>/plans/<file>.md`. That sub-task is the owner's, and it is what this skill goes through.
+A plan is no longer a card on a board of its own. Handing a task to a plan-first bucket's agent lays four sub-tasks out on the task's card: Plan, Review the plan, Implement, Review the work, each blocked by the one before. A free-rein bucket's agent has no Plan or Review the plan, so it has nothing here. Every plan waits for the owner: no kind of plan is approved without the owner ticking its review. When the plan is written the agent's Plan sub-task is ticked, through the board's queue, and the **Review the plan** sub-task carries a `Plan:` note pointing at the file, `data/<dataset>/plans/<file>.md`. That sub-task is the owner's, and it is what this skill goes through.
 
 So the plans waiting are the **Review the plan** sub-tasks that are unticked, assigned to the owner, with the Plan sub-task above them ticked. Read the list for them, and read the plan from the file the note names. The file is the truth, it needs no server running, and this skill has to work on a morning when the board is shut.
 
@@ -47,7 +47,7 @@ This skill does not touch `todo.md` itself. Once the owner has decided on the on
 ## What this skill never does
 
 - **It never writes a plan's own file.** A plan is content the agent wrote; what the owner thought of it goes on the task.
-- **It never runs the planning agent.** That spends money and is a deliberate press.
+- **It never runs a bucket agent.** That spends money and is a deliberate press.
 - **It never carries a plan out.** Approving is ticking the review, and carrying out is the `do` skill, in a session the owner is in.
 
 Older plans may still carry `state:` and `production:` in their frontmatter. Nothing reads them now. A plan whose task is no longer on the list shows in Overview's Context column, and the plan file is left where it is.

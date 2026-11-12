@@ -751,18 +751,18 @@ def check_tag_hygiene(lines, tasks):
                 retired[0],
                 "FIX",
                 f"{len(retired)} task line(s) still carry `ai:`, which was retired on "
-                f"21 Sep 2026. Say who does the work with [to:: Plan agent], "
-                f"[to:: Implement agent] or a person's name, and drop the tag.",
+                f"21 Sep 2026. Say who does the work with [to:: <bucket> agent] "
+                f"or a person's name, and drop the tag.",
             )
         )
     return findings
 
 
 def check_handover_hygiene(lines, text):
-    """`[to:: Plan agent]` or `[to:: Implement agent]` with no handover behind it.
+    """`[to:: <bucket> agent]` (or an old Plan/Implement agent) with no handover behind it.
 
-    The tag alone is not a handover: what makes a task the Plan agent's, or the
-    Implement agent's, is the `<id>-plan`/`<id>-implement` sub-task handOver()
+    The tag alone is not a handover: what makes a task its bucket agent's is
+    the `<id>-plan`/`<id>-implement` sub-task handOver()
     (the board's 04-tier-two-the-one-thing.js) writes alongside the tag. `pa`'s
     own SKILL.md documents writing the tag directly as an option, which is how a
     task ends up looking delegated with nobody having handed it over.
@@ -792,29 +792,40 @@ def check_handover_hygiene(lines, text):
                 return i
         return None
 
+    legacy = (todo.PLAN_AGENT, todo.IMPLEMENT_AGENT)
     for task in doc_tasks:
         agent = todo.agent_of(task.to)
-        if task.done or task.stable_id or agent not in (todo.PLAN_AGENT, todo.IMPLEMENT_AGENT):
+        if task.done or task.stable_id or not agent:
             continue
         findings.append(
             Finding(
                 line_of(task),
                 "CHECK",
                 f"\"{task.title}\" carries [to:: {agent}] but has no id: tag yet, so it "
-                f"has no handover either. The board gives it an id when it next loads, "
-                f"and the Plan agent asks for the handover on its run after that.",
+                f"has no handover either. The board gives it an id when it next loads"
+                + (", and the Plan agent asks for the handover on its run after that."
+                   if agent in legacy else ", and it can then be handed over from the board."),
             )
         )
-    for task, agent in pick.unhanded(doc_tasks):
-        kind = "plan" if agent == todo.PLAN_AGENT else "implement"
+    for task in doc_tasks:
+        agent = todo.agent_of(task.to)
+        if task.done or not task.stable_id or not agent or pick.handed_over(task):
+            continue
+        if agent in legacy:
+            kind = "plan" if agent == todo.PLAN_AGENT else "implement"
+            how = ("The Plan agent asks the board to hand it over after its next run; hand it "
+                   "over from the board now to have it sooner, or drop the tag if it was "
+                   "written in error.")
+        else:
+            kind = "plan or `-implement`"
+            how = ("Hand it over from the board, or drop the tag if it was written in error. "
+                   "A bucket whose agent is not set up takes nothing: offer pa-bucket-setup first.")
         findings.append(
             Finding(
                 line_of(task),
                 "CHECK",
                 f"\"{task.title}\" carries [to:: {agent}] but has no "
-                f"`{task.stable_id}-{kind}` sub-task yet. The Plan agent asks the board "
-                f"to hand it over after its next run; hand it over from the board now "
-                f"to have it sooner, or drop the tag if it was written in error.",
+                f"`{task.stable_id}-{kind}` sub-task yet. {how}",
             )
         )
     return findings
