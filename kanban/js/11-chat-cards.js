@@ -325,7 +325,8 @@ function agendaHTML(ag, when, opts){
    same tasks under three renderers, and three peers between separators spent a
    third of the strip on that. The registry stays flat — the ids, isKnownView(),
    the #matrix and #timeline fragments and syncHash() all carry on unchanged. The
-   order is the strip's: Overview, Reports, the three renderings, then Agents. */
+   order is the strip's: Overview, Reports, then the three renderings. Agents is a
+   tab of the Settings page. */
 function viewDefs(){
   const defs = [
     { id:'overview', label:'Overview' },
@@ -333,20 +334,15 @@ function viewDefs(){
     { id:'sep0', sep:true },
     { id:'board',    label:'Board' },
     { id:'timeline', label:'Timeline' },
-    { id:'matrix',   label:'Matrix' },
-    { id:'sep1', sep:true },
-    { id:'agents',   label:'Agents' }
+    { id:'matrix',   label:'Matrix' }
   ];
-  /* The agents run on the owner's Mac, so the shared board has no Agents tab
-     (loadWhoami() in 21-datasets.js), and no separator left dangling before it. */
-  if (state.who) return defs.filter(d => d.id !== 'agents');
   return defs;
 }
-/* Settings isn't a view of the board either: Memory, Settings, Spend, Schedules
-   and Backups are the five tabs of one page, opened from the Data menu's
+/* Settings isn't a view of the board either: Memory, Settings, Agents, Spend,
+   Schedules and Backups are the six tabs of one page, opened from the Data menu's
    Settings item, so it sits outside viewDefs() and its tabs but needs a
    #settings URL (the tab after a slash) and a renderView() case of its own. An
-   old #memory or #backups link opens that tab (adoptSettingsRoute(), 29-settings.js).
+   old #memory, #agents or #backups link opens that tab (adoptSettingsRoute(), 29-settings.js).
 
    'plans' is here for a different reason: it used to be a tab, and renderView() sends an
    old #plans link to the board. 'projects' is a view with no tab: the list of

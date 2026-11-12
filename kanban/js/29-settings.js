@@ -599,13 +599,14 @@ async function openSharing(){
 }
 
 /* ---- The Settings page ------------------------------------------------------
-   Data > Settings opens one page in the board's own area, with five tabs drawn
+   Data > Settings opens one page in the board's own area, with six tabs drawn
    in the bucket bar while it is up: Memory (31-memory.js), Settings (this form),
-   Spend and Schedules (the two cards of 14-schedule.js), Backups (15-backups.js).
-   The URL is #settings/<tab>; an old #memory or #backups link opens its tab. */
+   Agents (27-agents.js), Spend and Schedules (the two cards of 14-schedule.js), Backups (15-backups.js).
+   The URL is #settings/<tab>; an old #memory, #agents or #backups link opens its tab. */
 const SETTINGS_TABS = [
   ['memory', 'Memory', 'what Bench keeps about this board and you'],
   ['settings', 'Settings', 'your profile, models, folders and agent options'],
+  ['agents', 'Agents', 'when each agent runs, and what it does'],
   ['spend', 'Spend', 'what the agents have spent, window by window'],
   ['schedules', 'Schedules', 'what runs on a clock'],
   ['backups', 'Backups', 'every copy of this list the board has kept'],
@@ -616,11 +617,12 @@ let settingsHostEl = null;
 const settingsRoot = () => settingsHostEl || modalEl;
 
 /* The tabs on offer: where no agent can run, or on the shared board, Spend and
-   Schedules go, and a folder opened from disk has no backups. */
+   Schedules go (and Agents, on the shared board, which has none), and a folder opened from disk has no backups. */
 function settingsTabs(){
   const noAgents = !!listFolder || state.agentsReady === false || !!state.who;
   return SETTINGS_TABS.filter(([k]) =>
-    !((k === 'spend' || k === 'schedules') && noAgents) && !(k === 'backups' && listFolder));
+    !((k === 'spend' || k === 'schedules') && noAgents) && !(k === 'agents' && state.who) &&
+    !(k === 'backups' && listFolder));
 }
 
 /* A hash or a stray state.view that names the page, or one of the views that
@@ -628,7 +630,7 @@ function settingsTabs(){
 function adoptSettingsRoute(h){
   let tab = null;
   if (h.view === 'settings') tab = SETTINGS_TABS.some(t => t[0] === h.bucketSlug) ? h.bucketSlug : settingsTab;
-  else if (h.view === 'memory' || h.view === 'backups') tab = h.view;
+  else if (h.view === 'memory' || h.view === 'agents' || h.view === 'backups') tab = h.view;
   if (!tab) return false;
   settingsTab = tab;
   state.view = 'settings';
@@ -677,12 +679,14 @@ function leaveSettingsPage(){
 function renderSettingsPage(){
   renderSettingsTabs();
   leaveRefCards();
+  if (settingsTab !== 'agents') leaveAgentsView();
   settingsHostEl = null;
   if (typeof memStopObserving === 'function') memStopObserving();
   syncHash();
   const tab = settingsTab;
   if (tab === 'memory') renderMemoryView();
   else if (tab === 'backups') renderBackupsView();
+  else if (tab === 'agents') renderAgentsView();
   else if (tab === 'spend' || tab === 'schedules') drawRefCards(tab);
   else drawSettingsTab();
 }
@@ -691,6 +695,7 @@ function renderSettingsPage(){
    its files follow it, and the form is never redrawn under the person typing. */
 function refreshSettingsPage(){
   if (settingsTab === 'memory') memDraw();
+  else if (settingsTab === 'agents') renderAgentsView();
   else if (settingsTab === 'backups') renderBackupsView();
 }
 

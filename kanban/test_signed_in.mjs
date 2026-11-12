@@ -96,7 +96,7 @@ try {
   check('with a Sign out posting to nginx', await evalJS(
     `(() => { const f = $('#whoami form'); return !$('#whoami').classList.contains('hidden') && f.method === 'post' && f.getAttribute('action') === '/auth/logout' })()`))
   check('the page knows it is signed in', await evalJS(`document.body.classList.contains('signed-in') && state.who.email === 'jerome@example.com'`))
-  check('no Agents tab', await evalJS(`!viewDefs().some(d => d.id === 'agents') && !$('#viewToggle').textContent.includes('Agents')`))
+  check('no Agents tab', await evalJS(`!settingsTabs().some(t => t[0] === 'agents') && !$('#viewToggle').textContent.includes('Agents')`))
   check('no Spend and Schedules tabs', await evalJS(`!settingsTabs().some(t => t[0] === 'spend' || t[0] === 'schedules') && settingsTabs().some(t => t[0] === 'settings')`))
   check('the board loaded the list', await evalJS(`!!state.doc && !state.demo && state.dataset === 'offdesk'`))
 

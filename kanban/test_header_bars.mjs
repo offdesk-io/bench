@@ -176,11 +176,11 @@ try {
     getComputedStyle(document.querySelector('#phTop')).display === 'none' &&
     document.querySelectorAll('#agentFilterChip').length === 1 && document.querySelectorAll('#bucketFilters').length === 1`))
 
-  /* ---- the Agents tab hides the strip ---- */
+  /* ---- the Settings page swaps the strip for its tabs ---- */
 
   await evalJS(`state.view = 'agents'; renderView()`)
   await wait(300)
-  check('the Agents view hides the bucket strip', await evalJS(`document.querySelector('#bucketFilters').classList.contains('hidden')`))
+  check('the Agents tab shows the Settings tabs in place of the buckets', await evalJS(`!!document.querySelector('#bucketFilters [data-value=agents]') && !document.querySelector('#bucketFilters .taball')`))
   await evalJS(`state.view = 'board'; renderView()`)
   await wait(200)
 

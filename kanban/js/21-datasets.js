@@ -154,7 +154,7 @@ async function switchDataset(name, hashAfter){
    /auth/ route answers rather than this server. The parts that only work on
    the owner's Mac go: the server refuses them, and body.signed-in hides their
    buttons (board.css) so nothing on the page offers what will fail. The
-   Agents tab goes through viewDefs(), which is why the view is drawn again. */
+   Agents tab goes through settingsTabs(), which is why the view is drawn again. */
 async function loadWhoami(){
   let who;
   try { who = await getJSON('/whoami'); } catch (err) { return; }

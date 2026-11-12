@@ -110,8 +110,8 @@ check('the tab is locked', await evalJS(`state.locked === true`))
    the agents out. */
 await wait(800)
 check('a list with no agent counts as not set up', await evalJS(`state.agentsSetup === false && agentsSetUp() === false`))
-check('Agents is one of the view tabs', await evalJS(`viewDefs().some(d => d.id === 'agents')`))
-await evalJS(`state.view = 'agents'; renderView()`)
+check('Agents is a tab of the Settings page, not of the top bar', await evalJS(`!viewDefs().some(d => d.id === 'agents') && settingsTabs().some(t => t[0] === 'agents')`))
+await evalJS(`openSettingsPage('agents')`)
 await wait(400)
 check('the tab offers setup instead of the hour tracks', await evalJS(`!!document.querySelector('#lists .agentsetup [data-agent-setup]') && !document.querySelector('#lists .agents-ui')`))
 if (process.env.SHOT_SETUP) {
@@ -212,13 +212,13 @@ check('the tab lists this list\'s bucket planners under the cards', await evalJS
   return el.querySelector('.planner-bucket')?.textContent === 'Tasks' &&
     el.querySelector('.planner-name')?.textContent === 'fallback planner'
 })()`))
-check('the Agents tab hides the bucket filter strip, theme pills and edit-buckets pencil; other views bring them back', await evalJS(`(() => {
+check('the Settings page swaps the bucket strip for its own tabs and hides the edit-buckets pencil; other views bring them back', await evalJS(`(() => {
   const wasLocked = state.locked, wasView = state.view
   state.locked = false
-  state.view = 'agents'; renderFilterBar()
-  const hidden = document.querySelector('#bucketFilters').classList.contains('hidden') &&
+  state.view = 'agents'; renderView()
+  const hidden = document.querySelector('#bucketFilters [data-value=agents]') !== null &&
     document.querySelector('#themeBar').classList.contains('hidden') &&
-    document.querySelector('#editBuckets').classList.contains('hidden')
+    getComputedStyle(document.querySelector('#editBuckets')).display === 'none'
   state.view = 'board'; renderFilterBar()
   const back = !document.querySelector('#bucketFilters').classList.contains('hidden') &&
     !document.querySelector('#editBuckets').classList.contains('hidden')

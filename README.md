@@ -36,9 +36,9 @@ Three sibling folders are optional. Each is looked up as `../PACKAGES/<name>` ne
 | --- | --- |
 | `../PACKAGES/ai_chat_engine` | no chat window, and the Claude buttons on a task are hidden |
 | `../PACKAGES/work-streams` | no work-stream queues (`/streams.json` answers 404) |
-| `../PACKAGES/agents-engine` | the Agents view shows a stub saying it has nothing to show |
+| `../PACKAGES/agents-engine` | the Agents tab of the Settings page shows a stub saying it has nothing to show |
 
-The agents (`agents/plan-agent`, `agents/implement-agent`) need the `claude` command line tool and do nothing until a list is switched on in the Agents view. The tests are in `docs/TESTING.md`: run them with `scripts/test-board.sh --all`.
+The agents (`agents/plan-agent`, `agents/implement-agent`) need the `claude` command line tool and do nothing until a list is switched on in the Agents tab of the Settings page. The tests are in `docs/TESTING.md`: run them with `scripts/test-board.sh --all`.
 
 **Claude Code is optional.** Without it, the board works in full: lists, buckets, columns, editing, backups, reports, the archive and Settings. What needs it: the chat window and the PA, the Plan and Implement agents, and bucket briefs. With no `claude` on the path, the board hides all of those. The Agents tab says what to install, and the run buttons refuse rather than start something that cannot run. Install Claude Code and log in, then reload the board to turn them on.
 
