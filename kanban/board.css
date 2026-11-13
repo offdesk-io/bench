@@ -3225,10 +3225,6 @@ body.signed-in #runAgentBtn{display:none !important}
 }
 
 /* Memory (31-memory.js): one panel per section. */
-.memhead{display:flex; align-items:center; justify-content:space-between; gap:12px}
-.memhead h4, .memtext h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:600; color:var(--tenon-text-subtle)}
-.membucket{display:flex; flex-direction:column; gap:8px; padding:12px 0; border-top:1px solid var(--tenon-stroke-default)}
-.memtext{max-width:68ch}
 .memempty{margin:0; padding:14px 16px; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-faint); border:1px dashed var(--tenon-stroke-default); border-radius:var(--tenon-radius-md)}
 .memerr{margin:0; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-error)}
 .memactions{display:flex; align-items:center; flex-wrap:wrap; gap:8px}

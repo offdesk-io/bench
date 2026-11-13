@@ -218,14 +218,29 @@ function settingsPageLayoutHTML(title, sections, opts){
    notes (extra lines under the hint, as HTML), err (the data attribute naming
    the error line, e.g. 'data-err="name"'), required, readonly (disabled on a select or a switch, which have no read-only), on (a switch),
    wrap (attributes on the block, e.g. 'data-region-field hidden'). */
+/* True when a write must not go out: a locked tab (the example list, a backup
+   preview) saves nothing, and a tab whose list the server has moved off, from
+   another tab, goes over to that list through the board's own prompt rather
+   than writing into it. Every save on the Settings, Memory and Agents pages asks. */
+/* The welcome (first run) opens over the example list, which is locked, and has
+   to save: its two steps are exempt from the lock. */
+let settingsWelcome = false;
+const settingsLocked = () => state.locked && !settingsWelcome;
+function writeBlocked(){
+  if (settingsLocked()) return true;
+  if (state.boardMoved) { boardMoved(state.boardMoved, true); return true; }
+  return false;
+}
+
 let tenonFieldSeq = 0;
 const TENON_CHEVRON = '<svg class="tenon-select__chevron" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 function tenonFieldHTML(o){
   const id = 'tf-' + (++tenonFieldSeq), hintId = id + '-note', errId = id + '-err';
   const kind = o.kind || 'input';
   const hasHint = o.hint !== undefined && o.hint !== null && o.hint !== '';
+  const ro = o.readonly || settingsLocked();
   const common = ' id="' + id + '"' + (hasHint ? ' aria-describedby="' + hintId + '"' : '') + (o.required ? ' required' : '') +
-    (o.readonly ? (kind === 'select' || kind === 'switch' ? ' disabled' : ' readonly') : '') + (o.attrs ? ' ' + o.attrs : '');
+    (ro ? (kind === 'select' || kind === 'switch' ? ' disabled' : ' readonly') : '') + (o.attrs ? ' ' + o.attrs : '');
   let control;
   if (kind === 'select') {
     control = '<span class="tenon-field__select"><select class="tenon-field__control"' + common + '>' + (o.options || '') + '</select>' + TENON_CHEVRON + '</span>';
@@ -456,6 +471,7 @@ function trackSettingsForm(draft, first){
 }
 
 async function saveSettingsDraft(draft, first){
+  if (settingsLocked()) throw new Error('This tab is read-only.');
   const put = (url, body) => sendJSON('PUT', url, body);
   const basics = { name: draft.name };
   /* Every field and box the server sent, so the welcome, which shows none,
@@ -507,6 +523,7 @@ async function refreshOwnerName(){
 
 /* Checks the form and saves it, from the welcome's button or the page's. */
 async function runSettingsSave(draft, first, needsList, opts){
+  if (writeBlocked()) return false;
   if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return false; }
   try { await saveSettingsDraft(draft, first); }
   catch (err) { showToast('Could not save: ' + (err.message || err)); return false; }
@@ -526,6 +543,7 @@ async function runSettingsSave(draft, first, needsList, opts){
    welcome is the one place this form is still a pop-up; Data > Settings opens
    the same form as a tab of the Settings page (drawSettingsTab). */
 async function openSettings(first, needsList){
+  settingsWelcome = !!first;
   let loaded;
   try { loaded = await loadSettingsDraft(first); }
   catch (err) { showToast('Could not read settings: ' + (err.message || err)); return; }
@@ -645,6 +663,7 @@ function trackListForm(list){
 /* Step 2 of 2. The profile is saved by now, so this one reloads the board once
    the list exists. */
 function openFirstList(){
+  settingsWelcome = true;
   const list = { name: ONBOARD_LIST, buckets: ONBOARD_BUCKETS.map(b => Object.assign({ touched: {} }, b)), touched: {} };
   const make = { label: 'Create list', primary: true, run: async () => {
     if (listErrors(list).bad) { paintListErrors(list, true); return; }
@@ -696,6 +715,7 @@ async function openSharing(){
     { label: 'Save', primary: true, run: async () => {
       const got = sharingBody(sh);
       if (got.error) { showToast(got.error, 'bad'); return; }
+      if (state.locked) { showToast('This tab is read-only.', 'bad'); return; }
       try { await postJSON('/dataset/access', { name: acc.board, teams: got.body.teams, people: got.body.people }); }
       catch (err) { showToast('Could not save: ' + (err.message || err), 'bad'); return; }
       closeModal();
@@ -776,7 +796,7 @@ function settingsDraftSnapshot(d){
 
 /* True when the page on screen holds changes that are not saved. */
 function settingsPageDirty(){
-  if (settingsDiscarded) return false;
+  if (settingsDiscarded || state.locked) return false;
   if (settingsTab === 'settings') {
     return !!(settingsLiveDraft && settingsHostEl && settingsHostEl.isConnected && settingsDraftSnapshot(settingsLiveDraft) !== settingsSnapshot);
   }
@@ -881,7 +901,7 @@ async function drawSettingsTab(){
   if (state.view !== 'settings' || settingsTab !== 'settings') return;
   const { draft } = loaded;
   const host = $('#settingsPage');
-  host.innerHTML = settingsPageLayoutHTML(draft.signedIn ? 'Your profile' : 'Settings', settingsPageSections(draft));
+  host.innerHTML = settingsPageLayoutHTML(draft.signedIn ? 'Your profile' : 'Settings', settingsPageSections(draft), { save: !state.locked });
   settingsHostEl = host;
   settingsLiveDraft = draft;
   settingsSnapshot = settingsDraftSnapshot(draft);
@@ -947,6 +967,7 @@ let agentsOpts = null;
 
 /* Writes the settings the page holds when they changed. True when it went through. */
 async function saveAgentOptions(draft){
+  if (state.locked) return false;
   const dollars = v => v.trim() === '' ? null : Number(v);
   const agentBudgets = {};
   for (const k in draft.agentBudgets) agentBudgets[SETTINGS_BUDGET_IDS[k]] = dollars(draft.agentBudgets[k]);

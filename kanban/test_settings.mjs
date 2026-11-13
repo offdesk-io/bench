@@ -283,6 +283,21 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('the name goes back as it was', await evalJS(`OWNER_NAME`) === nameWas)
   await evalJS(`openSettingsPage('settings')`); await wait(900)
 
+  // A locked tab shows Settings readonly, with no Save, and nothing writes.
+  await evalJS(`window.__puts = []; if (!window.__realFetch) { window.__realFetch = window.fetch; window.fetch = (u, o) => { if (o && (o.method === 'PUT' || o.method === 'POST')) window.__puts.push(o.method + ' ' + u); return window.__realFetch(u, o) } }`)
+  await evalJS(`state.locked = true; openSettingsPage('settings')`); await wait(900)
+  check('a locked tab draws no Save', await evalJS(`!settingsRoot().querySelector('[data-settings-save]')`))
+  check('and every Settings field is readonly or disabled', await evalJS(`(() => { const f = [...settingsRoot().querySelectorAll('.tenon-field__control, [role=switch]')]; return f.length >= 8 && f.every(c => c.readOnly || c.disabled) })()`))
+  check('Save and the unsaved-changes prompt\'s Save refuse, and the page is never dirty', await evalJS(`Promise.all([runSettingsSave(settingsLiveDraft, false, false), settingsPageSave()]).then(r => JSON.stringify(r) === '[false,false]' && !settingsPageDirty())`))
+  check('and no write went out', await evalJS(`window.__puts.length === 0`), await evalJS(`window.__puts.join()`))
+  // A tab whose list the server has moved off sends nothing either: the board's own prompt takes over.
+  await evalJS(`state.locked = false; openSettingsPage('settings')`); await wait(900)
+  await evalJS(`window.__moved = null; window.__boardMoved = window.boardMoved; window.boardMoved = (n, a) => { window.__moved = [n, a] }; state.boardMoved = 'elsewhere'`)
+  await evalJS(`Promise.all([runSettingsSave(settingsLiveDraft, false, false), settingsPageSave()]).then(r => { window.__movedSaves = JSON.stringify(r) })`)
+  await wait(300)
+  check('when the board moved to another list Save refuses and hands over to the board\'s own prompt', await evalJS(`window.__movedSaves === '[false,false]' && window.__moved && window.__moved[0] === 'elsewhere' && window.__moved[1] === true && window.__puts.length === 0`), await evalJS(`window.__movedSaves + ' ' + window.__puts.join()`))
+  await evalJS(`window.boardMoved = window.__boardMoved; state.boardMoved = ''`)
+
   // The page's sections, the Setup box and where How to address you went.
   check('Settings has no How to address you, facts file or other profile sections', await evalJS(
     `!settingsRoot().querySelector('[data-about]') && settingsRoot().querySelectorAll('textarea').length === 1 && !settingsRoot().querySelector('[data-profile-sections]')`))

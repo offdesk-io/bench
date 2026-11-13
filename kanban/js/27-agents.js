@@ -221,7 +221,7 @@ function agentsIsDirty(){
    each. A refusal stops the rest and names what was refused. True when it went
    through. A locked tab writes nothing. */
 async function agentsSaveAll(){
-  if (state.locked) return false;
+  if (writeBlocked()) return false;
   const page = document.querySelector('#agentsPage');
   const opts = agentsOpts && agentsOpts.draft;
   if (opts && Object.keys(agentOptionErrors(opts)).length) { if (page) paintAgentOptionErrors(opts, page, true); return false; }

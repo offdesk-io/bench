@@ -249,7 +249,7 @@ function memReset(){ memResetDraft(); memDraw(true, true); }
    kept as saved. */
 /* True when it went through (or there was nothing to write). */
 async function memSaveAll(){
-  if (state.locked) return false;
+  if (writeBlocked()) return false;
   memReadPage();
   memPageError = '';
   const ch = memChanges();
