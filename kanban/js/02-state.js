@@ -394,7 +394,7 @@ const DONE_COL = DONE_HEADING;
 /* Who the two review sub-tasks of a handover are assigned to, and so whose move
    it is when one of them opens. The name as people.md and `[to::]` spell it. */
 /* Set by /owner.js from data/profile.md; "Me" where there is no server. */
-const OWNER_NAME = window.OWNER_NAME || 'Me';
+let OWNER_NAME = window.OWNER_NAME || 'Me';
 /* Not a special column the way Done is — just a tier the board tints, so a
    renamed section simply stops matching and goes back to looking normal. It
    used to be called Waiting for review: a column says the state of the

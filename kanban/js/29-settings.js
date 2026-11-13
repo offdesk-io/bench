@@ -441,6 +441,16 @@ function boardChanges(draft){
   return Object.keys(out).length ? out : null;
 }
 
+/* Reads the owner's name again from /owner.js, for a save that does not reload
+   the page, so what the board writes in `[to::]` and compares against follows it. */
+async function refreshOwnerName(){
+  try {
+    const text = await fetch('/owner.js', { cache: 'no-store' }).then(r => r.text());
+    const m = /OWNER_NAME\s*=\s*("(?:[^"\\]|\\.)*")/.exec(text);
+    if (m) OWNER_NAME = JSON.parse(m[1]) || 'Me';
+  } catch (err) { /* keeps the name it has */ }
+}
+
 /* Checks the form and saves it, from the welcome's button or the page's. */
 async function runSettingsSave(draft, first, needsList, opts){
   if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return false; }
@@ -450,7 +460,7 @@ async function runSettingsSave(draft, first, needsList, opts){
   /* Signed in, the name on the page is the sign-in's, so nothing to reload. */
   if (draft.signedIn) { if (!settingsHostEl) closeModal(); showToast('Saved.', 'good'); return true; }
   /* A save made on the way to somewhere else carries on to it instead of reloading. */
-  if (opts && opts.noReload) { showToast('Saved.', 'good'); return true; }
+  if (opts && opts.noReload) { await refreshOwnerName(); showToast('Saved.', 'good'); return true; }
   /* The owner's name is read once, from /owner.js, as the page loads. The
      page is saved by now, so the browser has nothing to warn about. */
   settingsDiscarded = true;

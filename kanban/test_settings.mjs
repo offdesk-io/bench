@@ -100,7 +100,7 @@ try {
   const send = (method, params) => new Promise(res => { const n = ++id; pending.set(n, res); ws.send(JSON.stringify({ id: n, method, params })) })
   const evalJS = async expr => {
     const x = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true })
-    if (x.result?.exceptionDetails) throw new Error(JSON.stringify(x.result.exceptionDetails).slice(0, 400))
+    if (x.result?.exceptionDetails) throw new Error(expr.slice(0, 200) + ' // ' + JSON.stringify(x.result.exceptionDetails).slice(0, 400))
     return x.result?.result?.value
   }
   const reload = async () => { await send('Page.reload', {}); await wait(3000) }
@@ -267,12 +267,21 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('Discard goes on to the other tab without saving', await evalJS(`!modalEl && settingsTab === 'memory'`))
   await tabClick('settings'); await wait(900)
   check('and the typing is gone', await evalJS(`settingsRoot().querySelector('[data-setup]').value === ${JSON.stringify(setupWas)}`))
+  const nameWas = await evalJS(`OWNER_NAME`)
+  const setName = v => evalJS(`(() => { const el = settingsRoot().querySelector('[data-name]'); el.value = ${JSON.stringify(v)}; el.dispatchEvent(new Event('input', { bubbles: true })) })()`)
   await setUnsaved('- Saved on the way out')
+  await setName('Alexa')
   await evalJS(`document.querySelector('#viewToggle [data-view=board]').click()`); await wait(400)
   await modalPress('Save'); await wait(2500)
+  check('Save on the way out brings the owner\'s name up to date without a reload', await evalJS(`OWNER_NAME`) === 'Alexa')
   check('Save writes the page, then goes on to the board view', await evalJS(`state.view === 'board' && !modalEl`) && /Saved on the way out/.test(readFileSync(join(data, 'profile.md'), 'utf8')))
   await evalJS(`openSettingsPage('settings')`); await wait(900)
   check('and the page reads back what was saved', await evalJS(`!!settingsRoot() && settingsRoot().querySelector('[data-setup]').value.includes('Saved on the way out')`), await evalJS(`state.view + '/' + settingsTab + '/' + !!settingsHostEl + '/' + !!document.querySelector('#settingsPage')`))
+  await setName(nameWas)
+  await evalJS(`document.querySelector('#viewToggle [data-view=board]').click()`); await wait(400)
+  await modalPress('Save'); await wait(2500)
+  check('the name goes back as it was', await evalJS(`OWNER_NAME`) === nameWas)
+  await evalJS(`openSettingsPage('settings')`); await wait(900)
 
   // The page's sections, the Setup box and where How to address you went.
   check('Settings has no How to address you, facts file or other profile sections', await evalJS(
@@ -435,7 +444,12 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   // Agent options live on the Agents tab, not the general Settings form.
   check('the general tab has no Agent options', await evalJS(`!document.querySelector('[data-agent-options]') && !settingsRoot().querySelector('[data-model]')`))
   const openSettingsPageFresh = async () => { await evalJS(`openSettingsPage('settings')`); await wait(500); await openAgents() }
-  const openAgents = async () => { await evalJS(`openSettingsPage('agents')`); await wait(1500) }
+  const openAgents = async () => {
+    await evalJS(`openSettingsPage('agents')`); await wait(500)
+    // A Settings form left with typing in it asks first; these steps are done with it.
+    if (await evalJS(`!!modalEl && modalEl.textContent.includes('Unsaved changes')`)) await modalPress('Discard')
+    await wait(1000)
+  }
   const A = `document.querySelector('#agentOptions')`
   const aSet = (sel, v, ev = 'input') => evalJS(`(() => { const b = ${A}.querySelector(${JSON.stringify(sel)}); b.value = ${JSON.stringify(v)}; b.dispatchEvent(new Event('${ev}', { bubbles: true })) })()`)
   const aSave = () => evalJS(`${A}.querySelector('[data-agent-options-save]').click()`)
