@@ -187,7 +187,7 @@ function settingsFormHTML(draft, choices, first){
 
    A title row with a Save on its right and a divider under it, then one row per
    section: its title on the left, its fields on the right, 3:9. A second Save
-   closes the content. `sections` is [{ id, title, html, wide }], wide letting the fields use the whole
+   closes the content. `sections` is [{ id, title, description, html, wide }], description being a line under the title that says what the group is for, wide letting the fields use the whole
    right-hand column. `opts.save` false
    leaves both Saves out (Backups); `opts.saveAttr` is the data attribute the
    caller wires its handler to. Under 900px each section stacks, title first. */
@@ -199,7 +199,8 @@ function settingsPageLayoutHTML(title, sections, opts){
     '<div class="spage__head"><h1 class="spage__title">' + esc(title) + '</h1>' + save + '</div>' +
     sections.map(sec =>
       '<section class="spage__section" data-section="' + escAttr(sec.id || sec.title) + '">' +
-        '<h2 class="spage__label">' + esc(sec.title) + '</h2>' +
+        '<div class="spage__side"><h2 class="spage__label">' + esc(sec.title) + '</h2>' +
+          (sec.description ? '<p class="spage__desc"' + (sec.descAttrs ? ' ' + sec.descAttrs : '') + '>' + esc(sec.description) + '</p>' : '') + '</div>' +
         '<div class="spage__fields' + (sec.wide ? ' spage__fields--wide' : '') + '">' + sec.html + '</div></section>').join('') +
     (save ? '<div class="spage__foot">' + save + '</div>' : '') +
     '</div>';

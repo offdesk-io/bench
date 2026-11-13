@@ -298,11 +298,15 @@ try {
   const wantDescs = {
     profile: 'Facts about you that agents work from: how you work, write and want things done.',
     recorder: '',
-    company: 'What this business does, in a few lines every agent reads first.+Who is who: role, team, who reports to whom, and the names that get confused.',
+    company: 'Who is who: role, team, who reports to whom, and the names that get confused.+What this business does, in a few lines every agent reads first.',
     context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone.",
     buckets: 'One per bucket: what kind of work lands there and how it should be handled.'
   }
   const wantStr = ['profile', 'recorder', 'company', 'context', 'buckets'].map(k => k + '=' + wantDescs[k]).join('|')
+  check('group descriptions sit under their title in the label column, field help stays under its field', await evalJS(`(() => {
+    const side = k => document.querySelector('#memView [data-section=' + k + '] .spage__side .spage__desc');
+    return !!side('profile') && !!side('company') && !!side('buckets') && !document.querySelector('#memView .spage__fields > p[data-mem-desc]')
+      && !!document.querySelector('#memView [data-section=context] .tenon-field__note[data-mem-desc=context]') })()`))
   check('each section shows its description', await evalJS(descs) === wantStr, await evalJS(descs))
 
   // every section empty: each still renders, with a box or a placeholder to type in

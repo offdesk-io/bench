@@ -121,7 +121,8 @@ const MEM_DESC = {
   context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone.",
   profile: 'Facts about you that agents work from: how you work, write and want things done.'
 };
-function memDesc(id){ return MEM_DESC[id] ? '<p class="memdesc" data-mem-desc="' + id + '">' + esc(MEM_DESC[id]) + '</p>' : ''; }
+/* A group's description goes under its title, in the layout's label column. */
+const memDesc = id => ({ description: MEM_DESC[id] || '', descAttrs: 'data-mem-desc="' + id + '"' });
 let memIds = new Set();   // ids issued during this render, so two headings that slug alike stay apart
 function memUniqueId(base){
   let id = base, n = 1;
@@ -217,7 +218,7 @@ function memAboutYouHTML(){
     ('habits' in d.psections ? sec('habits', 'Working habits') : '') +
     ('writing' in d.psections ? sec('writing', 'Writing rules') : '') +
     ('addressing' in d.pabout ? abt('addressing') : '');
-  return { id: 'profile', title: 'About you', html: (html || memEmpty('No profile yet. Set your name in Settings.')) + memDesc('profile') };
+  return Object.assign({ id: 'profile', title: 'About you', html: html || memEmpty('No profile yet. Set your name in Settings.') }, memDesc('profile'));
 }
 
 function memRecorderHTML(){
@@ -235,13 +236,12 @@ function memCompanyTeamHTML(){
       MEM_PEOPLE_COLS.map(c => memField({ label: c.label, attrs: 'data-mem-person="' + c.key + '"', value: p[c.key] || '' })).join('') +
       (state.locked ? '' : '<button type="button" class="btn small ghost danger" data-mem-remove="' + i + '" aria-label="Remove ' + esc(p.name || 'this person') + '">Remove</button>') +
     '</div>').join('');
-  return { id: 'company', title: 'Company and team', wide: true, html:
+  return Object.assign({ id: 'company', title: 'Company and team', wide: true, html:
     memField({ label: 'Company description', kind: 'textarea', attrs: 'data-mem-about', value: memDraft.about, placeholder: 'Say here what the company does.',
       hint: memDescText('about'), hintAttrs: 'data-mem-desc="about"' }) +
     (memDraft.people.length ? '' : memEmpty('No team yet. Add the people you work with.')) +
     '<div class="memrows" data-mem-people-rows>' + rows + '</div>' +
-    memDesc('people') +
-    (state.locked ? '' : '<div class="memactions"><button type="button" class="btn small outline" data-mem-add>Add a person</button></div>') };
+    (state.locked ? '' : '<div class="memactions"><button type="button" class="btn small outline" data-mem-add>Add a person</button></div>') }, memDesc('people'));
 }
 
 function memContextHTML(){
@@ -252,8 +252,8 @@ function memContextHTML(){
 
 function memBucketsHTML(){
   const list = memData.buckets;
-  if (!list.length) return { id: 'buckets', title: 'Buckets', wide: true, html: memDesc('buckets') + memEmpty('No buckets yet. Each bucket of the board gets its brief here.') };
-  return { id: 'buckets', title: 'Buckets', wide: true, html: memDesc('buckets') + list.map(b => {
+  if (!list.length) return Object.assign({ id: 'buckets', title: 'Buckets', wide: true, html: memEmpty('No buckets yet. Each bucket of the board gets its brief here.') }, memDesc('buckets'));
+  return Object.assign({ id: 'buckets', title: 'Buckets', wide: true, html: list.map(b => {
       const which = 'bucket:' + b.heading;
       let body;
       if (memEditing === which) {
@@ -269,7 +269,7 @@ function memBucketsHTML(){
       return '<article class="membucket" id="' + esc(memUniqueId('mem-bucket-' + memSlug(b.heading))) + '" data-mem-bucket="' + esc(b.heading) + '">' +
         '<div class="memhead"><h4>' + esc(b.name) + '</h4>' + edit + '</div>' + body +
       '</article>';
-    }).join('') };
+    }).join('') }, memDesc('buckets'));
 }
 
 /* The brief form that is open, copied into memBucketParts. */

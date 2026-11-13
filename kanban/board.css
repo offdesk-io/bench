@@ -3252,6 +3252,8 @@ body.signed-in #runAgentBtn{display:none !important}
 .spage__head{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:8px 0 16px; border-bottom:1px solid var(--tenon-stroke-default)}
 .spage__title{margin:0; font-size:var(--tenon-typography-size-2xl); font-weight:650; color:var(--tenon-text-default)}
 .spage__section{display:grid; grid-template-columns:1fr 3fr; gap:var(--tenon-dimension-300); padding-top:var(--tenon-dimension-600)}
+.spage__side{display:flex; flex-direction:column; gap:var(--tenon-dimension-050); min-width:0}
+.spage__desc{margin:0; max-width:32ch; font-size:var(--tenon-typography-size-sm); line-height:1.5; color:var(--tenon-text-faint)}
 .spage__label{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:650; text-transform:uppercase; letter-spacing:.06em; color:var(--tenon-text-subtle)}
 .spage__fields{display:flex; flex-direction:column; gap:14px; min-width:0; max-width:640px}
 .spage__fields--wide{max-width:none}
@@ -3267,7 +3269,6 @@ body.signed-in #runAgentBtn{display:none !important}
 .memhead h4, .memtext h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:600; color:var(--tenon-text-subtle)}
 .membucket{display:flex; flex-direction:column; gap:8px; padding:12px 0; border-top:1px solid var(--tenon-stroke-default)}
 .memtext{max-width:68ch}
-.memdesc{margin:0; max-width:68ch; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-subtle)}
 .memempty{margin:0; padding:14px 16px; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-faint); border:1px dashed var(--tenon-stroke-default); border-radius:var(--tenon-radius-md)}
 .memerr{margin:0; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-error)}
 .memactions{display:flex; align-items:center; flex-wrap:wrap; gap:8px}
