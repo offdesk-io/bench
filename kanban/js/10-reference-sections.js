@@ -608,8 +608,8 @@ function chainSection(items){
    drag-to-reorder on `rank:` was taken out: the
    automatic impact-against-effort score this entry originally asked for is
    what sorts it now, the same priorityScore() every other section already
-   ranks by. `rank:` itself stays on the task — the planning agent's own queue
-   still orders by it (agents/plan-agent/pick.py) — but this view no
+   ranks by. `rank:` itself stays on the task, written by hand or by an older
+   board, but this view no
    longer shows that number, since a task's scores can move without anyone
    re-ranking it and a stale rank next to a live sort would disagree with
    itself. What's on the row now is its position in the order shown. */
@@ -1751,7 +1751,7 @@ async function drainAttachQueue(){
    tick a review and approve its own work; a request from anyone else is refused
    and cleared, since waiting would not change the answer. A sub-task still
    waiting on an unfinished blocker is refused the same way, and one already
-   ticked is cleared without a word. And the Implement agent's tick is the one
+   ticked is cleared without a word. And the Implement tick is the one
    that moves the card, to Reviewing: a ticked Plan leaves it in Doing, because
    the work has only started.
 
@@ -1763,13 +1763,11 @@ async function drainAttachQueue(){
    Nothing approves a plan or a piece of work but the owner: a Review the plan
    or Review the work sub-task is assigned to the owner, so no agent's tick
    can reach it, and the board ticks none on the agent's behalf. The agent a
-   sub-task is assigned to is a bucket's agent ("Personal family agent"), or
-   one of the two old agents on a task handed over before buckets had their
-   own. */
+   sub-task is assigned to is a bucket's agent ("Personal family agent"). */
 
-/* The other request on the queue: hand a task over. The Plan agent leaves one
+/* The other request on the queue: hand a task over. The bucket agents leave one
    for a task carrying `[to::]` an agent with none of the sub-tasks a handover
-   lays out (pick.unhanded() in agents/plan-agent/pick.py), which is how a tag
+   lays out (unhanded() in agents/bucket-agent/bucket_work.py), which is how a tag
    written straight into the file becomes a real handover rather than a card that
    looks delegated with nobody working it. It is done by handOver(), the same
    function the drawer's Delegate to calls, so the card gets exactly what it would
@@ -1895,7 +1893,7 @@ async function drainTickQueueOnce(){
       }
     }
     dealt.push(it.id);
-    if ((who === 'Implement agent' || /-implement$/.test(f.slug || '')) && !t.done) {
+    if (/-implement$/.test(f.slug || '') && !t.done) {
       const cur = locate(t.id);
       if (cur && cur.tier.name !== WAIT_COL && cur.tier.name !== DONE_COL) {
         cur.tier.tasks.splice(cur.index, 1);
@@ -2090,7 +2088,7 @@ function briefKeyFor(t){
   return t.stableId || t.title;
 }
 
-/* A cached briefing, written by agents/plan-agent/brief.py — direction,
+/* A cached briefing, written by agents/bucket-agent/brief.py — direction,
    what's done, what's still needed — read exactly as cached, never
    re-validated here. Empty for a task never briefed yet. */
 function taskBriefing(t){

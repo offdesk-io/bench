@@ -44,10 +44,10 @@ function renameBucket(b, name){
   b.raw = null;
   // bucketFilter is held by name, so a toggled-on tab has to follow it.
   if (state.bucketFilter.has(was)) { state.bucketFilter.delete(was); state.bucketFilter.add(clean); }
-  /* A rename must not move the bucket's brief, its folder or its planner. The
+  /* A rename must not move the bucket's brief, its folder or its agent. The
      stream is fixed when a bucket is created and pinned in buckets/README.md,
      so this moves that row onto the new heading and changes nothing else on
-     disk — without it, `bucket_stream()` would slugify the new heading and the
+     disk — without it, `stream_of()` (core/bucket_agents.py) would slugify the new heading and the
      bucket would silently acquire a stream with no brief behind it. */
   scaffoldBucket(clean, { was });
   markDirty(); refreshView();
@@ -529,8 +529,8 @@ function keepBriefMarker(wasEmpty, parts){
 }
 
 /* The brief behind a bucket: `data/<dataset>/buckets/<stream>/<stream>.md`,
-   the file both planning agents and the implementing agent read for what a
-   bucket's work actually is. The editor above renames, colours, reorders and
+   the file that defines the bucket's agent and says what the bucket's work
+   actually is. The editor above renames, colours, reorders and
    deletes, and until now touched none of it — the file existed only to
    someone who opened it outside the board.
 
@@ -564,10 +564,8 @@ async function openBucketBrief(bucketName, back){
   briefWasEmpty = !brief.exists || !brief.filled;
 
   const marker = brief.marker || '';
-  /* Three things worth knowing before typing, and only when each is true: a
-     brief that does not exist yet, one that is still the untouched template,
-     and a bucket whose heading is mapped to nothing — the last is the one
-     that explains why two buckets can open the same file. */
+  /* Two things worth knowing before typing, and only when each is true: a
+     brief that does not exist yet, and one that is still the untouched template. */
   const notes =
     (brief.exists
       ? ''
@@ -576,11 +574,6 @@ async function openBucketBrief(bucketName, back){
     (brief.exists && !brief.filled
       ? '<p>This one still carries <code>' + esc(marker) + '</code>, so no agent is ' +
         'pointed at it. Filling in a section clears it automatically.</p>'
-      : '') +
-    (brief.fallback
-      ? '<p>This bucket’s heading is mapped to the <strong>' + esc(brief.stream) +
-        '</strong> fallback rather than a stream of its own, so this is the ' +
-        'catch-all brief — every unmapped bucket reads it.</p>'
       : '');
 
   const sectionFields = BRIEF_ALL.map((name, i) =>

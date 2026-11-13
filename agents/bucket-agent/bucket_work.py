@@ -176,7 +176,7 @@ def work(text, known, day=None):
 def in_order(tasks, today=None):
     """The list's own order of work: the headline first, then the soonest date,
     then impact against effort, highest first. Bucket is never a key, so
-    buckets interleave on merit (pick.in_order() in the Plan agent, unchanged)."""
+    buckets interleave on merit, as they did for the Plan agent before it."""
     today = today or dt.date.today()
 
     def sort_key(t):

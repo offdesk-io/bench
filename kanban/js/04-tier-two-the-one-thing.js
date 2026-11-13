@@ -524,88 +524,34 @@ function bucketAgentInHours(){
   const data = bucketAgentsNow();
   return data.on !== false && data.hours.indexOf(new Date().getHours()) > -1;
 }
-const LEGACY_AGENTS = ['Plan agent', 'Implement agent'];
-function legacyAgent(to){ return LEGACY_AGENTS.indexOf(agentOf(to)) > -1 ? agentOf(to) : ''; }
-
-/* ---- Handing a task to an agent, and the two reviews that follow ----
-   Handing a task over is the owner's act, and it becomes sub-tasks on the card rather than
-   a column of its own. To the Plan agent it is four, each blocked by the one
-   before: Plan (Plan agent), Review the plan (the owner), Implement (Implement agent),
-   Review the work (the owner). Straight to the Implement agent, because the task
-   already says how it is to be done, it is the last two. The board mints the
-   slugs from the task's id and the step (`ab12cd-plan`, `ab12cd-plan-review`,
+/* ---- Handing a task to its bucket's agent, and the two reviews that follow ----
+   Handing a task over is the owner's act, and it becomes sub-tasks on the card
+   rather than a column of its own. A plan-first bucket's agent gets four, each
+   blocked by the one before: Plan (the agent), Review the plan (the owner),
+   Implement (the agent), Review the work (the owner). A free-rein one goes
+   straight to the work, so it gets the last two. The board mints the slugs
+   from the task's id and the step (`ab12cd-plan`, `ab12cd-plan-review`,
    `ab12cd-implement`, `ab12cd-work-review`) so they are unique across the file
    and readable, and gives every sub-task an id of its own for an agent to name
-   when it asks for a tick. The card moves to Doing if it was in To do or Backlog.
-   `[to::]` on the task itself records who has it. */
+   when it asks for a tick. The card moves to Doing if it was in To do or
+   Backlog. `[to::]` on the task itself records who has it. A bucket whose
+   agent is not ready takes nothing. */
 const HANDOVER_STEPS = {
-  'plan':        { title: 'Plan',            to: 'Plan agent' },
+  'plan':        { title: 'Plan' },
   'plan-review': { title: 'Review the plan', to: OWNER_NAME },
-  'implement':   { title: 'Implement',       to: 'Implement agent' },
+  'implement':   { title: 'Implement' },
   'work-review': { title: 'Review the work', to: OWNER_NAME }
 };
-/* ---- How much of an agent's work waits on the owner: its handover level ----
-   Set per agent, per list, on the agent's card in the Agents tab.
-     off         the agent is not offered under Delegate to and takes nothing.
-     plan-first  the four sub-tasks above: the owner reads and approves the plan
-                 before the work starts. The Plan agent's default.
-     just-do-it  the same four, but Review the plan carries a `Handover: just
-                 do it` note, and when the plan lands the board ticks that
-                 review for the owner (drainTickQueue(), 10-reference-sections.js),
-                 so the work goes on to Implement and the owner meets it at Review the
-                 work, with the plan still there to read. A plan that folded,
-                 asking the owner something, still waits for the owner.
-   The Implement agent has no plan of its own, so it is just do it or off.
-   Read at the moment of handover and written onto the card, so changing the
-   level later leaves the tasks already handed over as they were. Kept in
-   localStorage like the drawer's width: it is how the owner likes to work with an
-   agent, not a fact about any task. */
-const HANDOVER_LEVELS = {
-  'Plan agent':      ['plan-first', 'just-do-it', 'off'],
-  'Implement agent': ['just-do-it', 'off']
-};
-const HANDOVER_LEVEL_LABEL = { 'plan-first': 'Plan first', 'just-do-it': 'Just do it', 'off': 'Off' };
-const JUST_DO_IT_NOTE = '- Handover: just do it';
-function handoverLevelsKey(){ return 'bench-handover:' + (state.dataset || ''); }
-function handoverLevels(){
-  try { const got = JSON.parse(localStorage.getItem(handoverLevelsKey()) || '{}'); return got && typeof got === 'object' ? got : {}; }
-  catch (err) { return {}; }
-}
-function handoverLevel(agent){
-  const allowed = HANDOVER_LEVELS[agentOf(agent)];
-  if (!allowed) return '';
-  const saved = handoverLevels()[agentOf(agent)];
-  return allowed.indexOf(saved) > -1 ? saved : allowed[0];
-}
-function setHandoverLevel(agent, level){
-  const allowed = HANDOVER_LEVELS[agentOf(agent)];
-  if (!allowed || allowed.indexOf(level) < 0) return false;
-  const all = handoverLevels();
-  all[agentOf(agent)] = level;
-  try { localStorage.setItem(handoverLevelsKey(), JSON.stringify(all)); } catch (err) { return false; }
-  return true;
-}
-/* Whether a Review the plan sub-task was laid out to approve itself. */
-function justDoIt(t, line){
-  return stepNoteText(t, line).split('\n').some(l => l.trim().toLowerCase() === JUST_DO_IT_NOTE.toLowerCase());
-}
 
-/* Handing a task to its bucket's agent: plan-first lays out Plan (the bucket
-   agent), Review the plan (the owner), Implement (the bucket agent) and Review
-   the work (the owner), each blocked by the one before; free-rein lays out
-   Implement and Review the work. A bucket whose agent is not ready takes
-   nothing. The two old agents still hand over the way they did (see
-   handOverLegacy), for a tag already written or a request already queued. */
-function handOver(t, agent, level){
-  if (legacyAgent(agent)) return handOverLegacy(t, agent, level);
+function handOver(t, agent){
   const a = bucketAgentNamed(agent);
   if (state.locked || !a || !a.ready) return false;
   return layOutHandover(t, a.name, a.mode === 'plan-first'
     ? ['plan', 'plan-review', 'implement', 'work-review']
-    : ['implement', 'work-review'], { plan: a.name, implement: a.name });
+    : ['implement', 'work-review']);
 }
 
-function layOutHandover(t, agent, kinds, doers, level){
+function layOutHandover(t, agent, kinds){
   t.to = agent;
   t.dirty = true;
   /* Already laid out when a sub-task carries the slug a handover makes. An
@@ -621,13 +567,10 @@ function layOutHandover(t, agent, kinds, doers, level){
   kinds.forEach(kind => {
     const id = mintId(taken); taken.add(id);
     const slug = t.stableId + '-' + kind;
-    const to = doers[kind] || HANDOVER_STEPS[kind].to;
+    const to = HANDOVER_STEPS[kind].to || agent;
     const f = { done: false, bold: false, title: HANDOVER_STEPS[kind].title, to,
                 slug, blockedBy: before ? [before] : [], stableId: id, body: [], dirty: true, extra: [] };
     t.body.push(indent + serializeTask(f)[0]);
-    /* Written as the review's own note, the way setStepNoteText() indents one,
-       and not through it: that marks an undo point half way through a handover. */
-    if (kind === 'plan-review' && level === 'just-do-it') t.body.push(indent + '  ' + JUST_DO_IT_NOTE);
     before = slug;
   });
   const loc = locate(t.id);
@@ -638,15 +581,6 @@ function layOutHandover(t, agent, kinds, doers, level){
   return true;
 }
 
-function handOverLegacy(t, agent, level){
-  if (state.locked || !legacyAgent(agent)) return false;
-  agent = legacyAgent(agent);
-  level = level || handoverLevel(agent);
-  if (level === 'off') return false;
-  return layOutHandover(t, agent, agent === 'Plan agent'
-    ? ['plan', 'plan-review', 'implement', 'work-review']
-    : ['implement', 'work-review'], { plan: 'Plan agent', implement: 'Implement agent' }, level);
-}
 /* Where a card goes for the state of its sub-tasks, and only these two ways:
    Implement ticked puts it in Reviewing, and unticked by a send-back puts it
    back in Doing. A ticked Plan leaves it where it is. */
@@ -691,7 +625,7 @@ function sendBack(t, line, why){
     const now = stepNoteText(t, prev.line);
     setStepNoteText(t, prev.line, (now ? now + '\n' : '') + '- feedback: ' + said.replace(/\n+/g, ' '));
   }
-  if (/-implement$/.test(back.slug || '') || agentOf(back.to) === 'Implement agent') moveCardTo(t, DOING_TIER);
+  if (/-implement$/.test(back.slug || '')) moveCardTo(t, DOING_TIER);
   markDirty();
   return true;
 }

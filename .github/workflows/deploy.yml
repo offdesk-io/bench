@@ -70,10 +70,9 @@ jobs:
         run: |
           set -e
           for t in core/test_*.py kanban/test_*.py \
-                   agents/plan-agent/test_planning_agent.py \
-                   agents/implement-agent/test_implement_agent.py \
                    agents/bucket-agent/test_bucket_agent.py \
                    agents/pa_agent/skills/pa/scripts/test_check_todo.py \
+                   agents/pa_agent/skills/pa/scripts/test_bucket_handover_migration.py \
                    agents/pa_agent/skills/pa/scripts/test_pa_save.py \
                    companion/test_companion.py \
                    scripts/test_deploy_forced.py \

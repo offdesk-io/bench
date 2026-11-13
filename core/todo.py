@@ -4,8 +4,8 @@
 The board's own reader is the JavaScript in kanban/index.html, and it stays the
 authority on writing the file: only the board and the pa-* skills ever change a
 task. This module is the read-only half of the same knowledge, for the things
-that are not a browser tab — the desktop companion in companion/, the nightly
-agent in agents/plan-agent/, the PA's consistency checker, and anything else later
+that are not a browser tab — the desktop companion in companion/, the bucket
+agents in agents/bucket-agent/, the PA's consistency checker, and anything else later
 that needs to know what is due without opening the board.
 
 It lives in core/ rather than beside the board because of that list. It sat in
@@ -106,7 +106,7 @@ class Task:
                  "to", "theme", "urgent", "week", "doing", "slug", "blocked_by", "rank",
                  "tlrank", "headline", "chat", "repeat", "stable_id",
                  "cancelled", "archived", "created_by", "edited_by", "extra",
-                 "body", "raw", "bucket", "column", "plan_sub")
+                 "body", "raw", "bucket", "column")
 
     def __init__(self):
         self.done = False
@@ -139,9 +139,6 @@ class Task:
         self.raw = ""
         self.bucket = ""
         self.column = ""
-        # Set by the planning agent's picker, never by the parser: the id of the
-        # Plan agent's sub-task this task is being planned for, or "".
-        self.plan_sub = ""
 
     def __repr__(self):
         return "<Task %r %s %s>" % (self.title, self.column, self.due or "-")
@@ -280,7 +277,7 @@ def parse_doc(text):
         # `in_buckets` is load-bearing and was missing for a few hours on 5 Sep
         # 2026. Without it this breaks on `## How this works`, the first heading
         # in the file, and every Python reader of the list — the companion, the
-        # planning agent, the checker — quietly saw an empty document. The board
+        # agents, the checker — quietly saw an empty document. The board
         # was never affected: parseDoc skips everything before the first
         # numbered bucket into doc.pre, and this is the line that ports that.
         if in_buckets and line.startswith("## "):
@@ -542,7 +539,7 @@ def occurrence_after(rep, date):
 # ---------------------------------------------------------------------------
 # Tier one: impact against effort
 #
-# The port of the same three names in core/todo.js. agents/plan-agent/pick.py needs the same
+# The port of the same three names in core/todo.js. agents/bucket-agent/bucket_work.py needs the same
 # answer to order its queue, and a second copy of "high is 3" would be the drift
 # this pair of files exists to stop.
 # ---------------------------------------------------------------------------
@@ -1755,7 +1752,7 @@ def stamp_authors(old_text, new_text, who, credits=None, write_tags=None):
     by `who`, and a task counts as changed when anything on its card did; every
     other keeps what the file says.
 
-    `who` is an email, an agent's name as a slug (`implement-agent`), `pa` for
+    `who` is an email, an agent's name as a slug (`personal-family-agent`), `pa` for
     an edit made to the file outside the server, or "" for a tab on a board
     nobody signs in to. `credits` names a different author for some tasks,
     {task id: {"who", "name"}}: a card an agent's request changed in this save,

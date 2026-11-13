@@ -89,7 +89,7 @@ try {
     window.__brief = {
       bucket: '', stream: 'people', path: 'data/demo/buckets/people/people.md',
       text: '# People\\n\\nThe brief on disk.\\n', exists: true, filled: true,
-      marker: '<!-- NOT FILLED IN YET -->', fallback: false
+      marker: '<!-- NOT FILLED IN YET -->', ready: false
     };
     window.fetch = (url, opts) => {
       const method = (opts && opts.method) || 'GET';
@@ -231,7 +231,7 @@ try {
 
   // --- a bucket with no brief yet ------------------------------------------
   const fresh = await evalJS(`(async () => {
-    window.__brief = { ...window.__brief, exists: false, filled: false, fallback: true,
+    window.__brief = { ...window.__brief, exists: false, filled: false,
       stream: 'general', text: '# <Bucket name>\\n\\n<!-- NOT FILLED IN YET -->\\n' };
     document.querySelector('.bkrow [data-brief]').click();
     await new Promise(r => setTimeout(r, 120));
@@ -240,12 +240,12 @@ try {
   })()`)
   check('a brief with no file says so', /No brief yet/.test(fresh.prose), fresh.prose.slice(0, 120))
   check('and opens with an empty summary field', fresh.summary === '', JSON.stringify(fresh.summary))
-  check('a fallback bucket says which brief it is really editing',
-    /fallback/.test(fresh.prose), fresh.prose.slice(0, 200))
+  check('and says nothing about a planner or a fallback brief',
+    !/fallback|planner/.test(fresh.prose), fresh.prose.slice(0, 200))
 
   // --- filling in a section clears the empty marker automatically ----------
   const cleared = await evalJS(`(async () => {
-    window.__brief = { ...window.__brief, exists: false, filled: false, fallback: false,
+    window.__brief = { ...window.__brief, exists: false, filled: false,
       stream: 'people', text: '# People\\n\\n\\n\\n<!-- NOT FILLED IN YET -->\\n\\n' +
         '## The processes I run in this bucket\\n\\n## What already does it\\n\\n' +
         '## Who is involved\\n\\n## What good looks like here\\n' };
@@ -275,7 +275,7 @@ try {
     '## What it must never touch\n\nPayroll.\n\n## What already does it\n\nNothing.\n\n' +
     '## Who is involved\n\nAlex.\n\n## What good looks like here\n\nShipped.\n'
   const agentSheet = await evalJS(`(async () => {
-    window.__brief = { ...window.__brief, exists: true, filled: true, fallback: false, text: ${JSON.stringify(newFormat)} };
+    window.__brief = { ...window.__brief, exists: true, filled: true, text: ${JSON.stringify(newFormat)} };
     openBucketEditor();
     await new Promise(r => setTimeout(r, 120));
     document.querySelector('.bkrow [data-brief]').click();

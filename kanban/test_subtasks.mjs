@@ -82,9 +82,9 @@ try {
       '# To-do', '', '## 1. Tasks', '',
       '### To do', '',
       '- [ ] **Write the handover** \`id:ab12cd\` [impact:: high] [effort:: M] [due:: 2026-09-30] \`week\`',
-      '  - [x] Plan [to:: Plan agent] \`done:2026-09-21\` \`#ab12cd-plan\` \`id:aa0001\`',
+      '  - [x] Plan [to:: Demo tasks agent] \`done:2026-09-21\` \`#ab12cd-plan\` \`id:aa0001\`',
       '  - [ ] Review the plan [to:: Morgan] \`#ab12cd-plan-review\` \`blocked-by:ab12cd-plan\` \`id:aa0002\`',
-      '  - [ ] Implement [to:: Implement agent] \`doing\` [due:: 2026-09-25] \`#ab12cd-implement\` \`blocked-by:ab12cd-plan-review\` \`id:aa0003\`',
+      '  - [ ] Implement [to:: Demo tasks agent] \`doing\` [due:: 2026-09-25] \`#ab12cd-implement\` \`blocked-by:ab12cd-plan-review\` \`id:aa0003\`',
       '  - [ ] Review the work [to:: Morgan] \`#ab12cd-work-review\` \`blocked-by:ab12cd-implement\` \`id:aa0004\`',
       ''
     ].join('\\n'), 'demo.md', {});
@@ -99,12 +99,12 @@ try {
   check('the four sub-tasks are read, each with the id written on its line',
     await evalJS(`__steps.map(s => s.stableId).join(',')`) === 'aa0001,aa0002,aa0003,aa0004')
   check('the assignee is read off each one', await evalJS(`__steps.map(s => s.to).join('|')`) ===
-    'Plan agent|Morgan|Implement agent|Morgan')
+    'Demo tasks agent|Morgan|Demo tasks agent|Morgan')
   check('Doing is the one state tag, and only the one carrying it has it',
     await evalJS(`__steps.map(s => s.doing ? 'doing' : '-').join(',')`) === '-,-,doing,-')
   check('the drawer\'s lighter reading of a step carries them too', await evalJS(`
     (() => { const s = subSteps(__parent); return s.map(x => x.stableId + ':' + x.to + ':' + (x.doing ? 'doing' : '-')).join(','); })()`) ===
-    'aa0001:Plan agent:-,aa0002:Morgan:-,aa0003:Implement agent:doing,aa0004:Morgan:-')
+    'aa0001:Demo tasks agent:-,aa0002:Morgan:-,aa0003:Demo tasks agent:doing,aa0004:Morgan:-')
   check('the tick is the state Done', await evalJS(`__steps.map(s => s.done ? 'x' : '.').join('')`) === 'x...')
 
   /* ---- blocked-by, between sub-tasks ---- */
@@ -241,10 +241,10 @@ try {
   await evalJS(`(() => {
     const real = window.__realFetch || (window.__realFetch = window.fetch);
     window.__queue = [
-      { id: 'q1', sub: 'p00001', by: 'Plan agent', note: 'plan written' },
-      { id: 'q2', sub: 'i00001', by: 'Implement agent' },
-      { id: 'q3', sub: 'r00001', by: 'Plan agent' },
-      { id: 'q4', sub: 'nope00', by: 'Plan agent' }
+      { id: 'q1', sub: 'p00001', by: 'Demo tasks agent', note: 'plan written' },
+      { id: 'q2', sub: 'i00001', by: 'Demo tasks agent' },
+      { id: 'q3', sub: 'r00001', by: 'Demo tasks agent' },
+      { id: 'q4', sub: 'nope00', by: 'Demo tasks agent' }
     ];
     window.__posted = [];
     window.fetch = (u, o) => {
@@ -257,9 +257,9 @@ try {
       '# To-do', '', '## 1. Tasks', '',
       '### Doing', '',
       '- [ ] **Handed over** \`id:hh0001\` [impact:: high]',
-      '  - [ ] Plan [to:: Plan agent] \`doing\` \`#hh-plan\` \`id:p00001\`',
+      '  - [ ] Plan [to:: Demo tasks agent] \`doing\` \`#hh-plan\` \`id:p00001\`',
       '  - [ ] Review the plan [to:: Morgan] \`#hh-review\` \`blocked-by:hh-plan\` \`id:r00001\`',
-      '  - [ ] Implement [to:: Implement agent] \`#hh-impl\` \`blocked-by:hh-review\` \`id:i00001\`',
+      '  - [ ] Implement [to:: Demo tasks agent] \`#hh-implement\` \`blocked-by:hh-review\` \`id:i00001\`',
       '',
       '### Reviewing', '',
       ''
@@ -280,44 +280,47 @@ try {
     const t = state.doc.buckets[0].tiers.flatMap(x => x.tasks).find(t => t.title === 'Handed over');
     const at = t.body.findIndex(l => l.includes('r00001'));
     const f = readSub(t, at); f.done = true; f.doneOn = '2026-09-22'; writeSub(t, at, f);
-    window.__queue = [{ id: 'q5', sub: 'i00001', by: 'Implement agent' }];
+    window.__queue = [{ id: 'q5', sub: 'i00001', by: 'Demo tasks agent' }];
     window.__posted = [];
   })()`)
   await evalJS(`drainTickQueue()`)
   await new Promise(r => setTimeout(r, 300))
-  check('once its blocker is ticked, the Implement agent\'s tick is applied', /\[x\] Implement/.test(await line('i00001')), await line('i00001'))
+  check('once its blocker is ticked, the agent\'s Implement tick is applied', /\[x\] Implement/.test(await line('i00001')), await line('i00001'))
   check('and it is the one that moves the card, into Reviewing', await evalJS(`locate(state.doc.buckets[0].tiers.flatMap(x => x.tasks).find(t => t.title === 'Handed over').id).tier.name`) === 'Reviewing')
   await evalJS(`state.locked = true`)
 
-  /* ---- the handover level ---- */
+  /* ---- a plan landing waits for the owner ---- */
 
-  await evalJS(`(() => {
+  await evalJS(`(async () => {
     load([
       '# To-do', '', '## 1. Tasks', '',
       '### To do', '',
-      '- [ ] **Just do it** \`id:jj0001\`',
+      '- [ ] **Typed** \`id:jj0001\`',
       '- [ ] **Folded** \`id:ff0001\`',
       '- [ ] **Not offered** \`id:nn0001\`',
       ''
     ].join('\\n'), 'demo.md', {});
     state.locked = false;
-    try { localStorage.removeItem(handoverLevelsKey()); } catch (e) {}
+    /* Set once load()'s own ask for the bucket agents has landed, which would otherwise replace it. */
+    await bucketAgentsLoaded();
+    bucketAgentData = { list: state.dataset || '', columns: {}, on: true, hours: [], buckets: [
+      { bucket: 'tasks', name: 'Demo tasks agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] },
+      { bucket: 'tasks', name: 'Demo unready agent', mode: 'plan-first', start: 'on-assign', ready: false, missing: ['mode'] }] };
   })()`)
   const task = title => `state.doc.buckets[0].tiers.flatMap(x => x.tasks).find(t => t.title === '${title}')`
-  check('the Plan agent hands over at Plan first, and the Implement agent at Just do it, until he says otherwise',
-    await evalJS(`handoverLevel('Plan agent') + ' ' + handoverLevel('Implement agent')`) === 'plan-first just-do-it')
-  check('an old-style handover at Just do it still lays out the four, with the plan review noted', await evalJS(`(() => {
-    const t = ${task('Just do it')};
-    if (!handOver(t, 'Plan agent', 'just-do-it')) return false;
-    return subSteps(t).length === 4;
-  })()`))
+  const four = await evalJS(`(() => {
+    const t = ${task('Typed')};
+    if (!handOver(t, 'Demo tasks agent')) return 'not handed over';
+    return subSteps(t).map(s => s.clean + ':' + s.to).join('|');
+  })()`)
+  check('a plan-first bucket agent gets the four sub-tasks', four === 'Plan:Demo tasks agent|Review the plan:' + await evalJS(`OWNER_NAME`) + '|Implement:Demo tasks agent|Review the work:' + await evalJS(`OWNER_NAME`), four)
   await evalJS(`(() => {
-    const j = ${task('Just do it')}, f = ${task('Folded')};
-    handOver(f, 'Plan agent', 'just-do-it');
+    const j = ${task('Typed')}, f = ${task('Folded')};
+    handOver(f, 'Demo tasks agent');
     const plan = t => subSteps(t).find(s => s.slug === t.stableId + '-plan').stableId;
     window.__queue = [
-      { id: 'q6', sub: plan(j), by: 'Plan agent', plan: 'jj0001-just-do-it.md', type: 'data' },
-      { id: 'q7', sub: plan(f), by: 'Plan agent', plan: 'ff0001-folded.md' }
+      { id: 'q6', sub: plan(j), by: 'Demo tasks agent', plan: 'jj0001-typed.md', type: 'data' },
+      { id: 'q7', sub: plan(f), by: 'Demo tasks agent', plan: 'ff0001-folded.md' }
     ];
     window.__posted = [];
   })()`)
@@ -325,17 +328,12 @@ try {
   await new Promise(r => setTimeout(r, 300))
   const review = title => evalJS(`(() => { const t = ${task(title)}; const rv = subSteps(t).find(s => s.slug === t.stableId + '-plan-review');
     return (rv.done ? 'ticked' : 'open') + ' | ' + stepNoteText(t, rv.line).replace(/\\n/g, ' / '); })()`)
-  check('when its plan lands, Review the plan stays open for him whatever the level', /^open \| .*- Plan: plans\/jj0001-just-do-it\.md/.test(await review('Just do it')), await review('Just do it'))
-  check('and nothing says it was approved on arrival', !/Approved:/.test(await review('Just do it')), await review('Just do it'))
+  check('when its plan lands, Review the plan stays open for him whatever its type', /^open \| .*- Plan: plans\/jj0001-typed\.md/.test(await review('Typed')), await review('Typed'))
+  check('and nothing says it was approved on arrival', !/Approved:/.test(await review('Typed')), await review('Typed'))
   check('a plan with no type waits for him too', /^open \|/.test(await review('Folded')), await review('Folded'))
-  check('an old agent set to Off takes no handover, and neither old agent is offered under Delegate to', await evalJS(`(() => {
-    setHandoverLevel('Plan agent', 'off');
-    const html = delegateSelectHTML('', '');
+  check('an agent that is not ready, or a retired name, takes no handover', await evalJS(`(() => {
     const t = ${task('Not offered')};
-    const ok = !html.includes('value="Plan agent"') && !html.includes('value="Implement agent"') &&
-      handOver(t, 'Plan agent') === false && !subSteps(t).length;
-    localStorage.removeItem(handoverLevelsKey());
-    return ok;
+    return handOver(t, 'Demo unready agent') === false && handOver(t, 'Plan agent') === false && !subSteps(t).length;
   })()`))
   await evalJS(`state.locked = true`)
 

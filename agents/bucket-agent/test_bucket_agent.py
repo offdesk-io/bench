@@ -794,9 +794,9 @@ def test_wiring():
     check("every command points at run.py, the wake included",
           (spec.get("wake"), all(v[1] == "run.py" for v in spec.values() if isinstance(v, list))),
           (["python3", "run.py", "--wake"], True))
-    for old in ("plan-agent", "implement-agent"):
-        spec = json.load(open(os.path.join(ROOT, "agents", old, "agent.json"), encoding="utf-8"))
-        check("the retired %s is no longer woken" % old, "wake" in spec, False)
+    check("the Plan and Implement agents are gone, so nothing else in agents/ is woken",
+          sorted(n for n in os.listdir(os.path.join(ROOT, "agents"))
+                 if os.path.isfile(os.path.join(ROOT, "agents", n, "agent.json"))), ["bucket-agent"])
     state = core.Agent(hooks, HERE)
     check("the runner's state lives under the data root", state.state_dir.startswith(DATA), True)
     card = hooks.card({"id": "t"}, {"problems": [], "detail": {"groups": []}})

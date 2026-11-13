@@ -49,7 +49,7 @@ function delegateSelectHTML(value, dis, id, bucketAgent){
      offered (`bucketAgent`, from bucketAgentOfTask()). One whose brief is not
      filled in yet is listed all the same, saying it is not set up and what is
      missing, so the owner sees why there is nothing to pick. An agent the task
-     already names, a bucket's or one of the two old ones, stays as written. */
+     already names stays as written. */
   const curAgent = agentOf(cur);
   const agents = [], offered = [];
   if (curAgent) { agents.push(cur); offered.push(curAgent); }
@@ -1431,12 +1431,10 @@ function openDrawer(id, focusTitle){
     }
     /* Choosing an agent is the handover: the sub-tasks are laid out on the card
        and it moves to Doing. See handOver() in 04-tier-two-the-one-thing.js.
-       A bucket agent starts itself (on assignment or on its schedule); only the
-       two old agents are started from here. */
+       The agent starts itself, on assignment or on its schedule. */
     if (agentOf(e.target.value)) {
       const laid = handOver(t, e.target.value);
-      const to = agentOf(e.target.value), old = legacyAgent(to);
-      if (laid && old) queueAgentStart(old === 'Plan agent' ? 'plan' : 'implement');
+      const to = agentOf(e.target.value);
       touch();
       openDrawer(id);
       if (laid) {
@@ -1843,11 +1841,6 @@ function openSubtaskDrawer(found){
       $('#f-approve').onclick = () => {
         const msg = approveReview(t, line);
         if (msg) { showToast(msg, 'blocked'); return; }
-        /* An approved plan is the Implement agent's cue, when it is the old one; a bucket agent takes its own. */
-        if (kind === 'plan') {
-          const doer = subSteps(t).find(x => x.slug === t.stableId + '-implement');
-          if (doer && legacyAgent(doer.to)) queueAgentStart('implement');
-        }
         subSendBackFor = null; refreshView(); again();
       };
       $('#f-sendback').onclick = () => { subSendBackFor = subSendBackFor === subId ? null : subId; again(); };

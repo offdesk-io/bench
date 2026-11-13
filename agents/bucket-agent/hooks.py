@@ -2,9 +2,8 @@
 
 `PACKAGES/agents-engine/RUNNER.md` owns the wake, the lock, the budget, the
 ledger and the daily log. What is here is which work a bucket's agent takes,
-what it is asked, and the guards around what comes back. Built from the Plan
-agent's hooks (agents/plan-agent/) and the Implement agent's
-(agents/implement-agent/), which this replaces.
+what it is asked, and the guards around what comes back. Built from the hooks
+of the Plan and Implement agents it replaced.
 
 - **One target per board.** Every list with a todo.md. `PLANNING_DATASET` is
   set for whichever list a hook is answering about, so paths.py resolves
@@ -657,7 +656,7 @@ def options(item, target):
         return {"tools": list(READ_TOOLS), "disallowed": ["Bash", "Write", "Edit", "NotebookEdit"],
                 "dirs": plans.extra_dirs(target["id"]) + plans.project_dirs(item["task"]),
                 "budget": plans.BUDGET_PER_TASK, "timeout": plans.TASK_TIMEOUT, "cwd": paths.ROOT,
-                "model": settings.planner_model()}
+                "model": settings.model_for("plan")}
     base = {"budget": IMPLEMENT_BUDGET, "timeout": IMPLEMENT_TIMEOUT, "disallowed": ["Bash", "NotebookEdit"],
             "model": settings.model_for("implement")}
     if item["type"] == "code":

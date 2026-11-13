@@ -15,14 +15,14 @@
    here touches todo.md.
    ========================================================================= */
 
-/* The last read of /planning-agent.json, kept for the run-cost fold in the sheet.
+/* The last read of /bucket-agent.json, kept for the run-cost fold in the sheet.
    It used to be polled while Plans was on screen; now it is read when the sheet
    opens, which is when anything shows it. */
 let lastNightAgent = null;
 
 async function readNightAgent(){
   try {
-    lastNightAgent = await getJSON('/planning-agent.json');
+    lastNightAgent = await getJSON('/bucket-agent.json');
     renderRunResults(lastNightAgent);
   } catch (err) { /* the fold stays as it was; the rest of the sheet does not need it */ }
 }

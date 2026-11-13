@@ -37,11 +37,9 @@ from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(_ROOT / "core"))
-sys.path.insert(0, str(_ROOT / "agents" / "plan-agent"))
 import bucket_agents  # noqa: E402
 import settings  # noqa: E402
 import todo  # noqa: E402
-import plan  # noqa: E402
 
 LEGACY = todo.AGENT_NAMES
 TO_TAG = re.compile(r"\[\s*to\s*::\s*([^\]]*?)\s*\]")
@@ -55,11 +53,6 @@ def _retag(line, name):
     return TO_TAG.sub("[to:: %s]" % name, line, count=1)
 
 
-def _streams(dataset, root):
-    readme = os.path.join(bucket_agents.buckets_dir(dataset, root), "README.md")
-    return plan.stream_map(readme)
-
-
 def migrate(dataset, root=None):
     """[{task, id, stream, agent, mode, status, reason, changes}] for each open
     task still handed to an old agent. `changes` is [(old line, new line or
@@ -68,7 +61,6 @@ def migrate(dataset, root=None):
     bucket_agents.bucket_names(dataset, root)  # refuses a list that is not one
     with open(os.path.join(root, dataset, "todo.md"), encoding="utf-8") as fh:
         text = fh.read()
-    mapping = _streams(dataset, root)
     known = set(bucket_agents.bucket_names(dataset, root))
     out = []
     for task in todo.parse_doc(text):
@@ -84,8 +76,7 @@ def migrate(dataset, root=None):
         legacy_subs = [s for s in subs if _legacy(s[2].to)]
         if not legacy_subs and not _legacy(task.to):
             continue
-        key = plan.bucket_slug(task.bucket)
-        stream = mapping.get(key, key)
+        stream = bucket_agents.stream_of(dataset, task.bucket, root)
         item = {"task": task.title, "id": task.stable_id, "stream": stream, "agent": "",
                 "mode": "", "status": "skip", "reason": "", "changes": []}
         out.append(item)

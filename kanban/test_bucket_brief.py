@@ -65,12 +65,10 @@ def main():
     # at a temp folder is the whole of the isolation.
     server.dataset_dir = lambda name=None: tmp
     server.current_dataset = lambda: "brief-test"
-    # The planner lookup goes through agents/plan-agent/paths.py instead, so it
-    # is pointed at the same folder, with a People planner and nothing else.
-    server.planning_agent_plan.paths.DATA_ROOT = root
-    os.environ["PLANNING_DATASET"] = "brief-test"
+    # The heading-to-stream lookup (core/bucket_agents.py) reads the list's
+    # buckets/README.md under the data root, so that is the same folder.
+    server.DATA_ROOT = root
     os.makedirs(os.path.join(tmp, "buckets", "people"))
-    open(os.path.join(tmp, "buckets", "people", "brief-test-people-agent.md"), "w", encoding="utf-8").close()
 
     httpd = server.BoardHTTPServer(("127.0.0.1", 0), server.Handler)
     base = "http://127.0.0.1:%d" % httpd.server_address[1]
@@ -81,7 +79,7 @@ def main():
         code, body = request(base, "GET", "/bucket-brief.json?bucket=1.%20People")
         ok("a brief with no file answers 200", code == 200, "got %d" % code)
         got = json.loads(body)
-        ok("it resolves the stream through bucket_stream()", got["stream"] == "people",
+        ok("it resolves the stream through stream_of()", got["stream"] == "people",
            "got %r" % got.get("stream"))
         ok("and names the file the agents read",
            got["path"].endswith(os.path.join("people", "people.md")), got.get("path", ""))
@@ -89,17 +87,14 @@ def main():
         ok("and opens on the brief template", "## The processes I run in this bucket" in got["text"])
         ok("the template still carries the empty marker", got["marker"] in got["text"])
         ok("so nothing reads as filled", got["filled"] is False)
-        ok("and People is not the fallback", got["fallback"] is False)
+        ok("and its agent is not ready", got["ready"] is False)
+        ok("and the old planner flag is gone", "fallback" not in got)
 
-        # --- a bucket nobody has written a planner for --------------------------
-        # It used to fall back to the `general` stream and share `general`'s
-        # brief; since 17 Sep 2026 the heading is the stream, so it gets a brief
-        # of its own and what is missing is the planner that would read it.
+        # --- a heading the README does not name ---------------------------------
         code, body = request(base, "GET", "/bucket-brief.json?bucket=9.%20Nothing%20maps%20here")
         got = json.loads(body)
         ok("a new heading gets a stream of its own", got["stream"] == "nothing-maps-here",
            "got %r" % got.get("stream"))
-        ok("and the reply says no planner reads it yet", got["fallback"] is True)
 
         # --- the write ---------------------------------------------------------
         written = "# People\n\nWhat lands in this bucket.\n"
@@ -122,7 +117,7 @@ def main():
 
         # --- a brief still carrying the marker is not filled --------------------
         request(base, "PUT", "/bucket-brief",
-                json.dumps({"bucket": "1. People", "text": "# People\n\n" + server.planning_agent_plan.BRIEF_EMPTY + "\n"}),
+                json.dumps({"bucket": "1. People", "text": "# People\n\n" + server.bucket_agents.NOT_FILLED + "\n"}),
                 {"Content-Type": "application/json", "X-Board": "1"})
         code, body = request(base, "GET", "/bucket-brief.json?bucket=1.%20People")
         got = json.loads(body)

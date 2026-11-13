@@ -1,7 +1,7 @@
 # core
 
 The modules more than one thing here depends on. Nothing in this folder knows
-about the board, the companion or the planning agent; all three know about it.
+about the board, the companion or the bucket agents; all three know about it.
 
 | | |
 | --- | --- |
@@ -27,7 +27,7 @@ Every file here started inside the thing that first needed it, and outgrew it.
 `todo.py` lived in `kanban/` while the board was its only caller. That stopped
 being true when the companion imported it, and by the time the PA's checker
 and the planning agent did too, four things depended on a module filed inside one
-of them. `windows.py` lived in `agents/plan-agent/` for about six hours, until the board
+of them. `windows.py` lived in the old Plan agent's folder for about six hours, until the board
 wanted the same window history for its Schedule view. It is now read by the
 board more than by the agent it was written for. `todo.js` was 440 lines in
 the middle of `kanban/index.html`, which is a 9,500-line file — one caller, so by
@@ -47,16 +47,16 @@ problem. A reader that cannot write also cannot corrupt the file, which is worth
 more than the symmetry.
 
 **Policy.** Which tasks are *owed* is `companion/digest.py`'s question, which are
-worth *planning* is `agents/plan-agent/pick.py`'s, and both are answered on top of this
+worth an agent's run is `agents/bucket-agent/bucket_work.py`'s, and both are answered on top of this
 rather than inside it. The test is whether two callers would want the same
 answer: the `repeat:` grammar yes, "is this due today" no.
 
 **Anything about a dataset.** These modules take text and return facts. Where
-`todo.md` lives is the caller's problem — `agents/plan-agent/paths.py` for the agent,
+`todo.md` lives is the caller's problem — `agents/bucket-agent/paths.py` for the agents,
 `digest.todo_path()` for the companion, `server.py`'s own resolution for the
 board — because they genuinely disagree. The companion watches the list picked
 in its tray menu so switching the board for ten minutes does not change what
-gets notified tomorrow; the planning agent follows `data/.current`. `dataset.py`
+gets notified tomorrow; the bucket agents take one board at a time. `dataset.py`
 is the one exception: it answers which list is current, and nothing about what
 is in it.
 

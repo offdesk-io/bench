@@ -1,6 +1,6 @@
 """The guard around a bucket agent's files run: what it may leave behind.
 
-Copied from agents/implement-agent/guard.py. Any work that is not code may only
+Copied from the retired Implement agent's guard. Any work that is not code may only
 add new files to one project folder. The tool list already says so
 (hooks.options() grants Write and Edit on that folder alone), and this checks
 afterwards anyway, the same way the runner hashes todo.md rather than trusting

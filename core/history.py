@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """Each task's history: which specialist an owning agent brought in, and when.
 
-The PA, the Plan agent and the Implement agent own tasks. The bucket planners
-(`data/<dataset>/buckets/<stream>/<dataset>-<stream>-agent.md`) never do: they are called in
+The PA and the bucket agents own tasks. A specialist never does: it is called in
 to give a view or do part of the work and hand the task back. So the only
 record that one touched a task is a line here, in
 `data/<dataset>/history.jsonl`, one JSON object a line:
 
-    {"at": "2026-09-27T02:14:09", "about": "task:ab12cd", "by": "Plan agent",
+    {"at": "2026-09-27T02:14:09", "about": "task:ab12cd", "by": "Work ds agent",
      "kind": "call", "called": "work-people-agent", "bucket": "people",
      "did": "work", "note": "wrote the plan"}
 
@@ -19,7 +18,7 @@ lock: two at once give two whole lines.
 
 It is not todo.md, and writing here is not writing the list.
 
-    python3 core/history.py call ab12cd --by "Plan agent" --called work-ds-agent --did view
+    python3 core/history.py call ab12cd --by "Work ds agent" --called work-people-agent --did view
 """
 
 import argparse

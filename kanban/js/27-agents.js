@@ -9,7 +9,7 @@
    the standalone agents dashboard draw one hour track rather than two. It asks
    /agents-api/* (kanban/server.py), which runs agents-engine's routes over this
    repo's agents/ folder only, so the agents on it are the ones the board hands
-   work to (the old Plan and Implement agents are filtered out below). Every change goes through the agent's own `apply` command; nothing
+   work to. Every change goes through the agent's own `apply` command; nothing
    here or in the server opens a schedule file.
 
    Under it, one card per agent from AGENT_CARDS (02-state.js): what it does,
@@ -35,9 +35,8 @@ let agentsRoot = null;
    delegated.
 
    A list counts as set up when any of these holds:
-     - a bucket has a planner of its own on disk (`fallback` false in
-       /bucket-brief.json), which is how the lists this board was built on
-       came to have agents before any of this existed;
+     - a bucket's agent is ready to take a task (`ready` in
+       /bucket-brief.json, core/bucket_agents.py's judgement);
      - a bucket's brief has a section the person wrote, rather than the
        template's own prose — a new list's wizard scaffolds every brief with a
        one-line summary and no marker, so `filled` alone would count every
@@ -77,7 +76,7 @@ async function checkAgentsSetup(){
   if (ask !== agentsSetupAsk) return;
   const got = answers.filter(Boolean);
   const was = agentsSetUp();
-  state.agentsSetup = got.length ? got.some(a => !a.fallback || briefWritten(a)) : null;
+  state.agentsSetup = got.length ? got.some(a => a.ready || briefWritten(a)) : null;
   if (agentsSetUp() !== was && state.doc) refreshView();
 }
 
@@ -86,7 +85,7 @@ async function checkAgentsSetup(){
    The agents need the `claude` CLI and agents-engine. Without either, a run
    dies the moment it starts, so the board leaves out everything that would
    start one: agents under Delegate to, Delegate to Claude on Overview, the
-   agent options in Settings, and the Data menu's Spend and Run the Plan agent.
+   agent options in Settings, and the Data menu's Spend and Run the bucket agents now.
    The Agents tab says what is missing instead. The rest of the board does not
    need them. */
 function agentsCanRun(){ return state.agentsReady !== false; }
@@ -195,10 +194,9 @@ function wireAgentSetupButtons(root){
    the agent should be like, what tasks it does there, whether there is
    documentation on how those tasks are run, and what the output looks like
    and in what form. The answers are written into that bucket's brief,
-   `data/<dataset>/buckets/<stream>/<stream>.md`, the file the Plan agent and
-   the Implement agent already read before working a task from that bucket. So
-   what the person tells it stays in their own data folder, out of git, and
-   the tracked planners in agents/plan-agent/ stay as shipped.
+   `data/<dataset>/buckets/<stream>/<stream>.md`, the file that defines the
+   bucket's agent. So what the person tells it stays in their own data folder,
+   out of git, and the tracked agents/bucket-agent/ stays as shipped.
 
    Where the answers land in the brief's four sections (BRIEF_SECTIONS,
    08-buckets.js), so the bucket's own brief editor opens on them unchanged:
@@ -378,38 +376,6 @@ async function reloadBucketAgentsPanel(){
   await loadBucketAgents();
   if ($('#agentsPlanners')) refreshBucketPlanners();
 }
-
-/* ---- The old Plan and Implement agents stay off this page ----
-
-   Their folders stay on disk until a later change deletes them, and the agents
-   engine still lists whatever has an agent.json. So the page asks through this
-   wrapper, which drops them from the state the Agents tab draws, and from the
-   Spend and Schedules panels' own lists. */
-const RETIRED_AGENT_IDS = ['plan-agent', 'implement-agent'];
-const RETIRED_AGENT_NAMES = ['Plan agent', 'Implement agent'];
-function withoutRetiredAgents(body){
-  if (!body || typeof body !== 'object') return body;
-  const out = Object.assign({}, body);
-  if (Array.isArray(out.agents)) out.agents = out.agents.filter(a => RETIRED_AGENT_IDS.indexOf(a.id || a.key) < 0);
-  if (Array.isArray(out.jobs)) {
-    out.jobs = out.jobs.filter(j => RETIRED_AGENT_NAMES.indexOf(j.name) < 0 && RETIRED_AGENT_IDS.indexOf(j.agent) < 0 && !/^(Plan|Implement) agent\b/.test(j.name || ''));
-  }
-  return out;
-}
-/* The fetch the wrapper passes on to; the suite swaps it for a stub. */
-let agentsFetchInner = window.fetch.bind(window);
-window.fetch = function(url, opts){
-  const u = String(url);
-  const get = !opts || !opts.method || opts.method === 'GET';
-  if (get && (u.indexOf('/agents-api/state.json') === 0 || u.indexOf('/schedule.json') === 0)) {
-    return agentsFetchInner(url, opts).then(res => {
-      if (!res.ok) return res;
-      return res.clone().json().then(body => new Response(JSON.stringify(withoutRetiredAgents(body)),
-        { status: res.status, headers: { 'Content-Type': 'application/json' } })).catch(() => res);
-    });
-  }
-  return agentsFetchInner(url, opts);
-};
 
 /* Called by renderView() for every view but this one. */
 function leaveAgentsView(){

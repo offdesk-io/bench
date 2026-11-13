@@ -33,7 +33,7 @@ script:
 
 It refuses to start if the data root resolves inside the repo's own `data/`.
 With the three `TODOS_*` variables unset, `server.py` behaves exactly as it
-always has. `agents/plan-agent/paths.py` and `core/tick_queue.py` read
+always has. `agents/bucket-agent/paths.py`, `core/bucket_agents.py` and `core/tick_queue.py` read
 `TODOS_DATA_ROOT` too, since the server calls into them, and Run the bucket agents
 now refuses on a scratch root rather than start a real run.
 
@@ -73,8 +73,8 @@ file. `kanban/test_schedule.mjs` (the Spend and Schedules panels of the Agents t
 which `/api/bucket-agents` names and says is ready or not. The scratch list has
 no buckets folder, so a suite that hands over or offers an agent seeds
 `bucketAgentData` itself, once `load()`'s own ask for it has landed (it would
-replace the seed), mapping the column's name to a bucket. The two old agents
-still hand over through `handOver(t, 'Plan agent')`, for tags already written.
+replace the seed), mapping the column's name to a bucket. A retired name, `handOver(t, 'Plan agent')`,
+hands nothing over.
 
 **`kanban/test_focus_prompt.mjs`** unlocks the tab too, because a locked tab
 shows no focus prompt. It holds cards, sub-tasks and drawer sections and talks
@@ -133,7 +133,10 @@ python3 core/test_todo.py          # the fixtures, and the working calendars
 node core/test_todo.mjs            # the same fixtures, the other language
 python3 core/test_reports.py       # aggregate.py, render.py, archive.py — no JS counterpart
 node kanban/ui/test_primitives.mjs # the React primitives against colHTML/cardShellHTML
-python3 agents/plan-agent/test_planning_agent.py    # the schedule, the picker, the runner
+python3 core/test_bucket_agents.py # a brief read as its agent: ready or not, its name, its processes
+python3 agents/bucket-agent/test_bucket_agent.py    # the runner, its guards and the on-assign wake
+python3 agents/pa_agent/skills/pa/scripts/test_check_todo.py              # the PA's checker
+python3 agents/pa_agent/skills/pa/scripts/test_bucket_handover_migration.py # moving old handovers over
 python3 companion/test_companion.py   # notify.py and digest.py; the Electron app is retired
 python3 core/test_notify_due.py    # desktop banners: the rules, the state file, the queue and its lock
 python3 kanban/test_bucket_brief.py # the brief routes and /api/bucket-agents — no board, no browser
@@ -219,13 +222,10 @@ small, temporary one — that's real content, private and irreplaceable in a way
 
 ## The Agents tab and the bucket agents
 
-`test_agents.mjs` stubs `/agents-api/state.json` by swapping `agentsFetchInner`
-(27-agents.js), the fetch the page's own wrapper passes on to, and leaves
-`window.fetch` alone. The wrapper is what drops `plan-agent` and
-`implement-agent` from that state and from `/schedule.json`, so a suite that
-stubbed `window.fetch` directly would skip it. `test_agents.mjs` and
-`test_schedule.mjs` both feed the old agents through the stub and assert they
-never reach the page. The bucket list under the switch and hours is drawn from
+`test_agents.mjs` and `test_schedule.mjs` stub `/agents-api/state.json` and
+`/schedule.json` by swapping `window.fetch`, and `test_agents.mjs` asks the real
+server once, through the saved fetch, to check that `bucket-agent` is the only
+agent in `agents/`. The bucket list under the switch and hours is drawn from
 `bucketAgentData`, which the suite fills with a ready plan-first bucket, a ready
 free-rein scheduled one and one that is not set up. `test_agent_runs.mjs` awaits
 `bucketAgentLoad` after `load()` before setting its own `bucketAgentData`,

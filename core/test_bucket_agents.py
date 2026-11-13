@@ -219,6 +219,66 @@ class BucketAgentsTest(unittest.TestCase):
         self.assertIsNone(bucket_agents.by_name("demo", "Plan agent", self.root))
         self.assertIsNone(bucket_agents.by_name("demo", "", self.root))
 
+    def test_stream_of(self):
+        os.makedirs(os.path.join(self.root, "demo", "buckets"), exist_ok=True)
+        with open(os.path.join(self.root, "demo", "buckets", "README.md"), "w", encoding="utf-8") as fh:
+            fh.write("| Heading in `todo.md` | Stream | Brief |\n| --- | --- | --- |\n"
+                     "| `3. Design System` | `ds` | ds/ds.md |\n")
+        self.assertEqual(bucket_agents.stream_of("demo", "## 3. Design System", self.root), "ds")
+        self.assertEqual(bucket_agents.stream_of("demo", "4. People", self.root), "people")
+        self.assertIsNone(bucket_agents.stream_of("demo", "  ", self.root))
+
+    def test_parse_processes(self):
+        """A brief read as its processes, for the check-in's process match.
+
+        Briefs are prose, so what is pinned is each shape a real one uses: a
+        bold lead-in, a `###` heading over a table, a plain paragraph, the
+        template's own guidance left in place, and skills named either inside
+        a process or in What already does it beside a word of its name."""
+        guidance = template().split("## The processes I run in this bucket\n\n")[1].split("\n\n")[0]
+        text = "\n".join([
+            "# DS / Design System", "", "What lands here.", "",
+            "## The processes I run in this bucket", "",
+            guidance, "",
+            "**Audits.** Figma against code, with `ds-snapshot-all` first.",
+            "Produces a dated report in `twinkl-web`.", "",
+            "**Documentation.** Usage rules. Produces a page in `ds-docs/`.", "",
+            "Validate by calling people, one call at a time, and keep notes.", "",
+            "### The meetings", "",
+            "| Meeting | When |", "| --- | --- |", "| **DSWG** | Fortnightly |", "",
+            "Each has a card on the board.", "",
+            "## What already does it", "",
+            "| Skill | What it does |", "| --- | --- |",
+            "| `ds-process-snapshots` | Rebuilds the audits' records |", "",
+            "Three agents sit beside them: `ds-analyst` answers a question, "
+            "`ds-component-docs` writes usage documentation from GOV.UK.", "",
+            "`tiago-writing-voice` and `tldr` apply to the meetings.", "",
+            "## Who is involved", "", "**Ana.** Not a process.", "",
+        ])
+        got = bucket_agents.parse_processes(text, known=lambda n: n != "twinkl-web")
+        procs = {p["process"]: p for p in got["processes"]}
+        self.assertEqual(got["title"], "DS / Design System")
+        self.assertEqual([p["process"] for p in got["processes"]],
+                         ["Audits", "Documentation", "Validate by calling people", "The meetings"])
+        self.assertIn("dated report", procs["Audits"]["text"])
+        self.assertEqual(procs["Audits"]["skills"], ["ds-process-snapshots", "ds-snapshot-all"])
+        self.assertEqual(procs["Documentation"]["skills"], ["ds-component-docs"])
+        self.assertEqual(procs["The meetings"]["skills"], ["tiago-writing-voice", "tldr"])
+        self.assertEqual(procs["The meetings"]["text"],
+                         "Meeting When **DSWG** Fortnightly Each has a card on the board.")
+        self.assertNotIn("Ana", procs)
+        self.assertEqual(bucket_agents.parse_processes("# X\n\n## Who is involved\n\nMe.\n")["processes"], [])
+
+        self.write("ds", text)
+        self.write("people", "# People\n\n%s\n" % bucket_agents.NOT_FILLED)
+        self.assertIsNone(bucket_agents.processes("demo", "People", self.root))
+        got = bucket_agents.processes("demo", "3. DS", self.root, known=lambda n: True)
+        self.assertEqual(got["brief"], os.path.join(self.root, "demo", "buckets", "ds", "ds.md"))
+        self.assertEqual(got["planner"], "")
+        self.write("news", filled())
+        self.assertEqual(bucket_agents.processes("demo", "News", self.root, known=lambda n: True)["planner"],
+                         "Demo news agent")
+
     def test_cli(self):
         self.write("news", filled("free-rein"))
         self.write("admin", template())

@@ -20,10 +20,6 @@ FILES = ("write-up", "draft")
 # never over a file, and save a new version as `name-v2.md` beside the original.
 GUARDED = ("prompt", "data", "deck")
 
-# Read only by the retired Implement agent's runner (agents/implement-agent/),
-# which took these on alone and nothing else. The bucket agents' runner does not
-# read it: it refuses figma alone (FIGMA_REFUSAL in agents/bucket-agent/hooks.py).
-UNATTENDED = FILES + GUARDED + ("code",)
 
 
 def read(value):

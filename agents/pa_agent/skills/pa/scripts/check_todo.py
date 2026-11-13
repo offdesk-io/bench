@@ -46,14 +46,14 @@ import todo  # noqa: E402
 import owner_profile  # noqa: E402
 import archive  # noqa: E402
 
-# plannable() is the Plan agent's own read of what counts as a real handover —
-# the tag plus the matching sub-task pick.py's docstring describes. Reused
-# rather than re-derived here, for the same reason todo.py is imported rather
-# than copied: two readers of "is this actually handed over" that can disagree
-# is worse than either being wrong on its own.
-_PLAN_AGENT = Path(__file__).resolve().parents[5] / "agents" / "plan-agent"
-sys.path.insert(0, str(_PLAN_AGENT))
-import pick  # noqa: E402
+# handed_over() is the bucket agents' own read of what counts as a real
+# handover: the tag plus the matching sub-task. Reused rather than re-derived
+# here, for the same reason todo.py is imported rather than copied: two readers
+# of "is this actually handed over" that can disagree is worse than either
+# being wrong on its own.
+_BUCKET_AGENT = Path(__file__).resolve().parents[5] / "agents" / "bucket-agent"
+sys.path.insert(0, str(_BUCKET_AGENT))
+import bucket_work  # noqa: E402
 
 # Two syntaxes, one meaning. impact, effort, due and ai are written as Dataview
 # inline fields — [due:: 2026-08-21] — because views.md queries them and Dataview
@@ -767,14 +767,14 @@ def check_handover_hygiene(lines, text):
     own SKILL.md documents writing the tag directly as an option, which is how a
     task ends up looking delegated with nobody having handed it over.
 
-    That gap closes itself: after each run the Plan agent asks
-    the board to hand every such task over (pick.unhanded(), queued through
-    core/tick_queue.py), and the board does it with handOver() on its next load.
-    So this still reports the gap, since the file is not yet what it will be,
-    but says what will happen rather than asking the owner to do it. The test is
-    pick.unhanded()'s own, reused rather than re-derived: two readers of "is
-    this actually handed over" that can disagree is worse than either being
-    wrong on its own.
+    For a bucket's agent the gap closes itself: after each run the bucket
+    agents ask the board to hand every such task over (bucket_work.unhanded(),
+    queued through core/tick_queue.py), and the board does it with handOver() on
+    its next load. A tag naming the old Plan or Implement agent has nobody to
+    close it, so that one points at the PA's handover migration. The test is
+    bucket_work.handed_over()'s own, reused rather than re-derived: two readers
+    of "is this actually handed over" that can disagree is worse than either
+    being wrong on its own.
 
     Works from a fresh todo.parse_doc() of the whole file rather than this
     script's own dict-based tasks, since that shape has no id: or bracket-form
@@ -803,18 +803,19 @@ def check_handover_hygiene(lines, text):
                 "CHECK",
                 f"\"{task.title}\" carries [to:: {agent}] but has no id: tag yet, so it "
                 f"has no handover either. The board gives it an id when it next loads"
-                + (", and the Plan agent asks for the handover on its run after that."
-                   if agent in legacy else ", and it can then be handed over from the board."),
+                + (". It names a retired agent, so move it to its bucket's agent with "
+                   "bucket_handover_migration.py." if agent in legacy
+                   else ", and it can then be handed over from the board."),
             )
         )
     for task in doc_tasks:
         agent = todo.agent_of(task.to)
-        if task.done or not task.stable_id or not agent or pick.handed_over(task):
+        if task.done or not task.stable_id or not agent or bucket_work.handed_over(task):
             continue
         if agent in legacy:
             kind = "plan" if agent == todo.PLAN_AGENT else "implement"
-            how = ("The Plan agent asks the board to hand it over after its next run; hand it "
-                   "over from the board now to have it sooner, or drop the tag if it was "
+            how = ("It names a retired agent, so nothing will hand it over: move it to its "
+                   "bucket's agent with bucket_handover_migration.py, or drop the tag if it was "
                    "written in error.")
         else:
             kind = "plan or `-implement`"
@@ -909,8 +910,8 @@ def archived_slugs(todo_path):
     than teaching this script a second way to parse an archived line.
 
     The archive lives at backups/done-archive.md next to todo.md, the same
-    layout backup_dir() in kanban/server.py and report_path() in
-    agents/plan-agent/report.py both already assume.
+    layout backup_dir() in kanban/server.py and _archive_path() in
+    agents/bucket-agent/report.py both already assume.
     """
     path = Path(todo_path).parent / "backups" / "done-archive.md"
     return {t.slug for t in archive.read_archive(str(path)) if t.slug}

@@ -162,14 +162,14 @@ HANDOVER = """# To-do
 """
 
 
-def test_a_tag_with_no_handover_says_the_plan_agent_will_hand_it_over():
+def test_a_tag_with_no_handover_says_who_hands_it_over():
     found = check_todo.check_handover_hygiene(HANDOVER.splitlines(), HANDOVER)
     got = sorted((f.line_no, f.severity) for f in found)
     check("each tag with no handover is a CHECK on its own line, and nothing else",
           got, [(9, "CHECK"), (10, "CHECK"), (11, "CHECK"), (13, "CHECK"), (16, "CHECK")])
     text = {f.line_no: f.message for f in found}
-    check("a tag with an id says the Plan agent will ask for the handover",
-          "The Plan agent asks the board to hand it over" in text.get(9, ""), True)
+    check("an old agent's tag with an id points at the handover migration",
+          "bucket_handover_migration.py" in text.get(9, ""), True)
     check("naming the sub-task the Implement agent's handover makes",
           "`ij56kl-implement`" in text.get(10, ""), True)
     check("a tag with no id says the board gives it one first",
@@ -220,7 +220,7 @@ def test_the_calendar_is_the_checked_lists():
 
 def main():
     test_the_calendar_is_the_checked_lists()
-    test_a_tag_with_no_handover_says_the_plan_agent_will_hand_it_over()
+    test_a_tag_with_no_handover_says_who_hands_it_over()
     test_blocked_by_an_archived_slug_is_not_dangling()
     test_missing_archive_reads_as_empty_not_an_error()
     test_a_live_slug_reusing_an_archived_one_is_flagged()

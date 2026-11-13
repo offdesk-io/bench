@@ -19,7 +19,7 @@ So the plans waiting are the **Review the plan** sub-tasks that are unticked, as
 
 ## Why the note is the whole point
 
-`agents/plan-agent/pick.py` hashes each task **including its notes**, and picks a task up again whenever its Plan sub-task is open. `agents/plan-agent/plan.py` pastes the task's title line and notes into the agent's prompt verbatim, because that is where the reasoning lives. So a `feedback:` note written under the Plan sub-task does three things in one move: it records what the owner thought, where the owner will find it again; it unticks the Plan, so the next night writes a new plan without anyone asking; and it becomes the brief for that plan, read by the next agent as an instruction.
+`agents/bucket-agent/bucket_work.py` hashes each task **including its notes**, and a bucket's agent picks a task up again whenever its Plan sub-task is open. The runner (`agents/bucket-agent/hooks.py`) pastes the task's title line and notes into the agent's prompt verbatim, because that is where the reasoning lives. So a `feedback:` note written under the Plan sub-task does three things in one move: it records what the owner thought, where the owner will find it again; it unticks the Plan, so the agent's next run writes a new plan without anyone asking; and it becomes the brief for that plan, read by the next agent as an instruction.
 
 So the feedback is not a rating. It is the correction that makes tomorrow's plan better than today's, and a session that collects reactions without writing them onto the tasks has thrown away the only part that compounds.
 

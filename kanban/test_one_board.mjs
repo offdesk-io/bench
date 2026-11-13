@@ -86,13 +86,13 @@ try {
       '  - [ ] an ordinary step',
       '',
       '- [ ] **Epsilon** [impact:: low] [effort:: S] \`id:ep0001\`',
-      '  - [ ] a step an agent does [to:: Implement agent]',
+      '  - [ ] a step an agent does [to:: Test tasks agent]',
       '',
       '### Backlog', '',
       '- [ ] **Delta** [impact:: low] [effort:: S]',
-      '- [ ] **Zeta** [impact:: low] [effort:: S] [to:: Plan agent] \`id:zt0001\`',
-      '- [ ] **Eta** [impact:: low] [effort:: S] [to:: Implement agent] \`id:et0001\`',
-      '- [ ] **Theta** [impact:: low] [effort:: S] [to:: Plan agent] \`id:th0001\`',
+      '- [ ] **Zeta** [impact:: low] [effort:: S] [to:: Test tasks agent] \`id:zt0001\`',
+      '- [ ] **Eta** [impact:: low] [effort:: S] [to:: Test free agent] \`id:et0001\`',
+      '- [ ] **Theta** [impact:: low] [effort:: S] [to:: Test tasks agent] \`id:th0001\`',
       ''
     ].join('\\n'), 'demo.md', {});
     state.locked = false;
@@ -107,7 +107,8 @@ try {
   await new Promise(r => setTimeout(r, 400))
   await evalJS(`(() => {
     window.__agent = { bucket: 'tasks', name: 'Test tasks agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] };
-    bucketAgentData = { list: state.dataset || '', buckets: [window.__agent], columns: { Tasks: 'tasks' } };
+    window.__free = { bucket: 'free', name: 'Test free agent', mode: 'free-rein', start: 'on-assign', ready: true, missing: [] };
+    bucketAgentData = { list: state.dataset || '', buckets: [window.__agent, window.__free], columns: { Tasks: 'tasks' } };
   })()`)
   check('the tab is unlocked, and every write is being torn out', await evalJS(`state.locked === false && window.__blocked.length === 0`))
 
@@ -115,7 +116,7 @@ try {
 
   const pick = value => evalJS(`(() => { const sel = document.querySelector('#f-to'); sel.value = ${JSON.stringify(value)}; sel.onchange({ target: sel }); })()`)
   await evalJS(`openDrawer(__task('Alpha').id)`)
-  check('Delegate to offers the bucket\'s agent, and neither of the old two', await evalJS(`
+  check('Delegate to offers the bucket\'s agent alone', await evalJS(`
     [...document.querySelectorAll('#f-to option')].map(o => o.value).filter(Boolean).filter(v => agentOf(v) || v === NOT_SET_UP).join('|')`) === 'Test tasks agent')
   await pick('Test tasks agent')
   check('handing a task to a plan-first agent lays out four sub-tasks, each blocked by the one before', await evalJS(`
@@ -152,12 +153,12 @@ try {
   await evalJS(`closeDrawer()`)
 
   /* A bucket whose agent is not set up cannot be handed to. */
-  await evalJS(`Object.assign(window.__agent, { ready: false, mode: null, missing: ['mode', 'purpose'] }); openDrawer(__task('Zeta').id)`)
+  await evalJS(`Object.assign(window.__agent, { ready: false, mode: null, missing: ['mode', 'purpose'] }); openDrawer(__task('Eta').id)`)
   check('an agent that is not set up is offered as such, with what is missing', await evalJS(`
     [...document.querySelectorAll('#f-to option')].map(o => o.textContent).filter(t => /not set up/.test(t)).join('|')`) ===
     'Test tasks agent not set up: how it works (plan first or free rein), what it is for')
   await pick('__not-set-up')
-  check('choosing it hands nothing over', await evalJS(`subSteps(__task('Zeta')).length === 0 && __task('Zeta').to === 'Plan agent'`))
+  check('choosing it hands nothing over', await evalJS(`subSteps(__task('Eta')).length === 0 && __task('Eta').to === 'Test free agent'`))
   check('and handOver refuses it', await evalJS(`handOver(__task('Eta'), 'Test tasks agent') === false && subSteps(__task('Eta')).length === 0`))
   await evalJS(`Object.assign(window.__agent, { ready: true, mode: 'plan-first', missing: [] }); closeDrawer()`)
 
@@ -189,7 +190,7 @@ try {
   check('approving is ticking the review', await evalJS(`subSteps(__task('Alpha'))[1].done`) === true)
 
   await evalJS(`(() => { const t = __task('Alpha'); const at = subSteps(t)[2].line; const f = readSub(t, at); f.done = true; writeSub(t, at, f); moveCardTo(t, WAIT_COL); refreshView(); openDrawer(subSteps(t)[3].stableId); })()`)
-  check('with the Implement agent done, the card is in Reviewing and the work is his to review', await evalJS(`__tier('Alpha') + ':' + yourMove(__task('Alpha'))`) === 'Reviewing:true')
+  check('with Implement done, the card is in Reviewing and the work is his to review', await evalJS(`__tier('Alpha') + ':' + yourMove(__task('Alpha'))`) === 'Reviewing:true')
   check('the review of the work offers no plan to read', await evalJS(`!document.querySelector('#f-readplan') && !!document.querySelector('#f-chatrev')`))
   await evalJS(`document.querySelector('#f-sendback').click()`)
   await evalJS(`(() => { document.querySelector('#f-sendback-text').value = 'Missed the mobile layout.'; document.querySelector('#f-sendback-go').click(); })()`)
@@ -222,7 +223,7 @@ try {
     const planOf = title => subSteps(__task(title)).find(s => /-plan$/.test(s.slug)).stableId;
     window.__queue = [
       { id: 'z2', sub: planOf('Delta'), by: 'Test tasks agent', plan: '2026-09-22/delta.md', type: 'write-up' },
-      { id: 'z3', sub: planOf('Epsilon'), by: 'Plan agent', plan: '2026-09-22/epsilon.md', type: 'deck' },
+      { id: 'z3', sub: planOf('Epsilon'), by: 'Test free agent', plan: '2026-09-22/epsilon.md', type: 'deck' },
     ];
   })()`)
   await evalJS(`drainTickQueue()`)
@@ -235,14 +236,14 @@ try {
   check('a tick from an agent the sub-task is not assigned to is refused', await evalJS(`
     !subSteps(__task('Epsilon')).find(s => /-plan$/.test(s.slug)).done`) === true)
 
-  /* ---- a tag with no handover, handed over at the Plan agent's request ---- */
+  /* ---- a tag with no handover, handed over at its agent's request ---- */
 
   await evalJS(`(() => {
     window.__queue = [
-      { id: 'h1', handover: 'zt0001', to: 'Plan agent', by: 'Plan agent' },
-      { id: 'h2', handover: 'et0001', to: 'Implement agent', by: 'Plan agent' },
-      { id: 'h3', handover: 'th0001', to: 'Implement agent', by: 'Plan agent' },
-      { id: 'h4', handover: 'zz9999', to: 'Plan agent', by: 'Plan agent' },
+      { id: 'h1', handover: 'zt0001', to: 'Test tasks agent', by: 'Test tasks agent' },
+      { id: 'h2', handover: 'et0001', to: 'Test free agent', by: 'Test free agent' },
+      { id: 'h3', handover: 'th0001', to: 'Test free agent', by: 'Test free agent' },
+      { id: 'h4', handover: 'zz9999', to: 'Test tasks agent', by: 'Test tasks agent' },
     ];
     window.__cleared = [];
     const was = window.fetch;
@@ -253,10 +254,10 @@ try {
   })()`)
   await evalJS(`drainTickQueue()`)
   await new Promise(r => setTimeout(r, 300))
-  check('a task tagged to the Plan agent with no handover gets the four sub-tasks', await evalJS(`
+  check('a task tagged to a plan-first agent with no handover gets the four sub-tasks', await evalJS(`
     (() => { const t = __task('Zeta'); return subSteps(t).map(s => s.slug.replace(t.stableId, 'ID')).join(','); })()`) === 'ID-plan,ID-plan-review,ID-implement,ID-work-review')
   check('and moves to Doing, as handing it over from the drawer would', await evalJS(`__tier('Zeta')`) === 'Doing')
-  check('one tagged to the Implement agent gets the last two', await evalJS(`
+  check('one tagged to a free-rein agent gets the last two', await evalJS(`
     (() => { const t = __task('Eta'); return subSteps(t).map(s => s.slug.replace(t.stableId, 'ID')).join(','); })()`) === 'ID-implement,ID-work-review')
   check('a request for an agent the tag no longer names does nothing', await evalJS(`subSteps(__task('Theta')).length`) === 0)
   check('what was dealt with is cleared, and a task not in this list waits', await evalJS(`window.__cleared[0]`) === '{"done":["h1","h2","h3"]}',

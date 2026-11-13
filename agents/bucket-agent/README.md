@@ -1,8 +1,9 @@
 # Bucket agents
 
-One runner for every bucket's agent on every list. It replaces the Plan agent
-(`agents/plan-agent/`) and the Implement agent (`agents/implement-agent/`),
-whose folders stay on disk, unwired, until a later change deletes them.
+One runner for every bucket's agent on every list. It replaced the Plan agent
+and the Implement agent, whose folders were deleted on 13 Nov 2026. The brief
+template the board opens a new brief on, `bucket-brief.template.md`, and the
+`do` skill, `skills/do/`, moved here from them.
 
 ## Why one runner
 
@@ -85,3 +86,12 @@ python3 agents/bucket-agent/run.py --now --target <list>         a run by hand
 python3 agents/bucket-agent/bucket_work.py <list>                what the list holds for its agents
 python3 agents/bucket-agent/test_bucket_agent.py
 ```
+
+## With the owner in the room
+
+`skills/do/` is the `do` skill, linked from `~/.claude/skills/do`. It finds an
+Implement sub-task that is work for a bucket's agent (`bucket_work.py`), and the
+session carries it out under `bucket-agent.md` and that bucket's brief, records
+what it produced with `core/agent_runs.py` and queues the tick under the agent's
+name. It is how Figma work gets done, since the runner refuses it unattended, and
+it can take any waiting item the owner would rather not leave for the runner.

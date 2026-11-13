@@ -2,8 +2,8 @@
 """What the bucket agents' hooks call about plans and the list: plan files, the
 todo.md guard, the usage window, banners.
 
-Ported from agents/plan-agent/plan.py with what a plan-first bucket's agent
-still needs. A plan is one file per task, flat under `data/<list>/plans/`,
+Ported from the retired Plan agent's plan.py with what a plan-first bucket's
+agent still needs. A plan is one file per task, flat under `data/<list>/plans/`,
 overwritten in place on a replan with its History carried forward, and the
 frontmatter the board reads is completed here rather than trusted.
 

@@ -4,7 +4,7 @@
     python3 core/bucket_agents.py <list>     each bucket, ready or not, and what is missing
 
 A bucket's agent is defined in one file, the bucket's brief, which the owner
-fills in (template: agents/plan-agent/bucket-brief.template.md). Its
+fills in (template: agents/bucket-agent/bucket-brief.template.md). Its
 frontmatter says how the agent works:
 
     ---
@@ -31,11 +31,11 @@ required section is empty. A section counts as empty when all that is left
 under its heading is the template's own guidance, an HTML comment or an
 `<angle-bracket placeholder>`, so an owner who keeps the guidance and writes
 under it is read as having written, and one who left the page alone is not.
-The guidance is read out of the template itself, as plan.py's
-_template_paragraphs() does, so the template is the one copy of it.
+The guidance is read out of the template itself, so the template is the one
+copy of it.
 
 The file is `data/<list>/buckets/<bucket>/<bucket>.md`, the brief's own place,
-where the board's brief editor and the Plan agent already read it. Anything
+where the board's brief editor reads it too. Anything
 about a bucket stays in Bench, and only people, about, context and the profile
 go to the memory folder, so it is never routed through the memory lookup.
 Every reader here goes through definition_path(), so the file's place is said
@@ -44,6 +44,14 @@ once.
 Each bucket's agent has a name, agent_name(), which is what a sub-task handed
 to it carries in `[to::]` and what its ticks are queued under. by_name() reads
 one back to its bucket.
+
+A column of the board is a heading in todo.md, and stream_of() says which
+bucket it is: the row for it in buckets/README.md, else the heading's own slug.
+The board's brief editor and the PA's handover migration both go through it.
+
+processes() reads a brief the other way, as the processes its owner runs and
+the skills that already do each, for the PA check-in's process match
+(core/aggregate.py).
 """
 
 import os
@@ -55,14 +63,14 @@ sys.path.insert(0, HERE)
 import settings  # noqa: E402
 
 ROOT = os.path.dirname(HERE)
-TEMPLATE = os.path.join(ROOT, "agents", "plan-agent", "bucket-brief.template.md")
+TEMPLATE = os.path.join(ROOT, "agents", "bucket-agent", "bucket-brief.template.md")
 
 MODES = ("plan-first", "free-rein")
 STARTS = ("on-assign", "scheduled")
 DEFAULT_START = "on-assign"
 
 # The line every brief ships with, and the one line that has to come out before
-# the brief counts as written. The same marker as plan.py's BRIEF_EMPTY.
+# the brief counts as written. The board's brief editor shows it as the marker.
 NOT_FILLED = "<!-- NOT FILLED IN YET -->"
 # What `missing` says when that line is still there. Not a field, but the
 # reason the owner most needs to hear first.
@@ -285,9 +293,205 @@ def bucket_names(dataset, root=None):
     return names
 
 
+def heading_slug(heading):
+    """A heading as a stream name. "## 3. DS" -> "ds"."""
+    key = re.sub(r"^#+\s*", "", (heading or ""))
+    key = re.sub(r"^\d+[.)]\s*", "", key).strip().lower()
+    return re.sub(r"[^a-z0-9]+", "-", key).strip("-")
+
+
+# The README's own header row and separator, which are not a bucket.
+README_HEADINGS = ("Heading in `todo.md`", "---", "\u2014")
+
+
+def stream_map(dataset, root=None):
+    """heading_slug(heading) -> stream, out of the list's buckets/README.md.
+    Empty when there is no such file, so every heading is its own slug."""
+    out = {}
+    try:
+        with open(os.path.join(buckets_dir(dataset, _root(root)), "README.md"), encoding="utf-8") as fh:
+            for line in fh:
+                m = README_ROW.match(line.strip())
+                if not m or m.group(1).strip() in README_HEADINGS:
+                    continue
+                key = heading_slug(m.group(1).strip())
+                if key:
+                    out[key] = m.group(2).strip()
+    except OSError:
+        return {}
+    return out
+
+
+def stream_of(dataset, heading, root=None):
+    """Which bucket a todo.md heading is: its README row first, so a column
+    renamed on the board keeps its brief, then the heading's own slug. None
+    for a heading with no letters or digits in it."""
+    key = heading_slug(heading)
+    if not key:
+        return None
+    stream = stream_map(dataset, root).get(key, key)
+    return stream if BUCKET_RE.match(stream) else None
+
+
 def all_buckets(dataset, root=None):
     """Each bucket of a list with its load() result, in bucket_names() order."""
     return [load(dataset, name, root) for name in bucket_names(dataset, root)]
+
+
+# The two sections of a brief the check-in's process match reads, by the
+# headings the template ships with. A brief that renames them is a brief the
+# match cannot see into, the same cost as any other string-matched heading here.
+PROCESSES_HEADING = "the processes i run in this bucket"
+COVERED_HEADING = "what already does it"
+# A skill or agent name as briefs write one: a backticked, hyphenated,
+# lowercase word. A backticked path has a slash or a dot in it and is not one.
+SKILL_RE = re.compile(r"`([a-z0-9][a-z0-9-]*)`")
+LEAD_RE = re.compile(r"^\*{1,2}([^*]+?)\.?\*{1,2}\.?\s*")
+
+
+def _units(lines, skip):
+    """A section cut into its processes: one per `### ` heading, one per
+    `**Bold.**` lead-in or bullet, otherwise one per paragraph."""
+    units, cur = [], None
+
+    def start(name, text=""):
+        nonlocal cur
+        cur = {"process": name, "text": text}
+        units.append(cur)
+
+    for raw in lines:
+        line = raw.strip()
+        if line.startswith(("<!--", ">")):
+            continue
+        if not line:
+            if cur is not None and not cur.get("heading"):
+                cur = None
+            continue
+        m = re.match(r"^###\s+(.+)$", line)
+        if m:
+            start(m.group(1).strip())
+            cur["heading"] = True
+            continue
+        bullet = re.match(r"^[-*]\s+(.*)$", line)
+        body = bullet.group(1) if bullet else line
+        lead = LEAD_RE.match(body)
+        if lead or (bullet and not (cur and cur.get("heading"))) or cur is None:
+            if lead:
+                start(lead.group(1).strip(), body[lead.end():])
+            else:
+                start("", body)
+            continue
+        cur["text"] += " " + body
+
+    out = []
+    for u in units:
+        text = " ".join(re.sub(r"\|\s*-{3,}\s*|\|", " ", u["text"]).split())
+        if not text and not u["process"]:
+            continue
+        if text in skip:
+            continue
+        name = u["process"]
+        if not name:
+            # An unheaded paragraph is named by its first clause, short enough
+            # to say in one line of the question.
+            first = re.split(r"[.,;:]\s|\s\u2014\s", text, maxsplit=1)[0]
+            words = first.replace("`", "").split()[:8]
+            while len(words) > 1 and words[-1].lower() in ("and", "or", "of", "the", "a", "to"):
+                words.pop()
+            name = " ".join(words)
+        out.append({"process": name, "text": text,
+                    "skills": sorted(set(SKILL_RE.findall(text)))})
+    return out
+
+
+def _clauses(lines):
+    """What already does it, cut fine enough that a skill sits with what it
+    does: a table row each, otherwise a sentence, and a sentence listing
+    several skills with a verb each (`a` answers this, `b` runs that) cut at
+    each one. A bare run of names (`a`, `b` and `c` apply when) stays with the
+    verb that follows it."""
+    rows, prose = [], []
+    for raw in lines:
+        line = raw.strip()
+        if line.startswith("|"):
+            if not re.match(r"^\|[\s:|-]+\|$", line):
+                rows.append(line)
+        else:
+            prose.append(line)
+    out = list(rows)
+    for sentence in re.split(r"(?<=[.!?])\s+", " ".join(prose)):
+        pieces, carry = [], ""
+        for piece in re.split(r",\s+(?=`)", sentence):
+            piece = carry + piece
+            if not re.sub(r"`[^`]*`|\band\b|[,\s]", "", piece):
+                carry = piece + ", "
+                continue
+            carry = ""
+            pieces.append(piece)
+        if carry:
+            pieces.append(carry)
+        out.extend(p for p in pieces if p.strip())
+    return out
+
+
+def parse_processes(text, known=None):
+    """A written brief as the processes its owner runs, each with the skills
+    that already do it.
+
+    A process's skills are the ones named inside it, and any clause of What
+    already does it that names a skill and shares a word with the process's
+    name: `ds-component-docs` writes usage documentation, so it covers
+    Documentation. `known` says whether a backticked name is a skill or agent
+    at all, since a brief backticks repos and boards the same way. Prose read
+    as prose, so the match it feeds is a candidate for the check-in to judge,
+    never a decision.
+    """
+    known = known or (lambda name: True)
+    sections = {k: v.split("\n") for k, v in _sections(text).items()}
+    skip = _template_paragraphs()
+    title = next((l[2:].strip() for l in text.split("\n") if l.startswith("# ")), "")
+    found = _units(sections.get(PROCESSES_HEADING, []), skip)
+    clauses = [(c.lower(), SKILL_RE.findall(c))
+               for c in _clauses(sections.get(COVERED_HEADING, []))]
+    for p in found:
+        skills = set(p["skills"])
+        words = set(re.findall(r"[a-z]{4,}", p["process"].lower()))
+        for line, named in clauses:
+            if named and any(w in line for w in words):
+                skills |= set(named)
+        p["skills"] = sorted(s for s in skills if known(s))
+    return {"title": title, "processes": found}
+
+
+def skill_installed(name):
+    """Whether Claude Code would find a skill or agent of that name: linked
+    into ~/.claude/skills/, or defined in either agents folder."""
+    home = os.path.expanduser("~/.claude")
+    return (os.path.isdir(os.path.join(home, "skills", name))
+            or os.path.isfile(os.path.join(home, "agents", "%s.md" % name))
+            or os.path.isfile(os.path.join(ROOT, ".claude", "agents", "%s.md" % name)))
+
+
+def processes(dataset, heading, root=None, known=skill_installed):
+    """What the check-in matches a column's open tasks against, or None where
+    its bucket has no written brief. `planner` is the bucket's agent when it
+    is ready, since it reads the brief and knows every process in it, so a
+    process no skill covers still has somewhere to go."""
+    stream = stream_of(dataset, heading, root)
+    if not stream:
+        return None
+    path = definition_path(dataset, stream, root)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+    except OSError:
+        return None
+    if NOT_FILLED in text:
+        return None
+    out = parse_processes(text, known=known)
+    out["brief"] = path
+    out["planner"] = agent_name(dataset, stream) if parse(text)["ready"] else ""
+    return out
 
 
 def describe(result):

@@ -9,7 +9,7 @@ description: Interview the owner about one bucket, or each bucket that is not se
 
 **Read `agents/pa_agent/PA.md` first.** It holds who the owner is and the tone.
 
-A bucket's agent is defined in one file, `data/<list>/buckets/<bucket>/<bucket>.md`, from the template `agents/plan-agent/bucket-brief.template.md`. The board hands a task to a bucket's agent only once the file is ready. `core/bucket_agents.py` is the one reader and the one judge of ready, so this skill never decides that itself.
+A bucket's agent is defined in one file, `data/<list>/buckets/<bucket>/<bucket>.md`, from the template `agents/bucket-agent/bucket-brief.template.md`. The board hands a task to a bucket's agent only once the file is ready. `core/bucket_agents.py` is the one reader and the one judge of ready, so this skill never decides that itself.
 
 ## 1. Find the bucket
 

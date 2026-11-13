@@ -85,7 +85,7 @@ await evalJS(`(window.painted = () => new Promise(
 await evalJS(`(() => {
   state.locked = true;
   state.lockedLabel = 'schedule test';
-  const real = agentsFetchInner;
+  const real = window.fetch.bind(window);
   window.__blocked = [];
   const now = Date.now();
   const iso = ms => new Date(ms).toISOString();
@@ -102,12 +102,7 @@ await evalJS(`(() => {
     { id:'weekly-backup', name:'Weekly backup', armed:true, state:'running, in this server',
       what:'One snapshot of todo.md a week.', schedule:'every 30 minutes',
       next:'', last:'todo-backup-week-2026-W36.md',
-      recent:['todo-backup-week-2026-W36.md'], hint:'' },
-    // The retired agents' jobs: the page leaves them out.
-    { id:'plan-agent', name:'Plan agent', armed:false, state:'not installed', what:'Retired.',
-      schedule:'', next:'', last:'', recent:[], hint:'' },
-    { id:'implement-agent', name:'Implement agent', armed:false, state:'not installed', what:'Retired.',
-      schedule:'', next:'', last:'', recent:[], hint:'' }
+      recent:['todo-backup-week-2026-W36.md'], hint:'' }
   ];
   window.__usage = {
     available:true, days:30, baseline:30,
@@ -140,7 +135,7 @@ await evalJS(`(() => {
   window.__plans = [];
   window.__queue = {};
   window.__nightAgent = { live:false, done:[], failed:[] };
-  agentsFetchInner = (url, opts) => {
+  window.fetch = (url, opts) => {
     const method = (opts && opts.method) || 'GET';
     if (method !== 'GET') { window.__blocked.push(method + ' ' + url); return Promise.resolve(new Response('{}', {status:200})); }
     const u = String(url);
@@ -148,7 +143,7 @@ await evalJS(`(() => {
     if (u.startsWith('/usage.json')) return Promise.resolve(new Response(JSON.stringify(window.__usage), {status:200}));
     if (u.startsWith('/plans.json')) return Promise.resolve(new Response(JSON.stringify({plans: window.__plans}), {status:200}));
     if (u.startsWith('/queue.json')) return Promise.resolve(new Response(JSON.stringify(window.__queue), {status:200}));
-    if (u.startsWith('/planning-agent.json')) return Promise.resolve(new Response(JSON.stringify(window.__nightAgent), {status:200}));
+    if (u.startsWith('/bucket-agent.json')) return Promise.resolve(new Response(JSON.stringify(window.__nightAgent), {status:200}));
     return real(url, opts);
   };
   return 'locked and stubbed';
@@ -181,9 +176,8 @@ check('the clock card is its own column, stacked under Token Session', await eva
       card.previousElementSibling.querySelector('h3').textContent === 'Token Session' })()
 `))
 const jobs = await evalJS(`document.querySelectorAll('#schedOut .schedjob').length`)
-check('one row per scheduled job, the retired agents\' left out', jobs === 3, `${jobs} rows`)
-check('the first row is the Bucket agents, and no row names the old agents', await evalJS(`document.querySelector('#schedOut .schedjob').textContent.includes('Bucket agents') &&
-  !/Plan agent|Implement agent/.test(document.querySelector('#schedOut').textContent)`))
+check('one row per scheduled job', jobs === 3, `${jobs} rows`)
+check('the first row is the Bucket agents', await evalJS(`document.querySelector('#schedOut .schedjob').textContent.includes('Bucket agents')`))
 
 check('an unarmed job says so and gives the command', await evalJS(`
   document.querySelector('#schedOut .schedjob .schedstate').textContent === 'not installed' &&
@@ -199,7 +193,7 @@ check('the next run is written as a date, not an ISO string', await evalJS(`
 
 // The usage card itself carries no explanatory prose: the Status line
 // (elsewhere now) says what there is to spend and
-// agents/plan-agent/README.md holds the reasoning.
+// agents/bucket-agent/README.md holds the reasoning.
 check('the usage card explains itself with the chart, not a paragraph', await evalJS(`
   !document.querySelector('#usageOut .help')
 `))
