@@ -11,8 +11,7 @@
  * test server, which runs the two agents' read-only `state` commands.
  *
  * SHOT=/path.png saves a screenshot of the list view, SHOT_SETUP one of the
- * tab before any agent is set up, SHOT_QUESTION one setup question and
- * SHOT_DONE the sheet setup ends on.
+ * tab before any agent is set up.
  */
 
 import { spawn } from 'node:child_process'
@@ -106,14 +105,16 @@ check('the tab is locked', await evalJS(`state.locked === true`))
 /* ---- before any agent is set up ----
    The _test list's buckets have no planner of their own and no brief anyone
    wrote, and the fixture delegates nothing, so the list counts as having no
-   agent: the tab offers setup and the cards, and the rest of the board leaves
-   the agents out. */
+   agent: the tab shows its three columns, with no way to set one up, and the
+   rest of the board leaves the agents out. */
 await wait(800)
 check('a list with no agent counts as not set up', await evalJS(`state.agentsSetup === false && agentsSetUp() === false`))
 check('Agents is a tab of the Settings page, not of the top bar', await evalJS(`!viewDefs().some(d => d.id === 'agents') && settingsTabs().some(t => t[0] === 'agents')`))
 await evalJS(`openSettingsPage('agents')`)
 await wait(400)
-check('the tab offers setup instead of the hour tracks', await evalJS(`!!document.querySelector('#lists .agentsetup [data-agent-setup]') && !document.querySelector('#lists .agents-ui')`))
+check('the tab offers no way to set up an agent', await evalJS(`!document.querySelector('#lists [data-agent-setup]') && !document.querySelector('#lists .agentsetup') && !document.querySelector('#lists').textContent.includes('Set up an agent')`))
+check('it lays out three columns: the cards, the options, the bucket agents', await evalJS(`[...document.querySelectorAll('#lists .agentscols > .agentscol')].map(c => c.id).join() === 'agentsCards,agentOptions,agentsPlanners' && getComputedStyle(document.querySelector('#lists .agentscols')).gridTemplateColumns.split(' ').length === 3`))
+check('and one column below 900px', await (async () => { await send('Emulation.setDeviceMetricsOverride', { width: 800, height: 900, deviceScaleFactor: 1, mobile: false }); await wait(200); const one = await evalJS(`getComputedStyle(document.querySelector('#lists .agentscols')).gridTemplateColumns.split(' ').length === 1`); await send('Emulation.clearDeviceMetricsOverride'); return one })())
 if (process.env.SHOT_SETUP) {
   const shot = await send('Page.captureScreenshot', { format: 'png' })
   writeFileSync(process.env.SHOT_SETUP, Buffer.from(shot.result.data, 'base64'))
@@ -135,61 +136,6 @@ check('a brief carrying only the template counts as unwritten', await evalJS(`((
   const written = scaffolded.replace('One per heading.', 'Weekly invoices, sent every Friday.');
   const b = text => ({ exists: true, filled: true, text, template: tpl });
   return !briefWritten(b(scaffolded)) && briefWritten(b(written));
-})()`))
-
-/* ---- setting one up: four questions, written into the bucket's brief ---- */
-const clickModal = label => evalJS(`(() => {
-  const b = [...(modalEl ? modalEl.querySelectorAll('button') : [])].find(b => b.textContent.trim() === ${JSON.stringify(label)});
-  if (!b) return false; b.click(); return true;
-})()`)
-const answer = text => evalJS(`(() => {
-  const box = modalEl && modalEl.querySelector('#agentSetupAnswer');
-  if (!box) return false; box.value = ${JSON.stringify(text)}; box.dispatchEvent(new Event('input')); return true;
-})()`)
-const heading = () => evalJS(`modalEl ? (modalEl.querySelector('h2, h1, .tenon-modal-title') || {}).textContent || '' : ''`)
-await evalJS(`state.view = 'agents'; renderView(); document.querySelector('#lists [data-agent-setup]').click()`)
-await wait(300)
-check('Set up an agent asks which bucket first', await evalJS(`!!(modalEl && modalEl.querySelector('#agentSetupBucket option[value="Tasks"]'))`))
-await clickModal('Next'); await wait(200)
-check('then what the agent should be like', (await heading()).includes('What should this agent be like'), await heading())
-await answer('Ask before starting anything longer than an hour.')
-await clickModal('Next'); await wait(200)
-check('then what tasks it does', (await heading()).includes('What tasks should it do'))
-await clickModal('Next'); await wait(200)
-check('which cannot be left empty', (await heading()).includes('What tasks should it do') && await evalJS(`!!modalEl.querySelector('.agentsetup-missing')`))
-await answer('Weekly invoices, sent every Friday.')
-await clickModal('Next'); await wait(200)
-check('then whether there is documentation', (await heading()).includes('documentation'))
-await clickModal('Back'); await wait(200)
-check('Back keeps what was typed', await evalJS(`modalEl.querySelector('#agentSetupAnswer').value === 'Weekly invoices, sent every Friday.'`))
-await clickModal('Next'); await wait(200)
-await clickModal('Next'); await wait(200)
-check('then what the output looks like', (await heading()).includes('output'))
-await answer('A PDF per client, named by month.')
-if (process.env.SHOT_QUESTION) {
-  const shot = await send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(process.env.SHOT_QUESTION, Buffer.from(shot.result.data, 'base64'))
-}
-await evalJS(`window.__blocked = []`)
-await clickModal('Set up the agent'); await wait(800)
-const put = await evalJS(`window.__blocked.find(b => b.startsWith('PUT /bucket-brief')) || ''`)
-const sent = put ? JSON.parse(put.slice(put.indexOf('{'))) : {}
-check('it writes the bucket\'s brief', sent.bucket === 'Tasks', put.slice(0, 120))
-check('tasks go under the processes', /## The processes I run in this bucket\n\nWeekly invoices, sent every Friday\./.test(sent.text || ''))
-check('how it works and the output go under what good looks like', /## What good looks like here\n\nHow the agent should work: Ask before.*\n\nWhat the output looks like: A PDF per client/.test(sent.text || ''))
-check('an unanswered question leaves the template\'s guidance', /## What already does it\n\nWhich of my skills/.test(sent.text || ''))
-check('the brief no longer carries the empty marker', !(sent.text || '').includes('NOT FILLED IN YET'))
-check('it ends on the Bucket agents card', await evalJS(`!!(modalEl && modalEl.querySelector('.agentcard.on[data-agent-card="Bucket agents"]'))`))
-check('and the list now counts as set up', await evalJS(`agentsSetUp() === true`))
-if (process.env.SHOT_DONE) {
-  const shot = await send('Page.captureScreenshot', { format: 'png' })
-  writeFileSync(process.env.SHOT_DONE, Buffer.from(shot.result.data, 'base64'))
-}
-await clickModal('Done')
-check('an answer goes under text someone already wrote', await evalJS(`(() => {
-  const tpl = '# <Bucket name>\\n\\n## The processes I run in this bucket\\n\\nOne per heading.\\n';
-  const out = briefWithAnswers({ text: '# Money\\n\\n## The processes I run in this bucket\\n\\nPayroll.\\n', template: tpl }, 'Money', { tasks: 'Invoices.' });
-  return /Payroll\\.\\n\\nInvoices\\./.test(out);
 })()`))
 
 /* ---- once one is ---- */
