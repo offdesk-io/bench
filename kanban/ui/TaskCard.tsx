@@ -46,7 +46,7 @@ export interface Chip {
 
 export type CardProgress = { kind: 'steps', done: number, total: number, pct: number }
 
-/** Where an agent's run on the task stands, one line: "Plan agent · waiting
+/** Where an agent's run on the task stands, one line: "Personal family agent · waiting
  *  for you · 02:05". `tone` is running, queued, you or failed
  *  (agentRunStatus(), kanban/js/28-agent-runs.js). */
 export interface CardRunStatus { text: string, tone: string, title?: string }

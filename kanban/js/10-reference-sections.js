@@ -2,7 +2,7 @@
 
 /* =========================================================================
    4b. Reference sections. Overview is Tasks finished (12-reports.js) then three columns — Big rocks, This
-       week and Quick wins. delegateSection() below is still built but no longer drawn.
+       week and Quick wins.
        Dependency chain sits on Matrix, beside the nine cells.
 
    These used to be rendered as prose straight out of the markdown, which meant
@@ -283,7 +283,7 @@ function refChips(it){
    whichever the card was built from, so the board and the file agree instantly.
 
    What one card says, as data for RefCard (kanban/ui/OverviewBodies.tsx).
-   opts.message / opts.prompt say whether to include the body text. */
+   opts.message says whether to include the body text. */
 function refModel(it, opts){
   opts = opts || {};
   /* This card is a copy shown away from its own column, so the column itself —
@@ -294,13 +294,6 @@ function refModel(it, opts){
   let body = '';
   if (opts.message && it.message) {
     body += messageHTML(it.message, { draft: it.draft });
-  }
-  /* Delegating a task to the Implement agent puts it here straight away, but the prompt is
-     written by hand and lags behind the tag. Say so on the card, otherwise a
-     task with nothing to paste looks the same as one that is ready to go. */
-  if (opts.prompt) {
-    body += it.prompt ? messageHTML(it.prompt, { claude:true, task:it.id })
-                      : '<p class="reflead draft">Needs a prompt before this can be handed over</p>';
   }
   /* An agenda, on the same terms as a message: it is the whole of what the card
      is for, so it only shows where the section asked for it. */
@@ -420,9 +413,9 @@ function quickSortBtn(){
 }
 
 function quickSection(items){
-  // The Implement agent's work belongs to Delegate to Claude, and Backlog is
-  // not a real priority — neither belongs here.
-  const implementing = i => agentOf(i.to) === 'Implement agent';
+  // Work given to an agent is the agent's, and Backlog is not a real priority —
+  // neither belongs here.
+  const implementing = i => !!agentOf(i.to);
   const open = items.filter(i => !i.done && !implementing(i) && i.tier !== HELD_TIER);
   // Two separate reasons something is not a quick win yet: it waits on another
   // task, or its start date has not arrived. Neither is about the deadline —
@@ -479,9 +472,8 @@ function quickSection(items){
      what says that, so a second answer to the same question is not wanted. */
   const preMeetings = take(live.filter(i => i.repeat && i.agenda && i.sub === null).sort(byDue));
   const preMessages = take(live.filter(i => i.message));
-  /* A small task with the Plan agent comes back as a plan to say yes or no
-     to. Anything else small is the owner's, or waits on the person it names. */
-  const preDecide   = take(live.filter(i => isS(i) && agentOf(i.to) === 'Plan agent'));
+  /* A small task with an agent is the agent's. Anything else small is the
+     owner's, or waits on the person it names. */
   const preTalk     = take(live.filter(i => isS(i) && !agentOf(i.to)));
 
   /* Dismissed here, not filtered out of `open` above: a dismissal is a
@@ -489,27 +481,25 @@ function quickSection(items){
      touch heldByDep/heldByDate/heldByBacklog, which describe the task itself. */
   const meetings = preMeetings.filter(notDismissed);
   const messages = preMessages.filter(notDismissed);
-  const decide   = preDecide.filter(notDismissed);
   const talk     = preTalk.filter(notDismissed);
   const dismissedShown = (preMeetings.length - meetings.length) + (preMessages.length - messages.length) +
-    (preDecide.length - decide.length) + (preTalk.length - talk.length);
+    (preTalk.length - talk.length);
 
-  const capped = capGroups([meetings, messages, decide, talk]);
-  const [sMeetings, sMessages, sDecide, sTalk] = capped.shown;
+  const capped = capGroups([meetings, messages, talk]);
+  const [sMeetings, sMessages, sTalk] = capped.shown;
 
   const out = [
     { kind: 'group', label: 'Costs one paste, before the meeting',
       cards: sMeetings.map(i => refModel(i, { agenda:true, quickDismiss:true })) },
     { kind: 'group', label: 'Costs one message, already written',
       cards: sMessages.map(i => refModel(i, { message:true, quickDismiss:true })) },
-    { kind: 'group', label: 'Costs one decision', cards: sDecide.map(i => refModel(i, { quickDismiss:true })) },
     { kind: 'group', label: 'Costs one conversation', cards: sTalk.map(i => refModel(i, { quickDismiss:true })) }
   ].filter(g => g.cards.length);
   const dismissedNote = dismissedShown ? [{ kind: 'dismissed', n: dismissedShown }] : [];
   /* The count in the head is what is actually in the column — after the
      dismissals, before the cap, since a card hidden by the cap is still one of
      them and says so in its own "more" line. */
-  const n = meetings.length + messages.length + decide.length + talk.length;
+  const n = meetings.length + messages.length + talk.length;
   return refSectionBody(
     out.length
       ? note.concat(out, moreBlock(capped.hidden), dismissedNote)
@@ -601,34 +591,6 @@ function chainSection(items){
     holdsHigher: weight.get(i) > itemImpact(i)
   }));
   return { body: BoardUI.h(BoardUI.ChainBody, { entries }), count: blocked.length };
-}
-
-/* Only the Implement agent's work belongs here, and `[to:: Implement agent]`
-   is the gate. Manual
-   drag-to-reorder on `rank:` was taken out: the
-   automatic impact-against-effort score this entry originally asked for is
-   what sorts it now, the same priorityScore() every other section already
-   ranks by. `rank:` itself stays on the task — the planning agent's own queue
-   still orders by it (agents/plan-agent/pick.py) — but this view no
-   longer shows that number, since a task's scores can move without anyone
-   re-ranking it and a stale rank next to a live sort would disagree with
-   itself. What's on the row now is its position in the order shown. */
-function delegateSection(items){
-  /* The Implement sub-task of a handover is briefed by its plan and run through
-     the `do` skill, not from a prompt pasted out of this list, so it is not here. */
-  const eligible = items.filter(i => agentOf(i.to) === 'Implement agent' && !i.done &&
-    !(i.sub && /-implement$/.test(i.slug || '')));
-  if (!eligible.length) return refSectionBody([{ kind: 'empty', which: 'delegate' }], 0);
-
-  const ranked = eligible
-    .map((i, idx) => ({ i, idx }))
-    .sort((a, b) => (priorityScore(b.i) - priorityScore(a.i)) || (a.idx - b.idx))
-    .map(x => x.i);
-
-  const { shown, hidden } = capCards(ranked);
-  return refSectionBody(
-    [{ kind: 'ranked', cards: shown.map(i => refModel(i, { prompt:true })) }].concat(moreBlock(hidden)),
-    ranked.length);
 }
 
 /* ---- Small shared renderers ---- */
@@ -1751,7 +1713,7 @@ async function drainAttachQueue(){
    tick a review and approve its own work; a request from anyone else is refused
    and cleared, since waiting would not change the answer. A sub-task still
    waiting on an unfinished blocker is refused the same way, and one already
-   ticked is cleared without a word. And the Implement agent's tick is the one
+   ticked is cleared without a word. And the Implement tick is the one
    that moves the card, to Reviewing: a ticked Plan leaves it in Doing, because
    the work has only started.
 
@@ -1760,16 +1722,14 @@ async function drainAttachQueue(){
    was dealt with is removed by id, so a request that arrived while this ran is
    not written over.
 
-   The Plan agent's tick carries the plan's `type:`. For a pre-approved type the
-   review behind it is ticked here too, with a note saying so: those plans only
-   add new files to one project folder and send nothing, so they need no accept
-   step. The list is the board's, not the agent's, and must match PRE_APPROVED
-   in core/plan_types.py. */
-const PRE_APPROVED_TYPES = ['write-up', 'draft'];
+   Nothing approves a plan or a piece of work but the owner: a Review the plan
+   or Review the work sub-task is assigned to the owner, so no agent's tick
+   can reach it, and the board ticks none on the agent's behalf. The agent a
+   sub-task is assigned to is a bucket's agent ("Personal family agent"). */
 
-/* The other request on the queue: hand a task over. The Plan agent leaves one
+/* The other request on the queue: hand a task over. The bucket agents leave one
    for a task carrying `[to::]` an agent with none of the sub-tasks a handover
-   lays out (pick.unhanded() in agents/plan-agent/pick.py), which is how a tag
+   lays out (unhanded() in agents/bucket-agent/bucket_work.py), which is how a tag
    written straight into the file becomes a real handover rather than a card that
    looks delegated with nobody working it. It is done by handOver(), the same
    function the drawer's Delegate to calls, so the card gets exactly what it would
@@ -1848,9 +1808,11 @@ async function drainTickQueueOnce(){
     items = await getJSON('/tick-queue.json');
   } catch (err) { return; }
   if (!Array.isArray(items) || !items.length) return;
+  /* A bucket agent's name is only an agent's once the list's buckets are known. */
+  await bucketAgentsLoaded();
 
   const dealt = [];
-  let ticked = 0, refused = 0, moved = 0, approved = 0, handed = 0, drafts = 0;
+  let ticked = 0, refused = 0, moved = 0, handed = 0, drafts = 0;
   for (const it of items) {
     if (!it || !it.id) continue;
     if (it.handover) {
@@ -1892,28 +1854,8 @@ async function drainTickQueueOnce(){
         setStepNoteText(t, rv.line, now.concat('- Plan: plans/' + rel).filter(Boolean).join('\n'));
       }
     }
-    const kind = String(it.type || '').trim().toLowerCase();
-    /* Review the plan ticks itself for a pre-approved type, and for any plan on
-       a task handed over at Just do it (handOver(), 04-tier-two-the-one-thing.js).
-       A folded plan arrives with no type, and waits for the owner either way. */
-    const rv = who === 'Plan agent' && kind && f.slug && t.stableId
-      ? subSteps(t).find(x => x.slug === t.stableId + '-plan-review' && (x.blockedBy || []).indexOf(f.slug) > -1)
-      : null;
-    const why = !rv ? ''
-      : PRE_APPROVED_TYPES.indexOf(kind) > -1 ? 'pre-approved type (' + kind + ')'
-      : justDoIt(t, rv.line) ? 'just do it' : '';
-    if (why) {
-      const g = readSub(t, rv.line);
-      if (g && !g.done && !agentOf(g.to)) {
-        g.done = true; g.doneOn = ymd(today()); g.doing = false;
-        writeSub(t, rv.line, g);
-        const now = stepNoteText(t, rv.line).split('\n').filter(l => !/^- Approved:/i.test(l));
-        setStepNoteText(t, rv.line, now.concat('- Approved: ' + why).filter(Boolean).join('\n'));
-        approved++;
-      }
-    }
     dealt.push(it.id);
-    if (who === 'Implement agent' && !t.done) {
+    if (/-implement$/.test(f.slug || '') && !t.done) {
       const cur = locate(t.id);
       if (cur && cur.tier.name !== WAIT_COL && cur.tier.name !== DONE_COL) {
         cur.tier.tasks.splice(cur.index, 1);
@@ -1929,7 +1871,6 @@ async function drainTickQueueOnce(){
     $('#status').textContent = (ticked
       ? 'agents ticked ' + ticked + ' sub-task' + (ticked === 1 ? '' : 's') +
         (moved ? ', ' + moved + ' card' + (moved === 1 ? '' : 's') + ' into ' + WAIT_COL : '') +
-        (approved ? ', ' + approved + ' plan' + (approved === 1 ? '' : 's') + ' approved on arrival' : '') +
         ' — save to apply'
       : '') + (refused ? (ticked ? '; ' : '') + refused + ' request' + (refused === 1 ? '' : 's') + ' refused' : '');
   }
@@ -2109,7 +2050,7 @@ function briefKeyFor(t){
   return t.stableId || t.title;
 }
 
-/* A cached briefing, written by agents/plan-agent/brief.py — direction,
+/* A cached briefing, written by agents/bucket-agent/brief.py — direction,
    what's done, what's still needed — read exactly as cached, never
    re-validated here. Empty for a task never briefed yet. */
 function taskBriefing(t){

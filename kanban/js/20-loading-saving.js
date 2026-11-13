@@ -41,6 +41,7 @@ function load(text, name, opts){
   markClean('');
   state.migratedOnly = false;
   checkAgentsSetup();
+  loadBucketAgents();
   renderView();
   if (renamed) { markDirty(); $('#status').textContent = 'renamed “Parked” to “Backlog” — save to apply'; }
   if (minted) { markDirty(); $('#status').textContent = 'gave ' + minted + ' task' + (minted === 1 ? '' : 's') +
@@ -164,7 +165,7 @@ function drainOnReturn(){
 window.addEventListener('focus', drainOnReturn);
 document.addEventListener('visibilitychange', drainOnReturn);
 
-/* A run started from this tab (Run the Plan agent now) is watched until it
+/* A run started from this tab (Run the bucket agents now) is watched until it
    finishes, then the queue is drained once. The check rides the file watcher's
    existing tick (watchTick() in 24-autosave-watching.js) rather than a timer of
    its own, and asks nothing while no run from here is going. The lock can take
@@ -178,7 +179,7 @@ async function checkRunStartedHere(){
   const run = runStartedHere;
   if (!run) return;
   let live;
-  try { live = !!(await getJSON('/planning-agent.json')).live; } catch (err) { return; }
+  try { live = !!(await getJSON('/bucket-agent.json')).live; } catch (err) { return; }
   if (live) { run.seenLive = true; return; }
   if (!run.seenLive && Date.now() - run.since < 60 * 1000) return;
   if (runStartedHere === run) runStartedHere = null;
@@ -206,7 +207,7 @@ async function loadJira(){
   }
 }
 
-/* Every task's cached briefing, written by agents/plan-agent/brief.py
+/* Every task's cached briefing, written by agents/bucket-agent/brief.py
    overnight. Absent is the ordinary case for a fresh clone or a task that
    has not been through a brief pass yet — taskDescription() in
    10-reference-sections.js falls back to raw notes exactly as it did before

@@ -65,12 +65,10 @@ def main():
     # at a temp folder is the whole of the isolation.
     server.dataset_dir = lambda name=None: tmp
     server.current_dataset = lambda: "brief-test"
-    # The planner lookup goes through agents/plan-agent/paths.py instead, so it
-    # is pointed at the same folder, with a People planner and nothing else.
-    server.planning_agent_plan.paths.DATA_ROOT = root
-    os.environ["PLANNING_DATASET"] = "brief-test"
+    # The heading-to-stream lookup (core/bucket_agents.py) reads the list's
+    # buckets/README.md under the data root, so that is the same folder.
+    server.DATA_ROOT = root
     os.makedirs(os.path.join(tmp, "buckets", "people"))
-    open(os.path.join(tmp, "buckets", "people", "brief-test-people-agent.md"), "w", encoding="utf-8").close()
 
     httpd = server.BoardHTTPServer(("127.0.0.1", 0), server.Handler)
     base = "http://127.0.0.1:%d" % httpd.server_address[1]
@@ -81,7 +79,7 @@ def main():
         code, body = request(base, "GET", "/bucket-brief.json?bucket=1.%20People")
         ok("a brief with no file answers 200", code == 200, "got %d" % code)
         got = json.loads(body)
-        ok("it resolves the stream through bucket_stream()", got["stream"] == "people",
+        ok("it resolves the stream through stream_of()", got["stream"] == "people",
            "got %r" % got.get("stream"))
         ok("and names the file the agents read",
            got["path"].endswith(os.path.join("people", "people.md")), got.get("path", ""))
@@ -89,17 +87,14 @@ def main():
         ok("and opens on the brief template", "## The processes I run in this bucket" in got["text"])
         ok("the template still carries the empty marker", got["marker"] in got["text"])
         ok("so nothing reads as filled", got["filled"] is False)
-        ok("and People is not the fallback", got["fallback"] is False)
+        ok("and its agent is not ready", got["ready"] is False)
+        ok("and the old planner flag is gone", "fallback" not in got)
 
-        # --- a bucket nobody has written a planner for --------------------------
-        # It used to fall back to the `general` stream and share `general`'s
-        # brief; since 17 Sep 2026 the heading is the stream, so it gets a brief
-        # of its own and what is missing is the planner that would read it.
+        # --- a heading the README does not name ---------------------------------
         code, body = request(base, "GET", "/bucket-brief.json?bucket=9.%20Nothing%20maps%20here")
         got = json.loads(body)
         ok("a new heading gets a stream of its own", got["stream"] == "nothing-maps-here",
            "got %r" % got.get("stream"))
-        ok("and the reply says no planner reads it yet", got["fallback"] is True)
 
         # --- the write ---------------------------------------------------------
         written = "# People\n\nWhat lands in this bucket.\n"
@@ -122,7 +117,7 @@ def main():
 
         # --- a brief still carrying the marker is not filled --------------------
         request(base, "PUT", "/bucket-brief",
-                json.dumps({"bucket": "1. People", "text": "# People\n\n" + server.planning_agent_plan.BRIEF_EMPTY + "\n"}),
+                json.dumps({"bucket": "1. People", "text": "# People\n\n" + server.bucket_agents.NOT_FILLED + "\n"}),
                 {"Content-Type": "application/json", "X-Board": "1"})
         code, body = request(base, "GET", "/bucket-brief.json?bucket=1.%20People")
         got = json.loads(body)
@@ -146,6 +141,37 @@ def main():
         code, _ = request(base, "PUT", "/data/people.md", "hello",
                           {"Content-Type": "text/markdown", "X-Board": "1"})
         ok("do_PUT still refuses anything but todo.md", code == 404, "got %d" % code)
+        # --- the bucket agents' route ---------------------------------------
+        was_root = server.DATA_ROOT
+        server.DATA_ROOT = root
+        try:
+            with open(os.path.join(tmp, "todo.md"), "w", encoding="utf-8") as fh:
+                fh.write("# To-do\n\n## 1. People\n\n### To do\n\n## 2. Brief test ops\n\n### To do\n")
+            ready = ("---\nmode: free-rein\nstart: scheduled\n---\n\n# People\n\nWhat lands here.\n\n"
+                     + "".join("## %s\n\nWritten.\n\n" % h for _, h in server.bucket_agents.FIELDS))
+            with open(on_disk, "w", encoding="utf-8") as fh:
+                fh.write(ready)
+            os.makedirs(os.path.join(tmp, "buckets", "brief-test-ops"))
+            code, body = request(base, "GET", "/api/bucket-agents?list=brief-test")
+            ok("the bucket agents route answers 200", code == 200, "got %d: %s" % (code, body))
+            got = json.loads(body)
+            by = {b["bucket"]: b for b in got["buckets"]}
+            ok("it lists each bucket under the list", sorted(by) == ["brief-test-ops", "people"], sorted(by))
+            ok("a filled-in brief is ready, with its mode and start",
+               by["people"]["ready"] is True and by["people"]["mode"] == "free-rein"
+               and by["people"]["start"] == "scheduled", json.dumps(by["people"]))
+            ok("its agent is named for the list and the bucket", by["people"]["name"] == "Brief test people agent", by["people"]["name"])
+            ok("the list's name is said once where the bucket starts with it",
+               by["brief-test-ops"]["name"] == "Brief test ops agent", by["brief-test-ops"]["name"])
+            ok("a bucket with no brief is not ready and says what is missing",
+               by["brief-test-ops"]["ready"] is False and "mode" in by["brief-test-ops"]["missing"], json.dumps(by["brief-test-ops"]))
+            ok("the route maps each column to its bucket", got["columns"].get("People") == "people", json.dumps(got.get("columns")))
+            code, _ = request(base, "GET", "/api/bucket-agents?list=nope")
+            ok("a list that does not exist is a 404", code == 404, "got %d" % code)
+            code, _ = request(base, "GET", "/api/bucket-agents?list=..")
+            ok("and so is a name that climbs out", code == 404, "got %d" % code)
+        finally:
+            server.DATA_ROOT = was_root
     finally:
         httpd.shutdown()
         shutil.rmtree(root, ignore_errors=True)

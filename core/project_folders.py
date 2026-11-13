@@ -14,8 +14,8 @@ list never sees another's projects. `homes()` names them in order; a folder in
 any of them needs no approval.
 
 Everything that turns a note into a path on disk goes through `resolve()`: the
-server's /project.json, its open-folder route, and the planning agent when it
-decides which folders a planner may read. The check compares real paths with
+server's /project.json, its open-folder route, and the bucket agents when they
+decide which folders a run may read. The check compares real paths with
 os.path.commonpath, so a symlink or a `..` pointing out of an allowed folder is
 caught after it is followed rather than before, and "/work-old" is never taken
 for a child of "/work" the way a string-prefix test would take it.

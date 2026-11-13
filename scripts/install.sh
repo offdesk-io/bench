@@ -52,7 +52,7 @@ fi
 
 say "Step 2: skills into $SKILLS"
 act mkdir -p "$SKILLS"
-for s in "$ROOT"/agents/pa_agent/skills/* "$ROOT"/agents/implement-agent/skills/do; do
+for s in "$ROOT"/agents/pa_agent/skills/* "$ROOT"/agents/bucket-agent/skills/do; do
   [ -d "$s" ] || continue
   link "$s" "$SKILLS/$(basename "$s")"
 done
@@ -60,8 +60,6 @@ done
 say "Step 3: agent definitions"
 act mkdir -p "$AGENTS"
 link "$ROOT/agents/pa_agent/pa-agent.md" "$AGENTS/pa-agent.md"
-act mkdir -p "$ROOT/.claude/agents"
-link "../../agents/implement-agent/implement-agent.md" "$ROOT/.claude/agents/implement-agent.md"
 
 say "Step 4: chevron"
 if [ "$NO_PIP" = 1 ]; then

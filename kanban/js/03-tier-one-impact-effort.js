@@ -9,7 +9,7 @@
    ========================================================================= */
 
 /* IMPACT_N, EFFORT_N, unscored and priorityScore live in core/todo.js, because
-   agents/plan-agent/pick.py needs the same answer to order its queue and a second
+   agents/bucket-agent/bucket_work.py needs the same answer to order its queue and a second
    copy of "high is 3" could drift. That file
    is loaded as a classic script above this one, so all four are already in
    scope here. Only the emoji stayed: the picker has no use for them and the

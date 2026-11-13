@@ -328,8 +328,7 @@ function sharingBody(sh){
 
 /* ---- Making a list ------------------------------------------------------
    A list needs more than a todo.md: a brief per bucket, and the README saying
-   which buckets the list has, or every task in it plans against the fallback
-   agent with nothing to read.
+   which buckets the list has, or no bucket has an agent to hand a task to.
 
    So it is a wizard: the name, then the buckets, then a line about each saying
    what kind of work lands in it. That last one is the part worth collecting —
@@ -362,7 +361,7 @@ function wizardHTML(){
   if (wizard.step === 1) {
     return '<div class="repdoc">' +
       '<p>Which buckets? One per line, in the order they should read on the board. ' +
-      'Each gets its own folder, its own brief and its own planner.</p>' +
+      'Each gets its own folder, its own brief and its own agent.</p>' +
       '<textarea id="wizBuckets" class="redowhy" rows="6" ' +
         'placeholder="' + esc(WIZARD_BUCKETS.join('\n')) + '">' +
         esc(wizard.buckets.map(b => b.name).join('\n')) + '</textarea>' +
@@ -371,8 +370,8 @@ function wizardHTML(){
   const b = wizard.buckets[wizard.step - 2];
   return '<div class="repdoc">' +
     '<p>What kind of work lands in <strong>' + esc(b.name) + '</strong>? One line. ' +
-    'It opens the bucket\u2019s brief, which is what the planning agent reads ' +
-    'before it plans anything in here.</p>' +
+    'It opens the bucket\u2019s brief, which is what the bucket\u2019s agent reads ' +
+    'before it works on anything in here.</p>' +
     '<textarea id="wizAbout" class="redowhy" rows="3" ' +
       'placeholder="Annual reviews, performance, hiring, objectives, growth conversations.">' +
       esc(b.about || '') + '</textarea>' +
@@ -535,7 +534,7 @@ async function loadDemo(){
    Everything else the board asks the server for stays unanswered, exactly as
    on the demo: /plans.json, /reports.json, /backups.json, /projects.json,
    /schedule.json and /queue.json are plain file reads and could be answered
-   from the folder in a later pass; the terminal, the planning agent, the
+   from the folder in a later pass; the terminal, the bucket agents, the
    companion and the Claude chat need a process and never can be.
 
    The page's code is fetched from a public URL on every visit, so a real list
@@ -683,7 +682,7 @@ function syncFolderButton(){
   /* In folder mode the Data menu is open for the first time on this page, and
      three of its items only talk to the helper. Off rather than failing. */
   ['#closeFolder'].forEach(id => $(id) && $(id).classList.toggle('hidden', !listFolder));
-  /* The Plan agent's run is about agents, so it goes too where no agent can run
+  /* The bucket agents' run is about agents, so it goes too where no agent can run
      (state.agentsReady, 27-agents.js). The Settings page's tabs follow the same
      rules in settingsTabs(). */
   ['#runAgentBtn'].forEach(id => $(id) && $(id).classList.toggle('hidden', !!listFolder || state.agentsReady === false));
@@ -892,8 +891,6 @@ async function saveFile(auto, forceBackup){
     }
     // Somebody else's change came in with this save: say whose.
     if (info.merged) loadActivity();
-    // A hand-over or an approval that asked for its agent to start now.
-    flushAgentStarts();
   } catch (err) {
     markDirty();
     if (auto) {

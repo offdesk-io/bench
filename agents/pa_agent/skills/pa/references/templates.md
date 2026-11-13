@@ -122,7 +122,7 @@ never negative) and `who` (from `[to:: ]`, or a `Waiting on:` note).
 | `week` | Anything tagged `week`, tasks and sub-steps both |
 | `done_today` | Ticked with today's `done:` date |
 | `quick_wins` | S effort, unblocked, `start:` arrived, or carrying a message |
-| `delegate` | `[to:: Implement agent]`, ranked by impact against effort — `rank:` is the planning agent's own queue order now, not this list's |
+| `delegate` | Tasks handed to a bucket's agent (`[to:: <List> <bucket> agent]`), ranked by impact against effort — `rank:` is the agents' own queue order now, not this list's |
 
 **Meetings**, each carrying the fields above plus `agenda_state`, which is
 `written` or `not written`.

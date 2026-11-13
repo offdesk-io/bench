@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Renders every due written-report definition, once a week.
 
-See agents/plan-agent/REPORT-DEFS.md for what a definition looks like and
+See agents/bucket-agent/REPORT-DEFS.md for what a definition looks like and
 IMPROVEMENTS.md, "A report the owner defines once cannot be written down anywhere."
 core/aggregate.period_view() is the grounding — what actually finished, in
 the window and buckets a definition names — handed to the model as fact
@@ -11,15 +11,15 @@ nothing here templates prose, on the same reasoning that entry gives: what
 moved and what it means is a judgement, and Mustache is not a language for
 one.
 
-A pass of its own rather than riding on plan.py's nightly batch, the same
-shape brief.py already is and for the same reason: eligible() in pick.py has
+A pass of its own rather than riding on the bucket agents' runs, the same
+shape brief.py already is and for the same reason: the runner's queue has
 never heard of a written report, and this has nothing to do while it is
 choosing tonight's plans anyway — a definition due weekly is not due every
 night.
 
-    python3 agents/plan-agent/report.py --dry-run          what is due, no spend
-    python3 agents/plan-agent/report.py                    render what's due
-    python3 agents/plan-agent/report.py --def NAME         one definition, by hand
+    python3 agents/bucket-agent/report.py --dry-run          what is due, no spend
+    python3 agents/bucket-agent/report.py                    render what's due
+    python3 agents/bucket-agent/report.py --def NAME         one definition, by hand
 """
 
 import argparse
@@ -37,7 +37,7 @@ sys.path.insert(0, HERE)
 
 import aggregate  # noqa: E402
 import paths  # noqa: E402
-import plan  # noqa: E402
+import plans  # noqa: E402
 
 TASK_TIMEOUT = 5 * 60
 BUDGET_PER_REPORT = 1.00
@@ -61,7 +61,7 @@ FIELD_RE = re.compile(r"^(\w+):\s*(.*)$")
 
 
 def log(line):
-    plan.log("report: %s" % line)
+    plans.log("report: %s" % line)
 
 
 def defs_dir():
@@ -204,7 +204,7 @@ def run_report_agent(defn, period, today, dry=False):
 def write_report(defn, period, today, body_text):
     """The model's frontmatter, with what this script already knows for
     certain overwritten onto it — the same belt-and-braces write_plan() in
-    plan.py uses, and for the same reason: the fields the board reads have
+    plans.py uses, and for the same reason: the fields the board reads have
     to be right regardless of what the agent remembered to write."""
     m = FRONT_RE.match(body_text)
     topic, summary, body = "", "", body_text

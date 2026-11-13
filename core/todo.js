@@ -1,7 +1,7 @@
 /* The to-do format, as the board reads and writes it.
 
    This is the authority. `core/todo.py` beside it is a port for the Python
-   readers — the companion, the planning agent, the PA's checker — and its
+   readers — the companion, the bucket agents, the PA's checker — and its
    own docstring says that where the two disagree, this file is right and the
    Python is the bug. `core/fixtures/` is what stops that being a promise: both
    suites read the same tables, so a change here the fixtures do not expect
@@ -82,13 +82,16 @@ function readField(text, key){
   if (!m) return '';
   return (m[1] != null ? m[1] : m[2]).trim();
 }
-/* The two agents a task can be handed to, spelt the way `[to::]` writes them.
-   Everything else in `[to::]` is a person. The Plan agent plans it and stops;
-   the Implement agent carries it out, and Delegate to Claude lists its tasks. */
+/* The agents a task can be handed to, spelt the way `[to::]` writes them. The
+   Plan agent and the Implement agent are the two old ones, kept readable. A
+   bucket's agent ("Personal family agent", core/bucket_agents.py) is any other
+   name ending in " agent". Everything else in `[to::]` is a person. */
 const AGENT_NAMES = ['Plan agent', 'Implement agent'];
 function agentOf(to){
-  const v = String(to || '').trim().toLowerCase();
-  return AGENT_NAMES.find(a => a.toLowerCase() === v) || '';
+  const v = String(to || '').trim();
+  const old = AGENT_NAMES.find(a => a.toLowerCase() === v.toLowerCase());
+  if (old) return old;
+  return /\S\s+agent$/i.test(v) ? v : '';
 }
 function hasField(text, key){
   return new RegExp('\\[' + key + '::|`' + key + ':', 'i').test(text);

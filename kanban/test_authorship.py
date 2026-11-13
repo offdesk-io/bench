@@ -21,7 +21,7 @@ What it holds to:
     back byte for byte, and the log names the owner from the profile;
   * a sub-task an agent asked to tick (core/tick_queue.py), applied by the
     board and saved by whoever's tab drained it, goes under the agent: the
-    card is edited by `implement-agent` and the log says Implement agent,
+    card is edited by `demo-tasks-agent` and the log says Demo tasks agent,
     while anything else in the same save stays the saver's; a request the
     board refuses credits nobody;
   * an edit written straight to todo.md, the way the pa skill writes, is
@@ -179,11 +179,11 @@ AGENTS = """# To-do
 
 ### Doing
 
-- [ ] **Ship the page** [to:: Implement agent] `id:aaaaaa`
-  - [ ] Implement [to:: Implement agent] `id:s00001`
+- [ ] **Ship the page** [to:: Demo tasks agent] `id:aaaaaa`
+  - [ ] Implement [to:: Demo tasks agent] `id:s00001`
   - [ ] Review the work [to:: Tiago] `id:s00002`
-- [ ] **Plan the launch** [to:: Plan agent] `id:bbbbbb`
-  - [ ] Plan [to:: Plan agent] `id:s00003`
+- [ ] **Plan the launch** [to:: Demo admin agent] `id:bbbbbb`
+  - [ ] Plan [to:: Demo admin agent] `id:s00003`
 - [ ] **Order badges** `id:cccccc`
 
 ### Done
@@ -224,11 +224,11 @@ def agents_and_outside(root):
             return code, as_json(body) or {}
 
         # --- the agent's tick ------------------------------------------------------
-        good = tick_queue.append("s00001", "Implement agent", path=queue)
-        bad = tick_queue.append("s00003", "Implement agent", path=queue)   # not its sub-task
+        good = tick_queue.append("s00001", "Demo tasks agent", path=queue)
+        bad = tick_queue.append("s00003", "Demo tasks agent", path=queue)   # not its sub-task
         # Two more the board refuses: a handover for a card whose [to::] names
         # no agent, and a move off the content list.
-        hand = tick_queue.append_handover("cccccc", "Plan agent", "Plan agent", path=queue)
+        hand = tick_queue.append_handover("cccccc", "Demo admin agent", "Demo admin agent", path=queue)
         move = tick_queue.append_move("bbbbbb", "Reviewing", "Content strategist agent", path=queue)
         code, body, _ = srv.ask("POST", "/tick-queue.json", dict(JEROME, **{"X-Board": "1",
                                 "Content-Type": "application/json"}),
@@ -237,33 +237,33 @@ def agents_and_outside(root):
         # What Jerome's tab saves: the tick it applied, the card moved on, and
         # an edit of his own on another card, all in one save.
         base = disk()
-        mine = (base.replace("- [ ] Implement [to:: Implement agent]", "- [x] Implement [to:: Implement agent] `done:2026-10-23`")
+        mine = (base.replace("- [ ] Implement [to:: Demo tasks agent]", "- [x] Implement [to:: Demo tasks agent] `done:2026-10-23`")
                     .replace("**Order badges**", "**Order name badges**")
                     .replace("**Plan the launch**", "**Plan the launch now**"))
         code, got = save(mine, base)
         now = disk()
         ok("the save with the tick writes", code == 200, "%d %r" % (code, got))
         step = line_of(now, "Implement [to::")
-        ok("the ticked sub-task is edited by the agent", "`edited-by:implement-agent`" in step, step)
+        ok("the ticked sub-task is edited by the agent", "`edited-by:demo-tasks-agent`" in step, step)
         card = line_of(now, "Ship the page")
-        ok("and so is its card", "`edited-by:implement-agent`" in card, card)
+        ok("and so is its card", "`edited-by:demo-tasks-agent`" in card, card)
         own = line_of(now, "Order name badges")
         ok("the saver's own edit in the same save stays theirs", "`edited-by:jerome@example.com`" in own, own)
         refused = line_of(now, "Plan the launch now")
         ok("a request the board refused credits nobody", "`edited-by:jerome@example.com`" in refused, refused)
         ok("a handover for a card not handed to that agent credits nobody",
-           "`edited-by:jerome@example.com`" in own and "plan-agent" not in own, own)
+           "`edited-by:jerome@example.com`" in own and "demo-admin-agent" not in own, own)
         ok("nor does a move off the content list",
            "content-strategist-agent" not in refused and "`edited-by:jerome@example.com`" in refused, refused)
         log = log_of(folder)
         ship = [e for e in log if e["task"] == "Ship the page"]
         ok("the log has the tick under the agent",
-           ship and ship[-1]["who"] == "implement-agent" and ship[-1]["name"] == "Implement agent", json.dumps(log))
+           ship and ship[-1]["who"] == "demo-tasks-agent" and ship[-1]["name"] == "Demo tasks agent", json.dumps(log))
         ok("and the saver's edit under the saver",
            any(e["task"] == "Order name badges" and e["who"] == "jerome@example.com" for e in log))
         code, body, _ = srv.ask("GET", "/activity.json", JEROME)
         ok("/activity.json names the agent",
-           (as_json(body) or {}).get("names", {}).get("implement-agent") == "Implement agent", body[:300])
+           (as_json(body) or {}).get("names", {}).get("demo-tasks-agent") == "Demo tasks agent", body[:300])
 
         # --- an edit written straight to the file ---------------------------------
         srv.ask("HEAD", "/data/todo.md", JEROME)          # the server has seen this version

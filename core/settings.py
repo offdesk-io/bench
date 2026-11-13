@@ -13,14 +13,15 @@ nothing raises.
                 "implement": {"start": "scheduled"}},
      "chime": true}
 
-- `models`: a model per job (`plan`, `implement`, `chat`, `brief`, `planner`), then
+- `models`: a model per job (`plan`, `implement`, `chat`, `brief`), then
   `default` for any job without its own. `$BENCH_MODEL_<JOB>` wins over both.
-  A null means the caller keeps the model it uses today. `planner` is the
-  per-bucket planners'; null follows `plan`.
-- `agents`: per agent (`plan`, `implement`), `start` says what happens when a
-  task is handed to it. `scheduled` waits for its hours in the board's Agents
-  tab (today's behaviour); `now` has the board start a run as soon as the hand
-  over is saved.
+  A null means the caller keeps the model it uses today. `plan` and
+  `implement` are the bucket agents' two jobs. `planner` was the per-bucket
+  planners' own and is still read so an older file loads, but nothing uses it.
+- `agents`: per job (`plan`, `implement`), a `start` of `now` or `scheduled`,
+  from when the Plan and Implement agents could be started on handover. Still
+  read and saved so an older file round-trips, but nothing acts on it: when a
+  bucket's agent starts is the `start:` in its brief (core/bucket_agents.py).
 - `chime`: true plays a short sound when a reply finishes in any chat on the
   board, a soft two-note rise for done and one low note for an error or a
   stop. False keeps the board silent. On by default.
@@ -52,9 +53,9 @@ nothing raises.
   from what load() returns and nothing changes. `banners` false keeps the
   list quiet: no due banners, catch-ups included, and the lines agents queue
   for it are dropped rather than posted (core/notify_due.py,
-  companion/notify.py). `agents` false keeps the Plan and Implement agents
-  off the list: their runs skip it with one log line, the board's Run now
-  refuses, and boards.md marks it `agents off`. True, or absent, is today's
+  companion/notify.py). `agents` false keeps the bucket agents off the
+  list: their runs skip it with one log line, the board's Run now refuses,
+  and boards.md marks it `agents off`. True, or absent, is today's
   behaviour for both.
 
     "boards": {"demo": {"memory_root": null, "banners": false, "agents": false}}
@@ -92,9 +93,9 @@ JOBS = ("plan", "implement", "chat", "brief", "planner")
 AGENTS = ("plan", "implement")
 STARTS = ("now", "scheduled")
 
-# The runner ids the fences file keys a budget by. The bucket planners run as
-# the Plan agent, so they spend from its budget and have none of their own.
-BUDGET_AGENTS = ("plan-agent", "implement-agent")
+# The runner ids the fences file keys a budget by. Every bucket's agent runs
+# under the one runner, so they share its budget.
+BUDGET_AGENTS = ("bucket-agent",)
 
 DEFAULTS = {
     "version": 1,
@@ -272,14 +273,6 @@ def model_for(job, root=None, default=None):
         return env
     models = load(root)["models"]
     return models.get(job) or models["default"] or default
-
-
-def planner_model(root=None, default=None):
-    """The model the per-bucket planners run on: their own setting when there is
-    one, else the Plan agent's. They are the Plan agent's runs, one per task."""
-    env = os.environ.get("BENCH_MODEL_PLANNER", "").strip()
-    own = env or load(root)["models"].get("planner")
-    return own or model_for("plan", root, default)
 
 
 def for_boards(saved, boards):

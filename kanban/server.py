@@ -64,19 +64,10 @@ except ImportError:
 import project_folders
 import platform_calls
 import settings
+import bucket_agents
+import bucket_wake
 import iso_countries
 import board_access
-# The planning agent's own two modules, imported the same way and for the same
-# reason. `pick` is what decides which tasks tonight would plan, and the board's
-# queue column is that decision rendered rather than a second guess at it —
-# there is one selection rule and this is it. `plan` comes along for the bucket
-# mapping alone, so the queue can name the agent each task would go to.
-sys.path.insert(0, os.path.join(ROOT, "agents", "plan-agent"))
-try:
-    import pick as planning_agent_pick
-    import plan as planning_agent_plan
-except ImportError:
-    planning_agent_pick = planning_agent_plan = None
 # The list and everything derived from it live in one folder, and that folder is
 # the only thing git ignores. Before this, the private half of the repo was four
 # separate ignore rules — todo.md, backups/, todo-backup-*.md, views.md — and
@@ -120,9 +111,6 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 # One-backup-per-run applies per dataset, not to the server as a whole — the
 # rare session that visits two lists gets one grace save on each.
 backup_made = set()
-# The plan agent's paths module keeps the list it is pointed at in one module
-# global (paths.using), so the routes that go through it take turns.
-_plan_paths_lock = threading.Lock()
 # Everything that writes todo.md takes turns, from reading the file to writing
 # it: a tab's save (do_PUT, which merges one save into another), a new list,
 # and the server stamping an edit made outside it (notice_outside_edit). The
@@ -268,6 +256,11 @@ def memory_path(kind, name=None, write=False):
     if not name:
         return os.path.join(dataset_dir(None), kind + ".md")
     return settings.memory_file(name, kind, DATA_ROOT, write)
+
+
+def bucket_agent_name(dataset, bucket):
+    """A bucket's agent as the board names it, from core/bucket_agents.py."""
+    return bucket_agents.agent_name(dataset, bucket)
 
 
 def people_path(name=None, write=False):
@@ -496,8 +489,8 @@ def file_hash(path):
     A content hash has no such granularity: it changes when the bytes change
     and not otherwise.
 
-    sha256, the same as file_hash() in agents/plan-agent/plan.py, which
-    guards the same file for the same reason from the other side. Truncated to
+    sha256, the same as the bucket agents' runner (agents/bucket-agent/plans.py),
+    which guards the same file for the same reason from the other side. Truncated to
     16 characters because this travels in a header on every read: it is a
     fingerprint for equality, not a signature, and 64 bits is far past enough
     for telling two versions of one file apart.
@@ -558,8 +551,8 @@ AGENT_CREDIT_S = 120
 
 
 def agent_slug(name):
-    """An agent's name as it goes in a tag and the log: `Implement agent` is
-    `implement-agent`, the same as its folder and id."""
+    """An agent's name as it goes in a tag and the log: `Personal family agent`
+    is `personal-family-agent`."""
     return "-".join(str(name).lower().split())
 
 
@@ -825,7 +818,7 @@ def column_names_path(name=None):
 
     Backlog, To do, Doing, Reviewing and Done are matched by their
     exact text all through the board and by every other reader of the list —
-    the companion, the planning agent, core/todo.py — so renameTier() refuses
+    the companion, the bucket agents, core/todo.py — so renameTier() refuses
     to rename one. A label here is the way round that: the `### To do` heading
     in todo.md stays exactly as it is and the board draws whatever word is set
     for it, so nothing outside the board is affected and nothing is migrated.
@@ -840,72 +833,40 @@ def column_names_path(name=None):
 
 
 def bucket_brief_path(bucket, name=None):
-    """A bucket's own brief, resolved the way the agents that read it resolve it.
+    """A bucket's own brief, resolved the way its agent resolves it.
 
-    `bucket_stream()` in agents/plan-agent/plan.py is the one table mapping
-    a heading to a stream, and the brief, the folder and the planning agent are
-    all named off it. Going through that function rather than slugifying the
-    heading here means the board edits the file the agents actually read —
-    including where the heading is mapped to nothing and the stream is the
-    `general` fallback, which is worth seeing in the editor rather than hidden
-    behind a file that looks like this bucket's own.
+    stream_of() in core/bucket_agents.py maps a heading to its stream, and the
+    brief, the folder and the agent are all named off it, so the board edits
+    the file the agent actually reads.
 
-    Returns (stream, path), or (None, None) in a checkout with no planning
-    agent in it: there is no brief to edit there, and the board says so rather
-    than writing a file nothing would read.
+    Returns (stream, path), or (None, None) for a heading that names no stream:
+    there is no brief to edit there, and the board says so rather than writing
+    a file nothing would read.
     """
-    if planning_agent_plan is None:
+    ds = name or current_dataset()
+    stream = bucket_agents.stream_of(ds, bucket, DATA_ROOT)
+    if not stream:
         return None, None
-    with plan_paths():
-        stream = planning_agent_plan.bucket_stream(bucket)
-    # bucket_stream() returns a value from its own table or the fallback, so
-    # this cannot be a path today. Checked anyway, because the entry that
-    # retires that table slugifies the live heading instead, and a heading is
-    # typed by hand.
-    if not stream or stream.startswith(".") or "/" in stream or "\\" in stream:
-        return None, None
-    base = os.path.join(dataset_dir(name or current_dataset()), "buckets")
+    base = os.path.join(dataset_dir(ds), "buckets")
     return stream, os.path.join(base, stream, "%s.md" % stream)
-
-
-class plan_paths:
-    """agents/plan-agent/paths.py pointed at the board this request is on, for
-    the length of a block. Its own pointer is data/.current, which on the
-    shared board is nobody's board in particular."""
-
-    def __enter__(self):
-        _plan_paths_lock.acquire()
-        try:
-            self._using = planning_agent_plan.paths.using(current_dataset())
-            self._using.__enter__()
-        except BaseException:
-            _plan_paths_lock.release()
-            raise
-
-    def __exit__(self, *exc):
-        try:
-            self._using.__exit__(*exc)
-        finally:
-            _plan_paths_lock.release()
 
 
 def brief_template():
     """The template a new brief opens on, read out of
-    agents/plan-agent/bucket-brief.template.md.
+    agents/bucket-agent/bucket-brief.template.md (bucket_agents.TEMPLATE).
 
     Read rather than copied, because a second copy in here is a second thing to
     keep in step. An empty string if it cannot be found, which costs an empty box.
     """
     try:
-        with open(os.path.join(ROOT, "agents", "plan-agent", "bucket-brief.template.md"),
-                  encoding="utf-8") as fh:
+        with open(bucket_agents.TEMPLATE, encoding="utf-8") as fh:
             return fh.read()
     except OSError:
         return ""
 
 
 def briefings_path(name=None):
-    """Where agents/plan-agent/brief.py leaves what it has worked out about
+    """Where agents/bucket-agent/brief.py leaves what it has worked out about
     each task — direction, what's done, what's still needed — one per task,
     keyed the same way the ledger is (stable id, falling back to title).
 
@@ -1313,7 +1274,7 @@ def brief_text(name, about=""):
 
 
 def buckets_readme(dataset, buckets):
-    """The table `stream_map()` in plan.py reads a bucket's stream out of.
+    """The table `stream_map()` in core/bucket_agents.py reads a bucket's stream out of.
 
     It is what lets a bucket be renamed without moving its brief, so it is
     written at creation rather than left for someone to remember — the entry
@@ -1331,7 +1292,7 @@ def buckets_readme(dataset, buckets):
         "| --- | --- | --- |\n"
         "%s\n"
         "**This table is what fixes a bucket's stream.** `stream_map()` in\n"
-        "`agents/plan-agent/plan.py` parses it, and the bucket editor rewrites a\n"
+        "`core/bucket_agents.py` reads it, and the bucket editor rewrites a\n"
         "row when a bucket is renamed — which is how a heading can change without\n"
         "the brief, the folder or the planner moving with it.\n\n"
         "A heading with no row here slugifies instead: strip the leading number,\n"
@@ -1357,7 +1318,7 @@ def scaffold_bucket(dataset, name, stream, about=""):
 def readme_rows(dataset=None):
     """The table in a dataset's buckets/README.md, as (heading, stream) pairs.
 
-    Read and written here rather than only parsed in plan.py, because the board
+    Read and written here rather than only parsed in core/bucket_agents.py, because the board
     is what keeps it in step: adding a bucket writes a row, renaming one
     rewrites its heading, and nothing else on the machine touches the file.
     """
@@ -1576,7 +1537,7 @@ def weekly_backup_watcher(every=1800):
 #   Live   whether a job is installed and armed, and when it fires next. Only
 #          the system knows that, and a log will happily describe a job that was
 #          unloaded a week ago.
-#   Ledger what actually happened. launchctl cannot tell you the planning agent
+#   Ledger what actually happened. launchctl cannot tell you the bucket agents
 #          wrote three plans and stopped on a usage limit.
 #
 # Everything here is read-only and local. `launchctl` is shelled out to with a
@@ -1701,7 +1662,7 @@ def ceiling(wins, roll, state):
     a real limit returns names the reset time but not the ceiling. So there are
     two sources and they are not equal.
 
-      measured  a run was actually refused, and `plan.py` wrote what the window
+      measured  a run was actually refused, and the runner wrote what the window
                 had spent at that moment into window.json. A real floor under
                 the true allowance, and the honest answer.
       observed  no limit has been hit yet, so the busiest window in the period
@@ -1856,7 +1817,7 @@ def usage_summary(days=30, ttl=60):
             "turns": w["turns"],
             "open": w["end"] > datetime.datetime.now().astimezone(),
             # A window that both starts and ends inside the night is one the
-            # planning agent could have spent in without touching the morning.
+            # bucket agents could have spent in without touching the morning.
             "night": w["start"].hour >= 19 or w["start"].hour < 7,
             # How the spend arrived across the five hours — see window_shape.
             "shape": window_shape(w),
@@ -1867,7 +1828,7 @@ def usage_summary(days=30, ttl=60):
 
 
 def plans_dir(name=None):
-    """Where the planning agent leaves what it worked out overnight.
+    """Where the bucket agents leave the plans they write.
 
     A different folder from reports/ on purpose, and not a candidate for being
     merged into it. A report is the owner's own record of what happened, written in
@@ -1879,37 +1840,8 @@ def plans_dir(name=None):
     return os.path.join(dataset_dir(name or current_dataset()), "plans")
 
 
-_owner_alias = {}
-
-
-def owner_now(owner):
-    """What a document's `owner:` is called today.
-
-    The two agents were renamed — `night-agent` was named for the hour it ran
-    and `execution-agent` for the job, which is two axes for one pair — so a
-    plan or a run written under the old names names an owner nothing on the
-    board matches any more, and every card of it draws as though it
-    were owned by nobody. `core/migrations/migrate-agent-names.py` rewrites
-    what is on disk; this is what reads the one the migration never reached, a
-    file restored from a backup being the obvious case.
-
-    The map is each stream's own, in its manifest beside the `legacy` block
-    that already does this for the five status words, so there is one copy of
-    it and it is the stream's to change.
-    """
-    if not _owner_alias:
-        for folder in ("plan-agent", "implement-agent"):
-            try:
-                with open(os.path.join(ROOT, "agents", folder, "stream.json"), encoding="utf-8") as fh:
-                    m = json.load(fh)
-            except (OSError, ValueError):
-                continue
-            _owner_alias.update(((m.get("owner_legacy") or {}).get("map") or {}))
-    return _owner_alias.get(owner, owner)
-
-
-# The three the board writes, as against the two plan.py writes — see
-# BOARD_HISTORY in agents/plan-agent/stream.py. "after a conversation" is
+# The three the board writes, as against the two a plan's agent writes.
+# "after a conversation" is
 # the marker saying the quote is a chat the owner had about the plan rather than a
 # sentence the owner typed, which is the one thing the modal shows differently.
 BOARD_HISTORY_RE = re.compile(
@@ -1919,7 +1851,7 @@ BOARD_HISTORY_RE = re.compile(
 def history_entry(date, revision, rest):
     """One line of a plan's History section, split into what the modal draws.
 
-    plan.py's history() writes two shapes after the bold date and revision:
+    history() in agents/bucket-agent/plans.py writes two shapes after the bold date and revision:
     "Planned by `agent`." and "Re-planned by `agent` after revision N was sent
     back: <the owner's reason>." The second is two events on one line, the send-back
     and the revision that answered it, so the reason comes back on its own
@@ -1964,7 +1896,7 @@ def plan_meta(path, name):
     revisions = []
     # One entry per line in the file's own History section — the record of
     # every time this task has been re-planned, not just the count in
-    # `revision:`. Read here rather than only in plan.py so the card can name
+    # `revision:`. Read here rather than only by the runner so the card can name
     # it without fetching the whole document: history()'s own line shape is
     # "- **YYYY-MM-DD, revision N.** ...", so that is what is matched.
     try:
@@ -2014,11 +1946,11 @@ def plan_meta(path, name):
         "about": fields.get("about", ""),
         "group": fields.get("group", fields.get("bucket", "")),
         "state": fields.get("state", ""),
-        "owner": owner_now(fields.get("owner", "")),
+        "owner": fields.get("owner", ""),
         "seen": fields.get("seen", "") == "yes",
         "needs_you": fields.get("needs_you", "") == "yes",
         "resolution": fields.get("resolution", ""),
-        # How far the implementing agent's half has got, on a plan the owner accepted.
+        # How far the work has got, on a plan the owner accepted.
         # Its own field rather than more values on `state` because the contract
         # allows one state per document and this is a second question about the
         # same one: `state` says where the plan is, `production` says what has
@@ -2026,7 +1958,7 @@ def plan_meta(path, name):
         # by do; "" on every plan that has not been accepted.
         #
         # This is also the field the eight-column version of the Plans view
-        # would draw as columns, if the implementing agent ever becomes
+        # would draw as columns, if the work ever becomes
         # autonomous enough to be worth watching — see IMPROVEMENTS.md.
         "production": fields.get("production", ""),
         "production_summary": fields.get("production_summary", ""),
@@ -2045,7 +1977,7 @@ def plan_meta(path, name):
         "status": fields.get("status", "unread"),
         # An agent that decided the task could not be planned without a
         # decision only the owner can make writes `outcome: folded`. See the folding
-        # rule in agents/plan-agent/PLAN-BRIEF.md. Passed through as written rather than
+        # rule in agents/bucket-agent/PLAN-BRIEF.md. Passed through as written rather than
         # reduced to a boolean, so a value this server has never heard of
         # reaches the board instead of being swallowed here.
         "outcome": fields.get("outcome", ""),
@@ -2064,13 +1996,12 @@ def plan_meta(path, name):
 
 
 def plan_listing():
-    """Every plan the planning agent has written, newest first.
+    """Every plan a bucket agent has written, newest first.
 
     One file per task, flat under plans_dir(). What is skipped is everything
     that is not a plan: the sidecar files (ledger, queue order, the log, the
     lock) and the dated subfolders that still hold a night's own index.md and
-    run.json — see night_dir() in agents/plan-agent/paths.py — neither of
-    which is a plan.
+    run.json, from before the bucket agents, neither of which is a plan.
     """
     root = plans_dir()
     if not os.path.isdir(root):
@@ -2090,27 +2021,24 @@ def ledger_path():
     return os.path.join(plans_dir(), "ledger.json")
 
 
-def planning_lock():
-    """The lock for the list the board is showing.
-
-    One lock per list, because one wake can now plan several
-    and a shared lock would have the second wait on the first. The board only
-    ever shows one list, so it only ever asks about that one's.
-    """
-    return os.path.join(DATA_ROOT, ".plan-agent-%s.lock" % current_dataset())
+def bucket_agent_lock():
+    """The bucket agents' lock for the list the board is showing, the one the
+    hourly wake, Run now and core/bucket_wake.py all take or check."""
+    return bucket_wake.lock_path(DATA_ROOT, current_dataset())
 
 
-# The log lines plan.py writes, and which of them mean what. Matched here rather
-# than exported from plan.py because the log is a human artefact first: it is
+# The log lines the bucket agents' runner writes (plans.log() in
+# agents/bucket-agent/), and which of them mean what. Matched here rather than
+# exported from the runner because the log is a human artefact first: it is
 # read at a terminal far more often than it is parsed, and pinning its wording
 # to a format string the board depends on would stop it being edited freely.
-# When one of these stops matching, the column goes quiet — it does not lie.
+# When one of these stops matching, the fold goes quiet — it does not lie.
 _LOG_RE = re.compile(r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\s\s+(.*)$")
-_FLIGHT_RE = re.compile(r"^>\s+(.*?)\s+\(([a-z0-9\-]+)\)\s*$")
-_DONE_RE = re.compile(r"^planned\s+(.*?)\s+(\d+)s\s+\$([0-9.]+)\s*$")
-# Greedy up to 50 rather than lazy to a run of spaces: plan.py pads the title
-# into a 50-character field, so a title that fills it is followed by a single
-# space and a lazy match would take the message as part of the title.
+_FLIGHT_RE = re.compile(r"^>\s+(.*?)\s+\(([^,()]+),\s*([a-z]+)\)\s*$")
+_DONE_RE = re.compile(r"^(?:planned|folded)\s+(.*?)\s+(\d+)s\s+\$([0-9.]+)\s*$")
+# Greedy up to 50 rather than lazy to a run of spaces: the runner pads the
+# title into a 50-character field, so a title that fills it is followed by a
+# single space and a lazy match would take the message as part of the title.
 _FAIL_RE = re.compile(r"^failed\s(.{1,50})\s+(\S.*)$")
 
 
@@ -2141,57 +2069,9 @@ def agents_missing():
     return None
 
 
-def start_planning_agent_run():
-    """Kick off a batch now, from the board's button.
-
-    `--force`, which is the whole point: it skips the clock gate and the window
-    test, so it runs at eleven in the morning when neither would allow it. It
-    does not skip the lock, and it does not skip the ledger — a task planned
-    last night whose text has not moved is still skipped, so pressing this twice
-    in a row is cheap rather than a second full batch.
-
-    Detached with start_new_session, so the run outlives both this request and
-    this server. A batch is twenty-odd agents over half an hour and it must not
-    be tied to whether a board tab stays open.
-
-    The lock is checked here as well as in run.sh. run.sh would refuse anyway,
-    but it refuses by logging a line and exiting 0, which from here is
-    indistinguishable from a run that started — and a button that says it
-    started something it did not is worse than one that refuses.
-    """
-    import subprocess
-    if planning_agent_pick is None:
-        return None, {"error": "no planning agent in this checkout"}
-    if not settings.agents_on(current_dataset(), DATA_ROOT):
-        return None, {"error": "agents are off for this board in Settings"}
-    if SCRATCH:
-        # A test server over a throwaway data root: a real run would spend
-        # money and plan against whatever run.sh resolves, not this folder.
-        return None, {"error": "not started from a server on a scratch data root"}
-    missing = agents_missing()
-    if missing:
-        return None, {"error": missing}
-    script = os.path.join(ROOT, "agents", "plan-agent", "run.sh")
-    if not os.path.isfile(script):
-        return None, {"error": "agents/plan-agent/run.sh is not here"}
-    if os.path.isdir(planning_lock()):
-        return None, {"error": "a run is already going"}
-    try:
-        subprocess.Popen(
-            # Named, rather than letting run.sh take every armed list: the
-            # button sits on a board showing one list and means that one.
-            [script, "--force", "--dataset", current_dataset()], cwd=ROOT,
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-            stdin=subprocess.DEVNULL, start_new_session=True)
-    except OSError as exc:
-        return None, {"error": "could not start it: %s" % exc}
-    sys.stdout.write("planning agent: forced a run from the board\n")
-    sys.stdout.flush()
-    return {"ok": True, "started": True}, None
-
-
-def planning_agent_run():
-    """What the planning agent is doing, or did last, from its lock and its log.
+def bucket_agent_run():
+    """What the bucket agents are doing on this list, or did last, from the
+    lock and the log.
 
     Two sources again, and neither is enough alone. The lock directory says
     whether a run is going on right now — it is held for the life of the batch
@@ -2199,10 +2079,10 @@ def planning_agent_run():
     through. A log with a task in flight and no lock is a run that died between
     the two, which is worth saying out loud rather than showing as live.
 
-    Only ever one task is in flight: plan.py runs its agents one at a time, on
-    purpose, so this is a single card rather than a list of them.
+    Only ever one item is in flight: the runner works through them one at a
+    time, on purpose, so this is a single card rather than a list of them.
     """
-    lock = planning_lock()
+    lock = bucket_agent_lock()
     live = os.path.isdir(lock)
     since = ""
     if live:
@@ -2213,7 +2093,7 @@ def planning_agent_run():
             live = False
 
     lines = []
-    for raw in _tail(os.path.join(plans_dir(), "plan-agent.log"), 400):
+    for raw in _tail(os.path.join(plans_dir(), "bucket-agent.log"), 400):
         m = _LOG_RE.match(raw)
         if m:
             lines.append((m.group(1), m.group(2).strip()))
@@ -2230,13 +2110,13 @@ def planning_agent_run():
     to_plan = 0
     current, done, failed, stopped = None, [], [], ""
     for stamp, body in lines:
-        m = re.match(r"^start:\s+(\d+) to plan", body)
+        m = re.match(r"^start:\s+(\d+) to run", body)
         if m:
             to_plan = int(m.group(1))
             continue
         m = _FLIGHT_RE.match(body)
         if m:
-            current = {"title": m.group(1), "agent": m.group(2), "since": stamp}
+            current = {"title": m.group(1), "agent": m.group(2).strip(), "kind": m.group(3), "since": stamp}
             continue
         m = _DONE_RE.match(body)
         if m:
@@ -2249,7 +2129,7 @@ def planning_agent_run():
             failed.append({"title": m.group(1).strip(), "why": m.group(2), "at": stamp})
             current = None
             continue
-        if body.startswith("Stopped") or body.startswith("STOPPED"):
+        if body.startswith("stopped:") or body.startswith("STOPPED"):
             stopped, current = body, None
 
     orphan = bool(current) and not live
@@ -2475,8 +2355,8 @@ except ImportError:
 
 # The Agents view. Its routes are agents-engine's own, answered under
 # /agents-api so they cannot collide with this server's, and pointed at this
-# repo's agents/ folder rather than at the workspace folder: the board shows the Plan and
-# Implement agents it hands work to, and nothing else on the machine. Same
+# repo's agents/ folder rather than at the workspace folder: the board shows the bucket
+# agents it hands work to, and nothing else on the machine. Same
 # failure as the two above: without PACKAGES the view says it has nothing to
 # show and the board is otherwise unchanged. The engine never opens an agent's
 # files; it runs the agent's own commands, so this adds no second writer for
@@ -2523,11 +2403,6 @@ _ai_chat_cache = {}
 # Permission-rule path patterns, relative to the chat's cwd (the folder a
 # list's claude.json names, to-dos itself for a list with no claude.json).
 CHAT_WRITE_DENIES = ["**/data/*/todo.md"]
-
-
-def planner_missing(bucket):
-    with plan_paths():
-        return not planning_agent_plan.agent_on_disk(planning_agent_plan.bucket_agent(bucket))
 
 
 _shared_chat_cache = {}
@@ -2706,7 +2581,7 @@ def shared_refusal(method, path):
     What only makes sense on the owner's Mac: revealing a folder in Finder,
     approving a folder on its disk, the agents and their launchd schedules, the
     companion and the usage windows read from local Claude Code transcripts,
-    and starting the Plan agent on the owner's own subscription. A 404, which
+    and starting the bucket agents on the owner's own subscription. A 404, which
     is what the board already copes with from a host that has none of them.
     The chat routes need no entry here: ai_chat_for() answers None without the
     server's API key, and kanban/server_chat.py's SharedChat with it.
@@ -2718,7 +2593,7 @@ def shared_refusal(method, path):
     gone = (404, {"error": "not on the shared board"})
     if path.startswith(AGENTS_PREFIX + "/"):
         return gone
-    if method == "POST" and path in ("/project/open", "/project-folders", "/planning_agent/run"):
+    if method == "POST" and path in ("/project/open", "/project-folders"):
         return gone
     if method in ("GET", "HEAD") and path in ("/schedule.json", "/usage.json"):
         return gone
@@ -3171,6 +3046,26 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
             return
+        if path == "/api/bucket-agents":
+            from urllib.parse import parse_qs, urlparse
+            q = parse_qs(urlparse(self.path).query)
+            ds = (q.get("list") or [""])[0].strip() or current_dataset()
+            if not ds or ds not in list_datasets():
+                return self._json(404, {"error": "there is no list called %r" % (ds,)})
+            out = []
+            for b in bucket_agents.all_buckets(ds, DATA_ROOT):
+                out.append({"bucket": b["bucket"], "name": bucket_agent_name(ds, b["bucket"]),
+                            "mode": b["mode"], "start": b["start"],
+                            "ready": b["ready"], "missing": b["missing"]})
+            # Which bucket's agent each column of the board hands to: the
+            # column's name -> its bucket (stream), the way its brief is found.
+            columns = {}
+            for heading, label in bucket_headings(ds):
+                try:
+                    columns[label] = bucket_brief_path(heading, ds)[0]
+                except LookupError:
+                    pass
+            return self._json(200, {"buckets": out, "columns": columns})
         if path == "/people.json":
             try:
                 with open(people_path(), encoding="utf-8") as fh:
@@ -3205,7 +3100,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 text, exists = _read_text(bpath) if bpath else ("", False)
                 buckets.append({"name": label, "heading": heading, "slug": stream,
                                 "text": text, "exists": exists,
-                                "filled": bool(exists and planning_agent_plan.BRIEF_EMPTY not in text)})
+                                "filled": bool(exists and bucket_agents.NOT_FILLED not in text)})
             return self._json(200, {"board": ds,
                                     "about": {"text": about, "exists": about_exists},
                                     "context": {"text": context, "exists": context_exists},
@@ -3299,8 +3194,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 # Answer rather than let the request die with a traceback.
                 return self._json(404, {"error": "no list is chosen yet, so there is no brief to edit"})
             if not bpath:
-                return self._json(404, {"error": "this checkout has no planning agent, "
-                                                 "so there is no brief to edit"})
+                return self._json(404, {"error": "that column names no bucket, so there is no brief to edit"})
             try:
                 with open(bpath, encoding="utf-8") as fh:
                     text, exists = fh.read(), True
@@ -3308,7 +3202,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 # No brief yet. The template is the honest starting point, and
                 # it is what the folder would have been scaffolded with anyway.
                 text, exists = brief_template(), False
-            marker = planning_agent_plan.BRIEF_EMPTY
+            marker = bucket_agents.NOT_FILLED
             return self._json(200, {
                 "bucket": bucket,
                 "stream": stream,
@@ -3326,37 +3220,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 # someone wrote from one scaffolded with a one-line summary,
                 # which carries no marker but only the template's own prose.
                 "template": brief_template(),
-                # A heading always resolves to a stream of its own since 17 Sep
-                # 2026, so "fallback" no longer means "nothing matched" — it
-                # means no planner of that name exists on disk yet, which is the
-                # thing worth saying: the bucket has a brief nobody is pointed
-                # at until somebody writes data/<dataset>/buckets/<stream>/<dataset>-<stream>-agent.md.
-                "fallback": planner_missing(bucket),
+                # Whether the bucket's agent could take a task as the brief
+                # stands, core/bucket_agents.py being the one judge of that.
+                "ready": exists and bucket_agents.parse(text)["ready"],
             })
-        # The Agents tab's own planner list: one row per bucket the caller
-        # names (the board already has the current list's buckets in
-        # state.doc, so it sends them rather than this route parsing todo.md
-        # itself). Same lookup /bucket-brief.json's "fallback" flag already
-        # uses — bucket_agent() and agent_on_disk() in
-        # agents/plan-agent/plan.py — so a bucket with no planner on disk
-        # reads the same way in both places.
-        if path == "/agents-planners.json":
-            from urllib.parse import parse_qs, urlparse
-            q = parse_qs(urlparse(self.path).query)
-            raw = (q.get("buckets") or [""])[0]
-            names = [n for n in (part.strip() for part in raw.split(",")) if n]
-            if planning_agent_plan is None or not current_dataset():
-                return self._json(200, {"planners": []})
-            planners = []
-            with plan_paths():
-                for name in names:
-                    agent = planning_agent_plan.bucket_agent(name)
-                    planners.append({
-                        "bucket": name,
-                        "agent": agent,
-                        "onDisk": planning_agent_plan.agent_on_disk(agent),
-                    })
-            return self._json(200, {"planners": planners})
         if path == "/reports.json":
             return self._json(200, {"reports": report_listing()})
         if path == "/projects.json":
@@ -3395,10 +3262,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             })
         if path == "/plans.json":
             return self._json(200, {"plans": plan_listing()})
-        # The run: a tail of the planning agent's log, read for the Spend and
-        # schedules sheet.
-        if path == "/planning-agent.json":
-            return self._json(200, planning_agent_run())
+        # The run: a tail of the bucket agents' log for this list, read for
+        # the run-cost fold and to see a run started from the board finish.
+        if path == "/bucket-agent.json":
+            return self._json(200, bucket_agent_run())
         if path == "/agents-status.json":
             return self._json(200, agents_status())
         # Every stream manifest under the workspace folder, with whatever is wrong with each.
@@ -4003,13 +3870,6 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 payload.get("cwd"), payload.get("title")
             )
             return self._json(400 if err else 200, err or got)
-        if path == "/planning_agent/run":
-            # Spends real money, so it is guarded like every other write route
-            # and confirmed in the board before it gets here.
-            if self.headers.get("X-Board") != "1":
-                return self._json(403, {"error": "not from the board"})
-            got, err = start_planning_agent_run()
-            return self._json(409 if err else 200, err or got)
         if path == "/agenda-history":
             data = self._body()
             if data is None:
@@ -4065,8 +3925,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._json(400, {"error": "expected a bucket and its brief"})
         stream, bpath = bucket_brief_path(bucket)
         if not bpath:
-            return self._json(404, {"error": "this checkout has no planning agent, "
-                                             "so there is no brief to write"})
+            return self._json(404, {"error": "that column names no bucket, so there is no brief to write"})
         os.makedirs(os.path.dirname(bpath), exist_ok=True)
         # Same temp-then-swap as every other write in here, so a crash
         # mid-write cannot leave a half-written brief for the night to read.
@@ -4077,7 +3936,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             os.fsync(fh.fileno())
         os.replace(tmp, bpath)
         return self._json(200, {"ok": True, "stream": stream,
-                                "filled": planning_agent_plan.BRIEF_EMPTY not in text})
+                                "filled": bucket_agents.NOT_FILLED not in text})
 
     def _put_json_from_board(self):
         """(payload, None), or (None, True) once a refusal has been sent: the
@@ -4565,6 +4424,8 @@ def main():
             read_text=lambda p: _steady_read(p)[0])
         if NOTIFIER["thread"]:
             print("Desktop banners for due tasks are on.")
+        # On-assign bucket agents start within a minute of a handover.
+        bucket_wake.start(DATA_ROOT)
 
     url = "http://127.0.0.1:%d/%s" % (PORT, PAGE)
     print("To-do board running at %s" % url)

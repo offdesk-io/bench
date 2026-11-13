@@ -46,14 +46,14 @@ import todo  # noqa: E402
 import owner_profile  # noqa: E402
 import archive  # noqa: E402
 
-# plannable() is the Plan agent's own read of what counts as a real handover —
-# the tag plus the matching sub-task pick.py's docstring describes. Reused
-# rather than re-derived here, for the same reason todo.py is imported rather
-# than copied: two readers of "is this actually handed over" that can disagree
-# is worse than either being wrong on its own.
-_PLAN_AGENT = Path(__file__).resolve().parents[5] / "agents" / "plan-agent"
-sys.path.insert(0, str(_PLAN_AGENT))
-import pick  # noqa: E402
+# handed_over() is the bucket agents' own read of what counts as a real
+# handover: the tag plus the matching sub-task. Reused rather than re-derived
+# here, for the same reason todo.py is imported rather than copied: two readers
+# of "is this actually handed over" that can disagree is worse than either
+# being wrong on its own.
+_BUCKET_AGENT = Path(__file__).resolve().parents[5] / "agents" / "bucket-agent"
+sys.path.insert(0, str(_BUCKET_AGENT))
+import bucket_work  # noqa: E402
 
 # Two syntaxes, one meaning. impact, effort, due and ai are written as Dataview
 # inline fields — [due:: 2026-08-21] — because views.md queries them and Dataview
@@ -188,11 +188,6 @@ def next_working_day(date):
 def load(path):
     text = Path(path).read_text(encoding="utf-8")
     return text.splitlines()
-
-
-# Delegate prompts are a starting point the owner complements, not a spec. Past this
-# the owner has to read the prompt before using it, which defeats the point.
-PROMPT_WORD_CEILING = 70
 
 
 def section_of(lines, idx):
@@ -751,30 +746,30 @@ def check_tag_hygiene(lines, tasks):
                 retired[0],
                 "FIX",
                 f"{len(retired)} task line(s) still carry `ai:`, which was retired on "
-                f"21 Sep 2026. Say who does the work with [to:: Plan agent], "
-                f"[to:: Implement agent] or a person's name, and drop the tag.",
+                f"21 Sep 2026. Say who does the work with [to:: <bucket> agent] "
+                f"or a person's name, and drop the tag.",
             )
         )
     return findings
 
 
 def check_handover_hygiene(lines, text):
-    """`[to:: Plan agent]` or `[to:: Implement agent]` with no handover behind it.
+    """`[to:: <bucket> agent]` (or an old Plan/Implement agent) with no handover behind it.
 
-    The tag alone is not a handover: what makes a task the Plan agent's, or the
-    Implement agent's, is the `<id>-plan`/`<id>-implement` sub-task handOver()
+    The tag alone is not a handover: what makes a task its bucket agent's is
+    the `<id>-plan`/`<id>-implement` sub-task handOver()
     (the board's 04-tier-two-the-one-thing.js) writes alongside the tag. `pa`'s
     own SKILL.md documents writing the tag directly as an option, which is how a
     task ends up looking delegated with nobody having handed it over.
 
-    That gap closes itself: after each run the Plan agent asks
-    the board to hand every such task over (pick.unhanded(), queued through
-    core/tick_queue.py), and the board does it with handOver() on its next load.
-    So this still reports the gap, since the file is not yet what it will be,
-    but says what will happen rather than asking the owner to do it. The test is
-    pick.unhanded()'s own, reused rather than re-derived: two readers of "is
-    this actually handed over" that can disagree is worse than either being
-    wrong on its own.
+    For a bucket's agent the gap closes itself: after each run the bucket
+    agents ask the board to hand every such task over (bucket_work.unhanded(),
+    queued through core/tick_queue.py), and the board does it with handOver() on
+    its next load. A tag naming the old Plan or Implement agent has nobody to
+    close it, so that one points at the PA's handover migration. The test is
+    bucket_work.handed_over()'s own, reused rather than re-derived: two readers
+    of "is this actually handed over" that can disagree is worse than either
+    being wrong on its own.
 
     Works from a fresh todo.parse_doc() of the whole file rather than this
     script's own dict-based tasks, since that shape has no id: or bracket-form
@@ -792,29 +787,41 @@ def check_handover_hygiene(lines, text):
                 return i
         return None
 
+    legacy = (todo.PLAN_AGENT, todo.IMPLEMENT_AGENT)
     for task in doc_tasks:
         agent = todo.agent_of(task.to)
-        if task.done or task.stable_id or agent not in (todo.PLAN_AGENT, todo.IMPLEMENT_AGENT):
+        if task.done or task.stable_id or not agent:
             continue
         findings.append(
             Finding(
                 line_of(task),
                 "CHECK",
                 f"\"{task.title}\" carries [to:: {agent}] but has no id: tag yet, so it "
-                f"has no handover either. The board gives it an id when it next loads, "
-                f"and the Plan agent asks for the handover on its run after that.",
+                f"has no handover either. The board gives it an id when it next loads"
+                + (". It names a retired agent, so move it to its bucket's agent with "
+                   "bucket_handover_migration.py." if agent in legacy
+                   else ", and it can then be handed over from the board."),
             )
         )
-    for task, agent in pick.unhanded(doc_tasks):
-        kind = "plan" if agent == todo.PLAN_AGENT else "implement"
+    for task in doc_tasks:
+        agent = todo.agent_of(task.to)
+        if task.done or not task.stable_id or not agent or bucket_work.handed_over(task):
+            continue
+        if agent in legacy:
+            kind = "plan" if agent == todo.PLAN_AGENT else "implement"
+            how = ("It names a retired agent, so nothing will hand it over: move it to its "
+                   "bucket's agent with bucket_handover_migration.py, or drop the tag if it was "
+                   "written in error.")
+        else:
+            kind = "plan or `-implement`"
+            how = ("Hand it over from the board, or drop the tag if it was written in error. "
+                   "A bucket whose agent is not set up takes nothing: offer pa-bucket-setup first.")
         findings.append(
             Finding(
                 line_of(task),
                 "CHECK",
                 f"\"{task.title}\" carries [to:: {agent}] but has no "
-                f"`{task.stable_id}-{kind}` sub-task yet. The Plan agent asks the board "
-                f"to hand it over after its next run; hand it over from the board now "
-                f"to have it sooner, or drop the tag if it was written in error.",
+                f"`{task.stable_id}-{kind}` sub-task yet. {how}",
             )
         )
     return findings
@@ -898,8 +905,8 @@ def archived_slugs(todo_path):
     than teaching this script a second way to parse an archived line.
 
     The archive lives at backups/done-archive.md next to todo.md, the same
-    layout backup_dir() in kanban/server.py and report_path() in
-    agents/plan-agent/report.py both already assume.
+    layout backup_dir() in kanban/server.py and _archive_path() in
+    agents/bucket-agent/report.py both already assume.
     """
     path = Path(todo_path).parent / "backups" / "done-archive.md"
     return {t.slug for t in archive.read_archive(str(path)) if t.slug}
@@ -982,50 +989,6 @@ def check_slugs(tasks, archived=frozenset()):
                     "CHECK",
                     f"#{entry['slug']} is not referenced by any blocked-by:. Either "
                     f"something should point at it, or the slug can go.",
-                )
-            )
-    return findings
-
-
-def check_prompt_coverage(tasks):
-    """Every live item with the Implement agent carries its own prompt, on the task.
-
-    Prompts used to live only in Delegate to Claude, which made them the one
-    thing in the file that could not be rebuilt from the buckets. They live on
-    the task now, so an Implement agent item without one breaks the rebuild.
-    """
-    findings = []
-    for entry in all_entries(tasks):
-        if entry["agent"] != todo.IMPLEMENT_AGENT or entry["checked"]:
-            continue
-        # A handover's Implement sub-task is briefed by the plan its review
-        # points at, or by the task itself when it went straight to the agent, so
-        # it needs no prompt of its own. Its slug is the id of its task and
-        # `-implement`.
-        if (entry["slug"] or "").endswith("-implement"):
-            continue
-        # Nor does the task those sub-tasks sit under.
-        if any((sub["slug"] or "").endswith("-implement") for sub in entry.get("subs", [])):
-            continue
-        if not entry["prompt"]:
-            findings.append(
-                Finding(
-                    entry["line"],
-                    "FIX",
-                    f"\"{entry['title'][:50]}\" is with the Implement agent but carries no Prompt: note. "
-                    f"Delegate to Claude is built from these, so it will rebuild without it.",
-                )
-            )
-            continue
-        words = len(entry["prompt"].split())
-        if words > PROMPT_WORD_CEILING:
-            findings.append(
-                Finding(
-                    entry["line"],
-                    "CHECK",
-                    f"prompt on \"{entry['title'][:40]}\" is {words} words. The owner asked for "
-                    f"short prompts they complement themself, so trim towards "
-                    f"{PROMPT_WORD_CEILING}.",
                 )
             )
     return findings
@@ -1141,54 +1104,6 @@ def check_headline(lines):
     return findings
 
 
-def check_ranks(tasks):
-    """Ranks order Delegate to Claude, so they must be unique and complete."""
-    findings = []
-    entries = all_entries(tasks)
-    ranked = [e for e in entries if e["rank"] is not None]
-    # A step under a ticked task is finished with it, whatever its own box says.
-    finished = {e["line"] for t in tasks for e in [t] + t["subs"]
-                if e["checked"] or t["checked"]}
-
-    seen = {}
-    for entry in ranked:
-        if entry["rank"] in seen:
-            findings.append(
-                Finding(
-                    entry["line"],
-                    "FIX",
-                    f"rank:{entry['rank']} is already used on line {seen[entry['rank']]}. "
-                    f"Two items cannot share a position in the list.",
-                )
-            )
-        seen[entry["rank"]] = entry["line"]
-
-    for entry in ranked:
-        if not entry["agent"] and entry["line"] not in finished:
-            findings.append(
-                Finding(
-                    entry["line"],
-                    "FIX",
-                    f"\"{entry['title'][:50]}\" carries rank:{entry['rank']} but is not "
-                    f"delegated to an agent. Only an agent's work is ranked.",
-                )
-            )
-
-    if ranked:
-        numbers = sorted(seen)
-        missing = [n for n in range(1, max(numbers) + 1) if n not in seen]
-        if missing:
-            findings.append(
-                Finding(
-                    None,
-                    "CHECK",
-                    f"ranks skip {', '.join(str(n) for n in missing)}. Harmless, but the "
-                    f"numbering in Delegate will not match the tags.",
-                )
-            )
-    return findings
-
-
 def check_week_health(tasks, today):
     """The `week` tag is the whole of This week now, so it is checked on its own.
 
@@ -1286,8 +1201,6 @@ def main():
         ("Sub-step chronology", check_substep_chronology(tasks)),
         ("This week", check_week_health(tasks, today)),
         ("Slugs and dependencies", check_slugs(tasks, archived)),
-        ("Prompts on tasks", check_prompt_coverage(tasks)),
-        ("Delegate ranks", check_ranks(tasks)),
         ("The one thing", check_headline(lines)),
         ("Start dates", check_start_dates(lines)),
         ("Tag hygiene", check_tag_hygiene(lines, tasks)),

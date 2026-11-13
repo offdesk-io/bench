@@ -89,7 +89,7 @@ try {
     window.__brief = {
       bucket: '', stream: 'people', path: 'data/demo/buckets/people/people.md',
       text: '# People\\n\\nThe brief on disk.\\n', exists: true, filled: true,
-      marker: '<!-- NOT FILLED IN YET -->', fallback: false
+      marker: '<!-- NOT FILLED IN YET -->', ready: false
     };
     window.fetch = (url, opts) => {
       const method = (opts && opts.method) || 'GET';
@@ -170,8 +170,8 @@ try {
   check('the brief sheet opened', sheet.summary !== null)
   check('the summary field is seeded from the file', sheet.summary === 'The brief on disk.',
     JSON.stringify(sheet.summary))
-  check('and one field per section, in template order', sheet.sections.join('|') ===
-    'Triage.|Nothing yet.|Alex.|Shipped.', sheet.sections.join('|'))
+  check('and a field per section, eight of them, in template order', sheet.sections.join('|') ===
+    '|Triage.||||Nothing yet.|Alex.|Shipped.', sheet.sections.join('|'))
   check('named for the bucket it belongs to', /^Brief: /.test(sheet.heading), sheet.heading)
   check('and it says where it saves', sheet.sub.includes('buckets/people/people.md'), sheet.sub)
   check('with Cancel and Save', sheet.buttons.join('|') === 'Cancel|Save brief',
@@ -199,8 +199,8 @@ try {
     summary.value = 'Written in the sheet.';
     summary.dispatchEvent(new Event('input'));
     const sections = document.querySelectorAll('[data-brief-section]');
-    sections[0].value = 'Triage, edited.';
-    sections[0].dispatchEvent(new Event('input'));
+    sections[1].value = 'Triage, edited.';
+    sections[1].dispatchEvent(new Event('input'));
     [...document.querySelectorAll('.tenon-modal__footer button')].find(b => b.textContent === 'Save brief').click();
     await new Promise(r => setTimeout(r, 200));
     const last = window.__sent[window.__sent.length - 1] || {};
@@ -223,14 +223,15 @@ try {
   check('an untouched section is carried through unchanged',
     savedText.includes('Alex.'), JSON.stringify(savedText))
   check('every section heading survives the round trip',
-    ['The processes I run in this bucket', 'What already does it', 'Who is involved',
+    ['What this agent is for', 'The processes I run in this bucket', 'Guidelines it follows', 'What it may touch',
+      'What it must never touch', 'What already does it', 'Who is involved',
       'What good looks like here'].every(h => savedText.includes('## ' + h)),
     savedText)
   check('then draws the bucket editor again', saved.rows === rows.rows, `${saved.rows} rows`)
 
   // --- a bucket with no brief yet ------------------------------------------
   const fresh = await evalJS(`(async () => {
-    window.__brief = { ...window.__brief, exists: false, filled: false, fallback: true,
+    window.__brief = { ...window.__brief, exists: false, filled: false,
       stream: 'general', text: '# <Bucket name>\\n\\n<!-- NOT FILLED IN YET -->\\n' };
     document.querySelector('.bkrow [data-brief]').click();
     await new Promise(r => setTimeout(r, 120));
@@ -239,12 +240,12 @@ try {
   })()`)
   check('a brief with no file says so', /No brief yet/.test(fresh.prose), fresh.prose.slice(0, 120))
   check('and opens with an empty summary field', fresh.summary === '', JSON.stringify(fresh.summary))
-  check('a fallback bucket says which brief it is really editing',
-    /fallback/.test(fresh.prose), fresh.prose.slice(0, 200))
+  check('and says nothing about a planner or a fallback brief',
+    !/fallback|planner/.test(fresh.prose), fresh.prose.slice(0, 200))
 
   // --- filling in a section clears the empty marker automatically ----------
   const cleared = await evalJS(`(async () => {
-    window.__brief = { ...window.__brief, exists: false, filled: false, fallback: false,
+    window.__brief = { ...window.__brief, exists: false, filled: false,
       stream: 'people', text: '# People\\n\\n\\n\\n<!-- NOT FILLED IN YET -->\\n\\n' +
         '## The processes I run in this bucket\\n\\n## What already does it\\n\\n' +
         '## Who is involved\\n\\n## What good looks like here\\n' };
@@ -266,6 +267,69 @@ try {
     !cleared.text.includes('NOT FILLED IN YET'), cleared.text)
   check('and keeps what was typed into that section',
     cleared.text.includes('Now written.'), cleared.text)
+
+  // --- the agent format: frontmatter, eight sections, mode and start ---------
+  const newFormat = '---\nmode: plan-first\nstart: scheduled\nowner: keep me\n---\n\n# People\n\nThe brief on disk.\n\n' +
+    '## What this agent is for\n\nTriage the inbox.\n\n## The processes I run in this bucket\n\nWeekly triage.\n\n' +
+    '## Guidelines it follows\n\nPlain tone.\n\n## What it may touch\n\nThe inbox folder.\n\n' +
+    '## What it must never touch\n\nPayroll.\n\n## What already does it\n\nNothing.\n\n' +
+    '## Who is involved\n\nAlex.\n\n## What good looks like here\n\nShipped.\n'
+  const agentSheet = await evalJS(`(async () => {
+    window.__brief = { ...window.__brief, exists: true, filled: true, text: ${JSON.stringify(newFormat)} };
+    openBucketEditor();
+    await new Promise(r => setTimeout(r, 120));
+    document.querySelector('.bkrow [data-brief]').click();
+    await new Promise(r => setTimeout(r, 120));
+    return { mode: document.querySelector('#briefMode')?.value, start: document.querySelector('#briefStart')?.value,
+      modes: [...document.querySelectorAll('#briefMode option')].map(o => o.value).join('|'),
+      starts: [...document.querySelectorAll('#briefStart option')].map(o => o.value).join('|'),
+      sections: [...document.querySelectorAll('[data-brief-section]')].map(b => b.value).join('|') };
+  })()`)
+  check('the sheet offers mode and start as choices and reads them from the frontmatter',
+    agentSheet.mode === 'plan-first' && agentSheet.start === 'scheduled' &&
+    agentSheet.modes === '|plan-first|free-rein' && agentSheet.starts === 'on-assign|scheduled', JSON.stringify(agentSheet))
+  check('and all eight sections are read',
+    agentSheet.sections === 'Triage the inbox.|Weekly triage.|Plain tone.|The inbox folder.|Payroll.|Nothing.|Alex.|Shipped.', agentSheet.sections)
+  const agentSaved = await evalJS(`(async () => {
+    const mode = document.querySelector('#briefMode');
+    mode.value = 'free-rein';
+    mode.dispatchEvent(new Event('change'));
+    [...document.querySelectorAll('.tenon-modal__footer button')].find(b => b.textContent === 'Save brief').click();
+    await new Promise(r => setTimeout(r, 500));
+    const last = window.__sent[window.__sent.length - 1] || {};
+    return last.body ? JSON.parse(last.body).text : '';
+  })()`)
+  check('a changed mode is written back to the frontmatter', /^---\nmode: free-rein\n/.test(agentSaved), JSON.stringify(agentSaved.slice(0, 80)))
+  check('start and any other key are kept as they were', /\nstart: scheduled\nowner: keep me\n---\n/.test(agentSaved), JSON.stringify(agentSaved.slice(0, 120)))
+  check('every section survives with its text', ['Triage the inbox.', 'Weekly triage.', 'Plain tone.', 'The inbox folder.', 'Payroll.',
+    'Nothing.', 'Alex.', 'Shipped.'].every(t => agentSaved.includes(t)), agentSaved)
+  check('and the marker is not put back on a written brief', !agentSaved.includes('NOT FILLED IN YET'), agentSaved)
+
+  // An old-format brief, with a section of its own the editor has no field for.
+  const oldSaved = await evalJS(`(async () => {
+    window.__brief = { ...window.__brief, text: '# People\\n\\nOld brief.\\n\\n## The processes I run in this bucket\\n\\nTriage.\\n\\n## Notes to self\\n\\nKeep this.\\n' };
+    openBucketEditor();
+    await new Promise(r => setTimeout(r, 120));
+    document.querySelector('.bkrow [data-brief]').click();
+    await new Promise(r => setTimeout(r, 120));
+    [...document.querySelectorAll('.tenon-modal__footer button')].find(b => b.textContent === 'Save brief').click();
+    await new Promise(r => setTimeout(r, 500));
+    const last = window.__sent[window.__sent.length - 1] || {};
+    return last.body ? JSON.parse(last.body).text : '';
+  })()`)
+  check('saving an old-format brief keeps its text and its own section', oldSaved.includes('Old brief.') && oldSaved.includes('Triage.') &&
+    oldSaved.includes('## Notes to self\n\nKeep this.'), oldSaved)
+  check('and writes no frontmatter the owner did not choose', !oldSaved.startsWith('---'), oldSaved.slice(0, 40))
+
+  // The bucket editor says whether each bucket's agent is set up.
+  const badge = await evalJS(`(async () => {
+    const col = state.doc.buckets[0].name;
+    bucketAgentData = { list: state.dataset || '', buckets: [{ bucket: 'x', name: 'Demo x agent', mode: null, start: 'on-assign', ready: false, missing: ['mode', 'purpose'] }], columns: { [col]: 'x' } };
+    openBucketEditor();
+    await new Promise(r => setTimeout(r, 120));
+    return document.querySelector('.bkrow .bkagent')?.textContent + ' | ' + document.querySelector('.bkrow .bkagent')?.title;
+  })()`)
+  check('a bucket row says its agent is not set up, and what is missing', /^Agent: not set up \| Demo x agent is not set up\. It still needs how it works .*what it is for\.$/.test(badge), badge)
 
   // --- nothing reached disk -------------------------------------------------
   const blocked = await evalJS(`window.__blocked`)

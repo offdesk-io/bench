@@ -33,8 +33,8 @@ script:
 
 It refuses to start if the data root resolves inside the repo's own `data/`.
 With the three `TODOS_*` variables unset, `server.py` behaves exactly as it
-always has. `agents/plan-agent/paths.py` and `core/tick_queue.py` read
-`TODOS_DATA_ROOT` too, since the server calls into them, and Run the Plan agent
+always has. `agents/bucket-agent/paths.py`, `core/bucket_agents.py` and `core/tick_queue.py` read
+`TODOS_DATA_ROOT` too, since the server calls into them, and Run the bucket agents
 now refuses on a scratch root rather than start a real run.
 
 A suite run on its own, without `BOARD_PORT`, still goes to 8765 and prints a
@@ -68,6 +68,13 @@ queue all edit the document. Each installs a `fetch` that tears every non-GET ou
 before it does, records what was attempted, and ends by asserting nothing
 reached `todo.md`; the queue tests stub `/tick-queue.json` rather than read a
 file. `kanban/test_schedule.mjs` (the Spend and Schedules panels of the Agents tab) does the same.
+
+**Bucket agents in the browser suites.** A task is handed to its bucket's agent,
+which `/api/bucket-agents` names and says is ready or not. The scratch list has
+no buckets folder, so a suite that hands over or offers an agent seeds
+`bucketAgentData` itself, once `load()`'s own ask for it has landed (it would
+replace the seed), mapping the column's name to a bucket. A retired name, `handOver(t, 'Plan agent')`,
+hands nothing over.
 
 **`kanban/test_focus_prompt.mjs`** unlocks the tab too, because a locked tab
 shows no focus prompt. It holds cards, sub-tasks and drawer sections and talks
@@ -126,10 +133,13 @@ python3 core/test_todo.py          # the fixtures, and the working calendars
 node core/test_todo.mjs            # the same fixtures, the other language
 python3 core/test_reports.py       # aggregate.py, render.py, archive.py — no JS counterpart
 node kanban/ui/test_primitives.mjs # the React primitives against colHTML/cardShellHTML
-python3 agents/plan-agent/test_planning_agent.py    # the schedule, the picker, the runner
+python3 core/test_bucket_agents.py # a brief read as its agent: ready or not, its name, its processes
+python3 agents/bucket-agent/test_bucket_agent.py    # the runner, its guards and the on-assign wake
+python3 agents/pa_agent/skills/pa/scripts/test_check_todo.py              # the PA's checker
+python3 agents/pa_agent/skills/pa/scripts/test_bucket_handover_migration.py # moving old handovers over
 python3 companion/test_companion.py   # notify.py and digest.py; the Electron app is retired
 python3 core/test_notify_due.py    # desktop banners: the rules, the state file, the queue and its lock
-python3 kanban/test_bucket_brief.py # the brief routes — no board, no browser
+python3 kanban/test_bucket_brief.py # the brief routes and /api/bucket-agents — no board, no browser
 python3 kanban/test_board_access.py # signed-in mode and board access — starts its own servers
 python3 kanban/test_chat_spend.py   # the shared board's daily chat ledger and its limits
 python3 kanban/test_pa_check.py     # the second check on a PA reply's changes, with a fake model
@@ -138,9 +148,9 @@ python3 kanban/test_server_chat_live.py # the real CLI with the shared board's s
 # the ones below need the board: scripts/test-board.sh --all runs every one
 node kanban/test_schedule.mjs
 node kanban/test_board_link.mjs   # a banner's link naming its board
-node kanban/test_one_board.mjs     # handing a task over, the two reviews, whose move it is
+node kanban/test_one_board.mjs     # handing a task to its bucket's agent (plan-first, free-rein, not set up), the two reviews, whose move it is
 node kanban/test_signed_in.mjs     # signed in: the name, the Mac-only parts gone, sharing a list
-node kanban/test_subtasks.mjs      # sub-tasks in the drawer, and the agents' tick queue
+node kanban/test_subtasks.mjs      # sub-tasks in the drawer, and the agents' tick queue (no auto-approval of a plan)
 node kanban/test_board.mjs         # drag, drop, sort, add, Done as a heading, string card vs React one
 node kanban/test_chats.mjs
 node kanban/test_projects.mjs
@@ -154,7 +164,7 @@ node kanban/test_reports.mjs       # both halves, and the window picker over the
 node kanban/test_recurring_roll.mjs # where a recurring card lands when its date turns over
 node kanban/test_archiving.mjs     # the only thing that rewrites todo.md on a timer
 node kanban/test_save_guard.mjs    # the preconditions on PUT /data/todo.md
-node kanban/test_bucket_brief.mjs  # the Brief button, and the sheet behind it
+node kanban/test_bucket_brief.mjs  # the Brief button, the sheet behind it, the agent format round trip (frontmatter, eight sections, mode and start)
 ```
 
 **`test_phone.mjs`** runs twice — a 400px window and a 1400px one, both through
@@ -209,3 +219,14 @@ from the stub and leave it out of what counts as a write.
 Never write into a real list under `data/` from a test, not even a
 small, temporary one — that's real content, private and irreplaceable in a way
 `data/_test/` deliberately isn't.
+
+## The Agents tab and the bucket agents
+
+`test_agents.mjs` and `test_schedule.mjs` stub `/agents-api/state.json` and
+`/schedule.json` by swapping `window.fetch`, and `test_agents.mjs` asks the real
+server once, through the saved fetch, to check that `bucket-agent` is the only
+agent in `agents/`. The bucket list under the switch and hours is drawn from
+`bucketAgentData`, which the suite fills with a ready plan-first bucket, a ready
+free-rein scheduled one and one that is not set up. `test_agent_runs.mjs` awaits
+`bucketAgentLoad` after `load()` before setting its own `bucketAgentData`,
+since every load asks the server for the real one and would overwrite it.

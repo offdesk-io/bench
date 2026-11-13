@@ -366,6 +366,10 @@
   .bkrow input[data-name]{flex:0 1 160px}
   .bkrow input.bksummary{flex:2 1 auto; color:var(--tenon-text-faint)}
   .bkrow input.bksummary:focus{color:var(--tenon-text-default)}
+  /* Whether the bucket's agent is ready to take work. */
+  .bkagent{flex:none; font-size:var(--tenon-typography-size-sm); white-space:nowrap; color:var(--tenon-text-faint)}
+  .bkagent.ready{color:var(--tenon-text-default)}
+  .briefagent{margin:6px 0 0}
   /* The brief button. Shrink-proof beside the name input, which takes the
      rest of the row — a two-line "Brief" is the one thing that would make
      these rows different heights from one another. */
@@ -2172,12 +2176,6 @@
   /* Trails the cards rather than leading them, since what it reports is that
      the column stopped rendering, not a fact about the work itself. */
   .refmore{margin:10px 0 0 !important; font-size: var(--tenon-typography-size-sm) !important; color:var(--tenon-text-faint) !important}
-  .refrow{display:flex; align-items:flex-start; gap:9px}
-  .refrow .ref{flex:1; min-width:0}
-  .refnum{
-    flex:none; width:22px; height:22px; margin-top:9px; border-radius:var(--tenon-radius-default); background:var(--tenon-background-neutral);
-    color:var(--tenon-text-subtle); font-size: var(--tenon-typography-size-sm); font-weight:700; line-height:22px; text-align:center;
-  }
   /* Dependency chain: the blocker(s) sit beside the card waiting on them.
      Each blocker gets its own arrow into the target, so a task with several
      blockers still reads as several distinct dependencies rather than one

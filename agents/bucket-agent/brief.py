@@ -5,7 +5,7 @@ The middle step IMPROVEMENTS.md called for: "Every place that hands a task to
 an assistant re-derives its own understanding from the same chaotic notes
 field, and none of them leaves behind anything the others could reuse."
 `newChat()` (kanban/js/10-reference-sections.js) seeds a chat with a task's
-raw notes; `build_prompt()` (plan.py) pastes the same block into a research
+raw notes; the bucket agents' plan prompt (hooks.py) pastes the same block into a research
 prompt; `pa`, grooming a task in conversation, reads it a third way by hand.
 None of the three write anything back.
 
@@ -14,16 +14,16 @@ one short paragraph per task — direction, what's done, what's still needed —
 cached in data/<dataset>/briefings.json, keyed the same way the ledger is.
 The other three read it from there; none of them call a model to get it.
 
-A pass of its own rather than a by-product of planning, because eligible()
-in pick.py only ever sees `ai:: full` tasks — a tenth of the board, at best —
-and a briefing is for every open task, planned or not, delegated or not.
+A pass of its own rather than a by-product of planning, because a briefing is
+for every open task, planned or not, delegated or not. Copied from the Plan
+agent's folder; the bucket agents' runner runs it once per scheduled wake.
 Cheap on purpose: a small model, a short answer, no tools, and nothing spent
 on a task whose text has not changed since it was last briefed.
 
-    python3 agents/plan-agent/brief.py --dry-run       what it would do, no spend
-    python3 agents/plan-agent/brief.py                 the batch
-    python3 agents/plan-agent/brief.py --task "..."    one task, by hand
-    python3 agents/plan-agent/brief.py --all           ignore the cache
+    python3 agents/bucket-agent/brief.py --dry-run       what it would do, no spend
+    python3 agents/bucket-agent/brief.py                 the batch
+    python3 agents/bucket-agent/brief.py --task "..."    one task, by hand
+    python3 agents/bucket-agent/brief.py --all           ignore the cache
 """
 
 import argparse
@@ -39,8 +39,8 @@ sys.path.insert(0, os.path.join(ROOT, "core"))
 sys.path.insert(0, HERE)
 
 import paths  # noqa: E402
-import pick  # noqa: E402
-import plan  # noqa: E402
+import bucket_work  # noqa: E402
+import plans  # noqa: E402
 import settings  # noqa: E402
 import todo  # noqa: E402
 import windows  # noqa: E402
@@ -53,11 +53,11 @@ MODEL = "claude-haiku-4-5-20251001"
 
 
 def log(line):
-    plan.log("brief: %s" % line)
+    plans.log("brief: %s" % line)
 
 
 def briefable(tasks):
-    """Every open task — no ai: filter, no column filter, unlike pick.eligible().
+    """Every open task — no ai: filter, no column filter, unlike the runner's queue.
 
     A briefing is read by three things and none of them care whether Claude
     could do the work: newChat() and pa reach a task in any column, and a
@@ -90,16 +90,16 @@ def save_briefings(data):
 
 
 def is_stale(task, briefed):
-    seen = briefed.get(pick.key_of(task))
+    seen = briefed.get(bucket_work.key_of(task))
     if not seen:
         return True
-    return seen.get("fingerprint") != pick.fingerprint(task)
+    return seen.get("fingerprint") != bucket_work.fingerprint(task)
 
 
 def build_brief_prompt(task):
     """A short ask, not a research brief — see PLAN-BRIEF.md for that one.
 
-    The same materials build_prompt() in plan.py gathers — the task's own
+    The same materials the plan prompt gathers — the task's own
     text, its bucket, its project note, which is already part of the raw
     block rather than a separate fetch — asked to explain rather than to
     propose. No bucket brief, no external reading: the point is a cheap
@@ -203,7 +203,8 @@ def run(argv=None):
               "No open task matched %r." % args.task)
         return 0
 
-    guard = plan.file_hash(todo_file)
+    guard = plans.file_hash(todo_file)
+    began = dt.datetime.now().astimezone()
     expiry = windows.current(state=windows.read_state(paths.window_path()))["expires"]
     spent, written, stopped = 0.0, 0, None
     log("start: %d to brief" % len(todo_list))
@@ -224,8 +225,9 @@ def run(argv=None):
         result, cost, err = run_brief_agent(task)
         spent += cost or 0.0
 
-        if plan.file_hash(todo_file) != guard:
-            stopped = "STOPPED: todo.md changed during the run"
+        moved = plans.todo_moved(guard, began)
+        if moved:
+            stopped = "STOPPED: %s" % moved
             log(stopped)
             break
 
@@ -233,9 +235,9 @@ def run(argv=None):
             log("  failed %-50s %s" % (task.title[:50], err.splitlines()[0][:120]))
             continue
 
-        briefed["briefed"][pick.key_of(task)] = {
+        briefed["briefed"][bucket_work.key_of(task)] = {
             "title": task.title,
-            "fingerprint": pick.fingerprint(task),
+            "fingerprint": bucket_work.fingerprint(task),
             "generated": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
             "text": result,
         }

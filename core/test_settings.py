@@ -110,13 +110,6 @@ class SettingsTest(unittest.TestCase):
             got = json.load(fh)
         self.assertEqual(got["agents"]["plan"], {"start": "scheduled", "note": "mine"})
 
-    def test_planner_follows_plan_unless_set(self):
-        self.write({"models": {"plan": "opus"}})
-        self.assertEqual(settings.planner_model(self.root), "opus")
-        self.write({"models": {"plan": "opus", "planner": "haiku"}})
-        self.assertEqual(settings.planner_model(self.root), "haiku")
-        self.assertIsNone(settings.planner_model(self.root + "/none"))
-
     def fences(self, data=None):
         f = os.path.join(self.root, "agents", "fences.json")
         if data is not None:
@@ -132,38 +125,40 @@ class SettingsTest(unittest.TestCase):
     def test_budgets_missing_file_is_no_limit(self):
         self.assertEqual(settings.budgets(self.fences()),
                          {"daily_budget": None,
-                          "agent_budgets": {"plan-agent": None, "implement-agent": None}})
+                          "agent_budgets": {"bucket-agent": None}})
 
     def test_budgets_per_agent_round_trip(self):
         f = self.fences({"other": 1, "agent_budgets": {"someone-else": 9}})
         err = settings.save_budgets(f, {"daily_budget": 10,
-                                        "agent_budgets": {"plan-agent": 2, "implement-agent": 5.5}})
+                                        "agent_budgets": {"bucket-agent": 5.5}})
         self.assertIsNone(err)
         got = settings.budgets(f)
         self.assertEqual(got["daily_budget"], 10.0)
-        self.assertEqual(got["agent_budgets"], {"plan-agent": 2.0, "implement-agent": 5.5})
+        self.assertEqual(got["agent_budgets"], {"bucket-agent": 5.5})
         self.assertEqual(self.read_fences()["other"], 1)
         self.assertEqual(self.read_fences()["agent_budgets"]["someone-else"], 9)
 
     def test_budgets_cleared_by_empty(self):
-        f = self.fences({"daily_budget": 3, "agent_budgets": {"plan-agent": 2}, "other": 1})
-        settings.save_budgets(f, {"daily_budget": "", "agent_budgets": {"plan-agent": None}})
+        f = self.fences({"daily_budget": 3, "agent_budgets": {"bucket-agent": 2}, "other": 1})
+        settings.save_budgets(f, {"daily_budget": "", "agent_budgets": {"bucket-agent": None}})
         self.assertEqual(self.read_fences(), {"other": 1})
-        settings.save_budgets(f, {"agent_budgets": {"implement-agent": 4}})
-        self.assertEqual(self.read_fences(), {"other": 1, "agent_budgets": {"implement-agent": 4.0}})
+        settings.save_budgets(f, {"agent_budgets": {"bucket-agent": 4}})
+        self.assertEqual(self.read_fences(), {"other": 1, "agent_budgets": {"bucket-agent": 4.0}})
 
     def test_budgets_untouched_when_not_sent(self):
-        f = self.fences({"daily_budget": 3, "agent_budgets": {"plan-agent": 2}})
+        f = self.fences({"daily_budget": 3, "agent_budgets": {"someone-else": 2}})
         settings.save_budgets(f, {"models": {"chat": "haiku"}})
-        settings.save_budgets(f, {"agent_budgets": {"implement-agent": 1}})
+        self.assertEqual(self.read_fences(), {"daily_budget": 3, "agent_budgets": {"someone-else": 2}})
+        settings.save_budgets(f, {"agent_budgets": {"bucket-agent": 1}})
         self.assertEqual(self.read_fences(), {"daily_budget": 3,
-                                              "agent_budgets": {"plan-agent": 2, "implement-agent": 1.0}})
+                                              "agent_budgets": {"someone-else": 2, "bucket-agent": 1.0}})
 
     def test_budgets_validated(self):
         f = self.fences({"daily_budget": 3})
         for bad in ({"daily_budget": "lots"}, {"daily_budget": -1}, {"daily_budget": True},
                     {"agent_budgets": []}, {"agent_budgets": {"nobody": 1}},
-                    {"agent_budgets": {"plan-agent": "2"}}, {"agent_budgets": {"plan-agent": -2}}):
+                    {"agent_budgets": {"plan-agent": 1}},
+                    {"agent_budgets": {"bucket-agent": "2"}}, {"agent_budgets": {"bucket-agent": -2}}):
             self.assertTrue(settings.save_budgets(f, bad), bad)
         self.assertEqual(self.read_fences(), {"daily_budget": 3})
 

@@ -105,8 +105,6 @@ def in_process(root):
         fh.write(LIST)
     server.dataset_dir = lambda name=None: tmp
     server.current_dataset = lambda: "memory-test"
-    server.planning_agent_plan.paths.DATA_ROOT = root
-    os.environ["PLANNING_DATASET"] = "memory-test"
     # The list's memory files are looked up under the data root, which is
     # `root` here, so the real data/ and its settings.json are never read.
     server.DATA_ROOT = root

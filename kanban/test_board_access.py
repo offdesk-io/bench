@@ -62,11 +62,11 @@ BOARD_GETS = ("/data/todo.md", "/data/views.md", "/data/people.md", "/chat-viewe
               "/people.json", "/attach-queue.json", "/tick-queue.json", "/pa-working.json",
               "/history.json?task=ab12cd", "/agent-runs.json", "/briefings.json",
               "/bucket-colors.json", "/bucket-themes.json", "/column-names.json",
-              "/bucket-brief.json?bucket=1.%20Tasks", "/agents-planners.json?buckets=1.%20Tasks",
+              "/bucket-brief.json?bucket=1.%20Tasks", "/api/bucket-agents",
               "/reports.json", "/data/reports/secret.md", "/projects.json",
               "/project.json?name=secret", "/data/projects/secret/CLAUDE.md",
               "/project-folders.json", "/plans.json", "/data/plans/secret.md",
-              "/planning-agent.json", "/backups.json", "/data/backups/todo-backup-secret.md",
+              "/bucket-agent.json", "/backups.json", "/data/backups/todo-backup-secret.md",
               "/data/backups/done-archive.md", "/dataset/access.json", "/settings.json")
 # Every route that writes one, with a body each would accept.
 BOARD_POSTS = (("/chat-viewed", {"version": 1, "viewed": {}}),
@@ -210,7 +210,7 @@ def signed_in_checks(root):
         for method, path in (("GET", "/schedule.json"), ("GET", "/usage.json"),
                              ("GET", "/agents-api/state.json"), ("POST", "/agents-api/run"),
                              ("POST", "/project/open"), ("POST", "/project-folders"),
-                             ("POST", "/planning_agent/run"), ("GET", "/claude.json"),
+                             ("GET", "/claude.json"),
                              ("POST", "/claude"), ("GET", "/ai-chat/ai-chat.js")):
             code, _, _ = srv.ask(method, path, dict(TIAGO, **BOARD),
                                  body={} if method == "POST" else None)

@@ -1,17 +1,17 @@
 # Writing a plan
 
-The shared half of every `plan-*` agent. Each of them reads this first, then
-applies whatever its own definition adds about its bucket.
+What a bucket's agent reads before it plans. Its bucket's own definition,
+pasted into the prompt above this, applies on top of it.
 
 You have been given one task off the owner's to-do list and asked what should happen
-to it. You are running unattended, overnight, and nobody will read your output
-until the morning. That shapes everything below.
+to it. You are running unattended, and nobody will read your output until the
+owner next opens the board. That shapes everything below.
 
 ## What you are for
 
-The task you have been given is delegated to the Plan agent, `[to:: Plan
-agent]`. That is the only tag the picker sends you, so a task reaching you is
-one the owner has already judged worth handing over. It has not been handed over.
+The task you have been given is handed to your bucket's agent, whose name its
+Plan sub-task carries in `[to::]`. That is the only thing that sends you a task,
+so a task reaching you is one the owner has already judged worth handing over.
 What stops it is almost never the doing — it is the half hour of reading and
 working out that has to happen first, and that half hour never has a good moment.
 
@@ -55,8 +55,7 @@ summary into the plan and stop.
 **Never write `todo.md`.** The board holds the whole document in memory and
 autosaves it, so anything written underneath an open tab is lost within seconds,
 silently. Two real overwrites of the live list have already happened this way.
-You are running at two in the morning with nobody watching, which is the worst
-possible case for it. Read it as much as you like. Never write it.
+You are running with nobody watching, which is the worst possible case for it. Read it as much as you like. Never write it.
 
 **Never invent a fact to make the plan read better.** Leave `[fill in]` where
 something is genuinely unknown, exactly as the prompt and Jira rules already say.
@@ -125,12 +124,12 @@ carry on.
 The same file as any other plan, with `outcome: folded` in the frontmatter and
 no **Proposed plan** section, because there is nothing to propose yet. Write
 **Context** as you would for any other plan: the research holds, and it is what
-stops the next night repeating it. Write **Summary** as what it would take to
+stops the next run repeating it. Write **Summary** as what it would take to
 make this plannable rather than what the task is about. Put the questions in
 **Needs you**.
 
 Answering those questions is a note on the task, which is what the owner writes back.
-That changes the task's text, which is what makes tonight's picker plan it
+That changes the task's text, which is what makes the runner plan it
 afresh. So a fold is a question asked, not a task dropped.
 
 ## What to write
@@ -138,16 +137,17 @@ afresh. So a fold is a question asked, not a task dropped.
 One file, five sections, always in this order and always under these exact
 headings. Two of them are not shown to the owner: the board's plan modal leaves
 **Context** and **History** out of what it renders, because they are written
-for the agent that carries the plan out and for the night that has to plan it
+for the agent that carries the plan out and for the run that has to plan it
 again. Everything else in the file is what the owner reads over coffee, and that is
 under 300 words in total.
 
 Do not write **History**. The runner writes it, and it spans revisions you
 cannot see.
 
-`type:` says what kind of work carrying the plan out is, and it decides whether
-the Implement agent may do it without the owner in the room, so pick the one that is
-true of the whole plan:
+`type:` says what kind of work carrying the plan out is, and it decides how your
+bucket's agent carries it out once the owner approves it (code on a branch,
+Figma not without the owner, everything else as new files in the task's project
+folder), so pick the one that is true of the whole plan:
 
 - `write-up`: a brief, an audit, recommendations. New files only.
 - `draft`: a message, a comment or ticket text, written out and not sent.
@@ -158,10 +158,8 @@ true of the whole plan:
 - `code`: a change to a repo.
 - `other`: anything else, or a plan that mixes two of these.
 
-A write-up or a draft is approved on arrival, without the owner ticking the review, so
-never call a plan either of those if carrying it out would change a file that
-already exists or send anything. When in doubt, `other`: it only means the work
-waits for the owner.
+Never call a plan a write-up or a draft if carrying it out would change a file
+that already exists or send anything. When in doubt, `other`.
 
 ```
 ---
@@ -169,7 +167,7 @@ title: <the task's exact title>
 task: <the task's exact title>
 bucket: <its bucket>
 column: <its state>
-to: Plan agent
+to: <the agent named in the task's Plan sub-task>
 date: <today, YYYY-MM-DD>
 type: <one of: write-up, draft, prompt, data, deck, figma, code, other>
 summary: <one sentence naming what you are proposing. The card in the list
@@ -181,7 +179,7 @@ summary: <one sentence naming what you are proposing. The card in the list
 ### Context
 
 Not shown to the owner. Written for the implementing agent that may carry this out, and for
-the next night if the owner sends this back, so write it as a trail rather than as
+the next run if the owner sends this back, so write it as a trail rather than as
 prose. Six labelled paragraphs, each one line or a short list:
 
 - **Read.** Every path you actually opened. Paths, not descriptions.
@@ -195,7 +193,7 @@ prose. Six labelled paragraphs, each one line or a short list:
 - **Standing constraints.** Who is on leave, which dates cannot move, what is
   waiting on somebody. Off `context.md`, not from memory.
 - **Ruled out, and why.** The approach you considered and dropped. This is the
-  line that stops the next night proposing it again.
+  line that stops the next run proposing it again.
 - **Not established.** What you went looking for and could not find, each one
   marked `[fill in]`.
 

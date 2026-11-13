@@ -10,7 +10,7 @@ through its own edit path, the way it drains attach-queue.json.
 
 Each entry is one request:
 
-    {"id": "3f9a1c2b", "sub": "aa0001", "by": "Plan agent",
+    {"id": "3f9a1c2b", "sub": "aa0001", "by": "Personal family agent",
      "at": "2026-09-22T02:14:09", "note": "plan written", "plan": "2026-09-22/ab12cd-x.md",
      "type": "write-up"}
 
@@ -19,18 +19,19 @@ asking. The board applies a tick only when `by` is the agent the sub-task is
 assigned to, so an agent cannot tick a review and approve its own work. Nothing
 is lost when the board is closed: the request waits for the next load.
 
-`type` is the plan's own `type:` (core/plan_types.py), on the Plan agent's tick
-only. For a pre-approved type the board also ticks Review the plan, with the
-note "pre-approved type". That is the board's decision, made from its own list:
-the agent only says what kind of plan it wrote.
+`type` is the plan's own `type:` (core/plan_types.py), written only by the
+retired Plan agent. No type is approved on arrival any more, so the bucket
+agents (agents/bucket-agent/) leave it out and the owner ticks every Review the
+plan.
 
 The other kind of request asks for a handover rather than a tick:
 
-    {"id": "7c1d0e4a", "handover": "ab12cd", "to": "Plan agent", "by": "Plan agent",
+    {"id": "7c1d0e4a", "handover": "ab12cd", "to": "Personal family agent", "by": "Personal family agent",
      "at": "2026-09-26T02:00:03", "note": "tagged with no handover"}
 
-`handover` is the task's own id. The Plan agent leaves one for a task carrying
-`[to::]` an agent with none of the sub-tasks a handover lays out (pick.unhanded()),
+`handover` is the task's own id. A bucket's agent leaves one for a task carrying
+`[to::]` its name with none of the sub-tasks a handover lays out
+(agents/bucket-agent/bucket_work.py unhanded()),
 and the board runs handOver() on it, as Delegate to would. It is applied only
 while the task's `[to::]` still names that agent, and does nothing to a task
 that has since been handed over.
@@ -52,7 +53,7 @@ The file is appended to and removed from under a lock, and the board removes
 only the ids it dealt with rather than rewriting the list, so a request that
 lands while the board is draining is not written over.
 
-    python3 core/tick_queue.py tick aa0001 --by "Plan agent" --note "plan written"
+    python3 core/tick_queue.py tick aa0001 --by "Personal family agent" --note "plan written"
     python3 core/tick_queue.py move 0q3ym0 --by "Content strategist agent" --draft <path> --dataset content
 """
 
@@ -181,10 +182,10 @@ def main(argv):
     ap = argparse.ArgumentParser(description="Ask the board to tick a sub-task, or move a card.")
     ap.add_argument("action", choices=["tick", "move"])
     ap.add_argument("sub", help="the six-character id on the sub-task's line, or the card's for move")
-    ap.add_argument("--by", required=True, help='who is asking: "Plan agent" or "Implement agent"')
+    ap.add_argument("--by", required=True, help='who is asking: the agent the sub-task is assigned to')
     ap.add_argument("--note", default="")
     ap.add_argument("--plan", default="", help="a plan just written, relative to the plans folder")
-    ap.add_argument("--type", default="", help="the plan's type:, on the Plan agent's tick")
+    ap.add_argument("--type", default="", help="the plan's type:, written by the retired Plan agent alone")
     ap.add_argument("--column", default="Reviewing", help="where move sends the card")
     ap.add_argument("--draft", default="", help="the draft move links the card to, by absolute path")
     ap.add_argument("--dataset")
