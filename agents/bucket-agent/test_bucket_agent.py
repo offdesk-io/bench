@@ -49,6 +49,7 @@ sys.path.insert(0, HERE)
 import hooks  # noqa: E402
 import agent_runs  # noqa: E402
 import bucket_wake  # noqa: E402
+import bucket_agents  # noqa: E402
 import guard  # noqa: E402
 import paths  # noqa: E402
 import plan_types  # noqa: E402
@@ -250,6 +251,18 @@ def test_names_and_queue():
           why(items["Half-defined bucket"]), "the T half agent is not ready: its definition is missing guidelines")
     check("a start: not yet arrived is skipped", why(items["Not until next year"]).startswith("not startable until"),
           True)
+
+
+def test_api_sections():
+    row = {r["bucket"]: r for r in map(bucket_agents.api_row, bucket_agents.all_buckets("t", DATA))}["news"]
+    check("the API row names its keys", sorted(row),
+          ["bucket", "missing", "mode", "name", "ready", "sections", "start"])
+    check("sections carries each brief field's text by key", (row["sections"]["purpose"], row["sections"]["good"]),
+          ("Drafts the weekly newsletter.", "A draft I send with one edit."))
+    check("every field is there, the optional ones empty", sorted(row["sections"]),
+          sorted(name for name, _ in bucket_agents.FIELDS))
+    half = {r["bucket"]: r for r in map(bucket_agents.api_row, bucket_agents.all_buckets("t", DATA))}["half"]
+    check("a field not written is an empty string", half["sections"]["guidelines"], "")
 
 
 # --- plan-first: plan, then wait for review, then the work ------------------------
@@ -809,7 +822,7 @@ def test_wiring():
 def main():
     setup()
     try:
-        for fn in (test_names_and_queue, test_plan_first, test_replan_after_send_back, test_free_rein,
+        for fn in (test_names_and_queue, test_api_sections, test_plan_first, test_replan_after_send_back, test_free_rein,
                    test_board_off, test_scheduled, test_todo_guard, test_figma_and_plan_checks, test_guard,
                    test_handovers, test_wake, test_on_assign_failure_waits, test_spending_caps,
                    test_free_rein_code, test_usage_limit, test_review_must_be_ticked,

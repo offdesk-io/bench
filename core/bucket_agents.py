@@ -266,6 +266,13 @@ def load(dataset, bucket, root=None):
     return out
 
 
+def api_row(b):
+    """A load() result as GET /api/bucket-agents sends it: who and how the agent
+    works, whether it is ready, and `sections`, each brief field's text by key."""
+    return {"bucket": b["bucket"], "name": b["name"], "mode": b["mode"], "start": b["start"],
+            "ready": b["ready"], "missing": b["missing"], "sections": dict(b["fields"])}
+
+
 def bucket_names(dataset, root=None):
     """A list's buckets: the streams its buckets/README.md names, in its order,
     then any other folder under buckets/. The README is the board's record of
