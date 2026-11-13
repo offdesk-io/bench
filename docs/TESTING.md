@@ -13,6 +13,13 @@ scripts/test-board.sh --all          # every kanban/test_*.mjs
 scripts/test-board.sh --no-build ... # skip npm run build when nothing in kanban/ui/ changed
 ```
 
+`SUITE_RETRIES=1` runs a failed suite once more before it counts as failed. It
+is 0 by default and set to 1 only in the GitHub workflow, where the hosted
+runner is slow enough to fail a timing check now and then. A suite that passes
+only on its second try is named at the end, and on GitHub as a warning on the
+run and in its summary: it is flaky, and the check that failed should wait for
+what it tests rather than for a fixed time.
+
 Added 25 Sep 2026, after six agents in one night each hand-rolled a second
 server and one's scratch `data/.current` leaked into another's lookup. The
 script:
