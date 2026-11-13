@@ -3244,9 +3244,6 @@ body.signed-in #runAgentBtn{display:none !important}
 .bucketbar--page #editBuckets, .bucketbar--page #editTiers, .bucketbar--page #filterChips,
 .bucketbar--page #agentFilterChip, .bucketbar--page #mineChip,
 .bucketbar--page #q{display:none !important}
-.settingspanel .settingspage{padding:0}
-.settingspage__actions{display:flex; gap:8px; margin-top:16px}
-.lists.pview.memview{max-width:860px}
 .lists.pview.settingsview{max-width:none}
 /* The page layout every Settings tab shares (settingsPageLayoutHTML() in
    29-settings.js): a title row with Save, a divider, then sections as rows of
@@ -3257,6 +3254,7 @@ body.signed-in #runAgentBtn{display:none !important}
 .spage__section{display:grid; grid-template-columns:1fr 3fr; gap:var(--tenon-dimension-300); padding-top:var(--tenon-dimension-600)}
 .spage__label{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:650; text-transform:uppercase; letter-spacing:.06em; color:var(--tenon-text-subtle)}
 .spage__fields{display:flex; flex-direction:column; gap:14px; min-width:0; max-width:640px}
+.spage__fields--wide{max-width:none}
 .spage__foot{display:flex; justify-content:flex-end; padding-top:var(--tenon-dimension-600)}
 @media (max-width:900px){
   .spage__section{grid-template-columns:1fr; gap:var(--tenon-dimension-150); padding-top:var(--tenon-dimension-400)}
@@ -3265,9 +3263,8 @@ body.signed-in #runAgentBtn{display:none !important}
 .agentsview #refCardsRoot{max-width:860px}
 
 /* Memory (31-memory.js): one panel per section. */
-.memcolbody{display:flex; flex-direction:column; gap:8px}
+.memsubhead{margin:8px 0 0; font-size:var(--tenon-typography-size-sm); font-weight:650; color:var(--tenon-text-default)}
 .memhead{display:flex; align-items:center; justify-content:space-between; gap:12px}
-.memhead h3{margin:0; font-size:var(--tenon-typography-size-lg); font-weight:660; letter-spacing:-.01em; color:var(--tenon-text-default)}
 .memhead h4, .memtext h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:600; color:var(--tenon-text-subtle)}
 .membucket{display:flex; flex-direction:column; gap:8px; padding:12px 0; border-top:1px solid var(--tenon-stroke-default)}
 .memtext{max-width:68ch}
@@ -3282,24 +3279,9 @@ body.signed-in #runAgentBtn{display:none !important}
   border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-md);
 }
 .memarea:focus{outline:2px solid var(--tenon-stroke-focus); outline-offset:1px}
-.memscroll{overflow-x:auto}
-.memtable{width:100%; border-collapse:collapse; font-size:var(--tenon-typography-size-sm)}
-.memtable th{text-align:left; padding:6px 10px 6px 0; font-weight:650; color:var(--tenon-text-faint); border-bottom:1px solid var(--tenon-stroke-default)}
-.memtable td{padding:6px 10px 6px 0; vertical-align:top; color:var(--tenon-text-subtle); border-bottom:1px solid var(--tenon-stroke-default)}
-.memtable td:first-child{color:var(--tenon-text-default); font-weight:600}
 .memrows{display:flex; flex-direction:column; gap:12px}
 .memrow{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)) auto; gap:8px; align-items:end}
-.memdl{display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; margin:0 0 10px; font-size:var(--tenon-typography-size-sm)}
-.memdl dt{color:var(--tenon-text-faint)}
-.memdl dd{margin:0; color:var(--tenon-text-subtle)}
 @media (max-width:640px){
   .memrow{grid-template-columns:1fr 1fr}
   .memrow .btn{grid-column:1 / -1; justify-self:start}
-  .memtable thead{display:none}
-  .memtable, .memtable tbody, .memtable tr, .memtable td{display:block}
-  .memtable tr{padding:8px 0; border-bottom:1px solid var(--tenon-stroke-default)}
-  .memtable td{border:0; padding:2px 0}
-  .memtable td:empty{display:none}
-  .memtable td::before{content:attr(data-label) ": "; color:var(--tenon-text-faint)}
-  .memtable td:first-child::before{content:""}
 }
