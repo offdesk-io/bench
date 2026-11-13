@@ -244,7 +244,9 @@ CONTACT_STEP = re.compile(
     r"send (?:out |the |a )?(?:[\w'’]+ )*(?:requests?|invites?|doc|document|note|list|email)|"
     r"share (?:the |my |a )?.*\bwith\b|"
     r"check in with|follow up|"
-    r"push \w+ to|"
+    # Pushing a person to act, not pushing code somewhere.
+    r"push (?!(?:it|them|this|that|changes?|commits?|code)\b)\w+ to"
+    r"(?! (?:a |the )?(?:branch|main|master|github|origin|remote|repo|server)\b)|"
     r"(?:set up|book|schedule|arrange) (?:a |the )?(?:session|call|meeting|slot|1:1|chat|conversation)"
     r")\b",
     re.I,
