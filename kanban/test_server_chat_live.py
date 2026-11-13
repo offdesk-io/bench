@@ -82,6 +82,7 @@ try:
     engine = Engine(default_cwd=board, config_path=os.path.join(board, "claude.json"),
                     sessions_path=os.path.join(sessions_dir, "work.json"),
                     ask_denies=list(ASK_DENIES) + server_chat.EXTRA_DENIES,
+                    ask_tools=server_chat.ASK_TOOLS,
                     ask_allows=server_chat.read_allows(ROOT, data, board, []))
     engine.config = lambda: {"cwd": board, "work": False, "model": "haiku", "timeout": 300}
 
