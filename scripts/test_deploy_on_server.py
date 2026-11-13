@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """Proof that deploy-on-server.sh, given BENCH_DEPLOY_ONLY_ON (which
 deploy-forced-command.sh sets to main), deploys only a commit that branch has
-reached, and that the manual route, which never sets it, is unchanged.
+reached, and that the manual route, which never sets it, is unchanged. Also
+that each package packages.lock names at the deployed commit goes to the
+commit it names, a package on the command line keeps its ref, a bad line
+stops the deploy, and a failed deploy rolls the packages back too.
 
 It runs the real script over throwaway git repos, with runuser, getent, flock,
 npm, systemctl and curl stubbed on the PATH, so nothing is built or restarted.
@@ -102,6 +105,69 @@ class World:
         return r.returncode, r.stdout + r.stderr, git(self.bench, "rev-parse", "HEAD")
 
 
+def pkg_world(tmp, bash, lock_line=None, health="printf 200"):
+    """World plus a package `eng` with commits P1, P2 on its origin, its
+    server checkout on P1, and a Bench commit D on main whose packages.lock
+    names eng at P2 (or `lock_line`)."""
+    w = World(tmp, bash)
+    pwork = os.path.join(tmp, "pwork")
+    os.makedirs(pwork)
+    git(pwork, "init", "-q", "-b", "main")
+    w.p1 = commit(pwork, "P1")
+    w.p2 = commit(pwork, "P2")
+    porigin = os.path.join(tmp, "porigin.git")
+    subprocess.run(["git", "clone", "-q", "--bare", pwork, porigin], check=True)
+    w.pkgs = os.path.join(tmp, "PACKAGES")
+    w.eng = os.path.join(w.pkgs, "eng")
+    os.makedirs(w.pkgs)
+    subprocess.run(["git", "clone", "-q", porigin, w.eng], check=True)
+    git(w.eng, "checkout", "-q", "--detach", w.p1)
+    work = os.path.join(tmp, "work")
+    git(work, "checkout", "-q", "main")
+    with open(os.path.join(work, "packages.lock"), "w") as fh:
+        fh.write("# comment\n\n" + (lock_line or "eng %s https://example.invalid/eng.git" % w.p2) + "\n")
+    git(work, "add", "packages.lock")
+    git(work, "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q", "-m", "D")
+    w.d = git(work, "rev-parse", "HEAD")
+    git(work, "push", "-q", w.origin, "main")
+    with open(os.path.join(w.stubs, "curl"), "w") as fh:
+        fh.write("#!/usr/bin/env bash\n" + health + "\n")
+    return w
+
+
+def run_deploy(w, *extra):
+    env = dict(os.environ, PATH=w.stubs + os.pathsep + os.environ["PATH"],
+               STUB_HOME=w.tmp, BENCH_DEPLOY_LOCK=os.path.join(w.tmp, "lock"),
+               BENCH_DEPLOY_ONLY_ON="main")
+    r = subprocess.run([w.bash, SCRIPT, "1", w.bench, w.pkgs, w.d, *extra],
+                       env=env, capture_output=True, text=True)
+    return r.returncode, r.stdout + r.stderr, git(w.bench, "rev-parse", "HEAD"), git(w.eng, "rev-parse", "HEAD")
+
+
+def test_packages_lock(bash):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = pkg_world(tmp, bash)
+        rc, out, head, eng = run_deploy(w)
+        check("a package in packages.lock goes to its commit", (rc, head, eng), (0, w.d, w.p2))
+    with tempfile.TemporaryDirectory() as tmp:
+        w = pkg_world(tmp, bash)
+        rc, out, head, eng = run_deploy(w, "eng=" + w.p1)
+        check("a package named on the command line keeps its ref", (rc, eng), (0, w.p1))
+    with tempfile.TemporaryDirectory() as tmp:
+        w = pkg_world(tmp, bash, lock_line="eng main https://example.invalid/eng.git")
+        rc, out, head, eng = run_deploy(w)
+        check("a lock line without a full commit stops the deploy", (rc, head, eng), (1, w.a, w.p1))
+        check("it says which", "eng needs a full commit id" in out, True)
+    with tempfile.TemporaryDirectory() as tmp:
+        w = pkg_world(tmp, bash, lock_line="eng " + "1" * 40 + " https://example.invalid/eng.git")
+        rc, out, head, eng = run_deploy(w)
+        check("a locked commit the origin lacks stops the deploy", (rc, head, eng), (1, w.a, w.p1))
+    with tempfile.TemporaryDirectory() as tmp:
+        w = pkg_world(tmp, bash, health="printf 500")
+        rc, out, head, eng = run_deploy(w)
+        check("a failed deploy rolls the package back too", (rc, head, eng), (1, w.a, w.p1))
+
+
 def test_only_on_main(bash):
     with tempfile.TemporaryDirectory() as tmp:
         w = World(tmp, bash)
@@ -134,6 +200,7 @@ def main():
         return 0
     test_only_on_main(bash)
     test_manual_route_unchanged(bash)
+    test_packages_lock(bash)
     print()
     if FAILED:
         for f in FAILED:

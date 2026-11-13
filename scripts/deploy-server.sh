@@ -8,7 +8,8 @@
 #   scripts/deploy-server.sh v1.2 --packages agents-engine=main --apply
 #
 # <name> is agents-engine, ai_chat_engine or work-streams. A ref is a branch,
-# tag or commit on the repo's GitHub origin, so push it there first.
+# tag or commit on the repo's GitHub origin, so push it there first. Packages
+# not named go to the commit packages.lock names at <bench-ref>.
 #
 # --apply records the current commits, fetches, checks out the refs, installs
 # and builds the board's front end, restarts bench.service and waits up to 20 s
@@ -24,7 +25,7 @@ BENCH_REPO="/opt/agency/bench"
 PKG_DIR="/opt/agency/PACKAGES"
 
 usage() {
-  sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
+  sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2
   exit 2
 }
 
