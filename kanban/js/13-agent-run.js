@@ -86,11 +86,10 @@ async function startNightAgentRun(){
 let refCardsDrawn = false;
 
 function drawRefCards(){
-  /* One React tree in the Agents tab's #refCardsRoot, drawn by paintRefCards()
-     in 14-schedule.js: Token Session and the clock card, two panels. */
-  if (refCardsDrawn || !$('#refCardsRoot')) return;
+  /* Two React trees on the Agents page, #refSpendRoot (Token Session) and
+     #refSchedRoot (the clock card), drawn by paintRefCards() in 14-schedule.js. */
+  if (refCardsDrawn || !$('#refSpendRoot')) return;
   refCardsDrawn = true;
-  refCardsShow = undefined;
   paintRefCards();
   renderSched();
   renderUsage();
@@ -100,8 +99,7 @@ function drawRefCards(){
 
 function leaveRefCards(){
   refCardsDrawn = false;
-  const host = $('#refCardsRoot');
-  if (host) BoardUI.unmount(host);
+  ['#refSpendRoot', '#refSchedRoot'].forEach(sel => { const host = $(sel); if (host) BoardUI.unmount(host); });
 }
 
 $('#runAgentBtn').textContent = 'Run the bucket agents now';

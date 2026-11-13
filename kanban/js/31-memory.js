@@ -3,21 +3,19 @@
 /* =========================================================================
    4d. Memory — everything Bench keeps about the current board, on one page in
    the shared page layout (settingsPageLayoutHTML(), 29-settings.js): About you,
-   Meeting recorder, Company and team, Other context, and Buckets.
+   Meeting recorder, Company and team, and Other context. The buckets' briefs are
+   on the Agents page.
 
    Every field is always editable and the page's two Saves write whatever
    changed, each section through its own route and only when it differs from
    what was loaded. Drafts live in memDraft, filled from the DOM before any
-   redraw, so adding a person or opening a bucket never loses typing. Buckets
-   keep their own Edit and Save, one open at a time. The routes:
+   redraw, so adding a person never loses typing. The routes:
 
      Company   PUT /about            (one file, replaced whole)
      Team      PUT /people           (one table in people.md)
      Profile   PUT /profile-basics.json (the facts file, How to address you and
                                       the Working habits, Writing and Meeting
                                       recorder sections; only the keys changed)
-     Buckets   PUT /bucket-brief     (the route the bucket editor already uses,
-                                      with the section form it already has)
      Context   PUT /context          (context.md; a list that still keeps a
                                       `## Context` section in todo.md shows that
                                       until the first save, which moves it out
@@ -26,10 +24,7 @@
 
 let memData = null;       // the last /memory.json answer, null until it arrives
 let memError = '';
-let memEditing = null;    // 'bucket:<heading>' | null, the one brief form that is open
-let memFormError = '';    // the last bucket save's message, shown inside its form
 let memPageError = '';    // the last page Save's message, shown under the title
-let memBucketParts = null;
 let memDraft = null;      // what the page's fields hold, kept across redraws
 let memBase = null;       // what was loaded, as JSON, to tell what changed
 
@@ -79,58 +74,18 @@ function memRemoveContextSection(){
 
 /* ---- Drawing ---- */
 
-function memRender(md, isBrief){
-  const clean = String(md || '').split('\n')
-    .filter(l => l.trim() !== BRIEF_MARKER && !(isBrief && /^>/.test(l.trim())));
-  /* A heading with nothing under it before the next heading, or the end, gets
-     the same dashed empty line a section does. The H1 is the brief's title and
-     has no heading of its own on screen, so it is left out. */
-  const chunks = [];
-  let cur = { head: null, lines: [] };
-  clean.forEach(l => {
-    if (/^#{2,6}\s/.test(l)) { chunks.push(cur); cur = { head: l, lines: [] }; }
-    else cur.lines.push(l);
-  });
-  chunks.push(cur);
-  const html = chunks.map(c => {
-    const body = c.lines.join('\n');
-    if (!c.head) return body.trim() ? mdBlocks(body, { keepH1: false }) : '';
-    return mdBlocks(c.head + '\n' + body, { keepH1: false }) + (body.trim() ? '' : memEmpty('Nothing here yet.'));
-  }).join('');
-  return '<div class="repdoc memtext">' + html + '</div>';
-}
 /* The placeholder a section shows when it holds nothing: a quiet dashed box
    saying what goes there. */
 function memEmpty(line){ return '<p class="memempty">' + esc(line) + '</p>'; }
-function memFormButtons(which){
-  return '<div class="memactions">' +
-    '<button class="btn small primary" data-mem-save="' + esc(which) + '">Save</button>' +
-    '<button class="btn small ghost" data-mem-cancel>Cancel</button>' +
-    (memFormError ? '<span class="memerr" role="alert">' + esc(memFormError) + '</span>' : '') +
-  '</div>';
-}
-/* A stable anchor id: the same text always gives the same id. */
-function memSlug(text){
-  return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
-}
 /* What each section is for, shown under its heading whether or not it has content. */
 const MEM_DESC = {
   about: 'What this business does, in a few lines every agent reads first.',
   people: 'Who is who: role, team, who reports to whom, and the names that get confused.',
-  buckets: 'One per bucket: what kind of work lands there and how it should be handled.',
   context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone.",
   profile: 'Facts about you that agents work from: how you work, write and want things done.'
 };
 /* A group's description goes under its title, in the layout's label column. */
 const memDesc = id => ({ description: MEM_DESC[id] || '', descAttrs: 'data-mem-desc="' + id + '"' });
-let memIds = new Set();   // ids issued during this render, so two headings that slug alike stay apart
-function memUniqueId(base){
-  let id = base, n = 1;
-  while (memIds.has(id)) id = base + '-' + (++n);
-  memIds.add(id);
-  return id;
-}
-
 /* ---- The page's drafts ---- */
 
 /* The profile fields the page offers, each only when the server sent it. */
@@ -250,66 +205,31 @@ function memContextHTML(){
       hint: memDescText('context'), hintAttrs: 'data-mem-desc="context"' }) };
 }
 
-function memBucketsHTML(){
-  const list = memData.buckets;
-  if (!list.length) return Object.assign({ id: 'buckets', title: 'Buckets', wide: true, html: memEmpty('No buckets yet. Each bucket of the board gets its brief here.') }, memDesc('buckets'));
-  return Object.assign({ id: 'buckets', title: 'Buckets', wide: true, html: list.map(b => {
-      const which = 'bucket:' + b.heading;
-      let body;
-      if (memEditing === which) {
-        body = tenonFieldHTML({ label: 'One line: what kind of work lands here', attrs: 'data-mem-brief-summary', value: memBucketParts.summary }) +
-          BRIEF_SECTIONS.map((name, i) => tenonFieldHTML({ label: name, kind: 'textarea', attrs: 'data-brief-section="' + i + '"', value: memBucketParts.sections[name] || '' })).join('') +
-          memFormButtons(which);
-      } else if (!b.exists) body = memEmpty('No brief yet.');
-      else if (!b.filled) body = memEmpty('The brief is still the empty template.');
-      else body = memRender(b.text, true);
-      const edit = memEditing === which || state.locked ? '' :
-        '<button type="button" class="btn small outline" data-mem-edit="' + esc(which) + '"' +
-        (memEditing ? ' disabled title="Save or cancel the open edit first"' : '') + '>Edit</button>';
-      return '<article class="membucket" id="' + esc(memUniqueId('mem-bucket-' + memSlug(b.heading))) + '" data-mem-bucket="' + esc(b.heading) + '">' +
-        '<div class="memhead"><h4>' + esc(b.name) + '</h4>' + edit + '</div>' + body +
-      '</article>';
-    }).join('') }, memDesc('buckets'));
-}
-
-/* The brief form that is open, copied into memBucketParts. */
-function memReadBucket(){
-  const box = document.querySelector('#memView [data-mem-brief-summary]');
-  if (!memEditing || !memBucketParts || !box) return;
-  memBucketParts.summary = box.value;
-  document.querySelectorAll('#memView [data-brief-section]').forEach(t => {
-    memBucketParts.sections[BRIEF_SECTIONS[+t.dataset.briefSection]] = t.value;
-  });
-}
 /* Every field of the page, in order. A redraw builds the same fields again, so
    a field's place in this list names it afterwards. */
 const memFields = () => [...document.querySelectorAll('#memView textarea, #memView input')];
 
-/* Drawn from memDraft. A redraw while fields hold unsaved typing, or a bucket
-   brief is open, is skipped unless `force` says the page's own structure
-   changed (a row added, a bucket opened) or fresh text arrived. A forced redraw
-   reads the typing into the drafts first and puts the cursor back. A locked
-   tab never has a form open. */
+/* Drawn from memDraft. A redraw while fields hold unsaved typing is skipped
+   unless `force` says the page's own structure changed (a row added) or fresh
+   text arrived. A forced redraw reads the typing into the drafts first and puts
+   the cursor back. */
 function memDraw(force, fresh){
   const lists = $('#lists');
   if (!lists) return;
-  if (state.locked && memEditing) { memEditing = null; memBucketParts = null; memFormError = ''; }
   if (memError) {
     lists.innerHTML = '<div class="lists pview memview settingsview" style="--pcols:1"><p class="memerr" role="alert">' + esc(memError) + '</p></div>';
     return;
   }
   if (!memData) { lists.innerHTML = '<div class="lists pview memview settingsview" style="--pcols:1"><p class="memempty">Reading what Bench keeps…</p></div>'; return; }
-  if (!force && (memIsDirty() || (memEditing && document.querySelector('#memView [data-mem-brief-summary]')))) return;
-  memReadBucket();
+  if (!force && memIsDirty()) return;
   if (force && !fresh) memReadPage();
   if (!memDraft) memResetDraft();
   const at = memFields().indexOf(document.activeElement);
   const sel = at < 0 ? null : { start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd };
-  memIds = new Set();
   lists.innerHTML = '<div class="lists pview memview settingsview" id="memView" style="--pcols:1">' +
     (memPageError ? '<p class="memerr" role="alert">' + esc(memPageError) + '</p>' : '') +
     (state.locked ? '<p class="help memlocked">This tab is read-only.</p>' : '') +
-    settingsPageLayoutHTML('Memory', [memAboutYouHTML(), memRecorderHTML(), memCompanyTeamHTML(), memContextHTML(), memBucketsHTML()], { saveAttr: 'data-mem-save-all', save: !state.locked }) +
+    settingsPageLayoutHTML('Memory', [memAboutYouHTML(), memRecorderHTML(), memCompanyTeamHTML(), memContextHTML()], { saveAttr: 'data-mem-save-all', save: !state.locked }) +
   '</div>';
   lists.querySelector('#memView').onclick = memClick;
   const el = at < 0 ? null : memFields()[at];
@@ -358,66 +278,25 @@ async function memSaveAll(){
   return true;
 }
 
-async function memSaveBucket(which){
-  if (state.locked) return;
-  memFormError = '';
-  try {
-    const heading = which.slice(7);
-    const b = memData.buckets.find(x => x.heading === heading);
-    const box = document.querySelector('#memView [data-mem-brief-summary]');
-    memBucketParts.summary = box.value;
-    document.querySelectorAll('#memView [data-brief-section]').forEach(t => {
-      memBucketParts.sections[BRIEF_SECTIONS[+t.dataset.briefSection]] = t.value;
-    });
-    const wasEmpty = !b.exists || !b.filled;
-    const text = serializeBriefText(memBucketParts, keepBriefMarker(wasEmpty, memBucketParts));
-    await putJSON('/bucket-brief', { bucket: heading, text });
-    reloadBucketAgentsPanel();
-    /* Only the briefs are read again, so typing in the page's other fields stays. */
-    memData.buckets = (await getJSON('/memory.json')).buckets;
-  } catch (err) {
-    memFormError = String(err.message || err);
-    if (memOnScreen()) memDraw(true);
-    return;
-  }
-  memEditing = null; memBucketParts = null;
-  if (memOnScreen()) memDraw(true);
-}
-
-function memStartEdit(which){
-  if (state.locked) return;
-  memFormError = '';
-  memEditing = which;
-  const b = memData.buckets.find(x => x.heading === which.slice(7));
-  memBucketParts = parseBriefText(b.text);
-  if (!b.exists) memBucketParts.title = b.name;
-  memDraw(true);
-  const first = document.querySelector('#memView .membucket[data-mem-bucket="' + which.slice(7).replace(/"/g, '\\"') + '"] input');
-  if (first) first.focus();
-}
-
 function memClick(e){
   const t = e.target.closest('button');
   if (!t) return;
-  if (t.dataset.memEdit) { memStartEdit(t.dataset.memEdit); return; }
-  if (t.hasAttribute('data-mem-cancel')) { memEditing = null; memBucketParts = null; memFormError = ''; memDraw(true); return; }
   if (t.hasAttribute('data-mem-save-all')) { memSaveAll(); return; }
-  if (t.dataset.memSave) { memSaveBucket(t.dataset.memSave); return; }
   if (t.hasAttribute('data-mem-add')) { memReadPage(); memDraft.people.push({}); memDraw(true, true); return; }
   if (t.dataset.memRemove !== undefined) {
     memReadPage(); memDraft.people.splice(+t.dataset.memRemove, 1); memDraw(true, true); return;
   }
 }
 
-/* Reads what Bench keeps again. Unsaved typing, and a bucket brief that is
-   open, survive it (a watch-tick reload or a late answer) unless `fresh` says
-   the page was just saved and starts from what was read. */
+/* Reads what Bench keeps again. Unsaved typing survives it (a watch-tick reload
+   or a late answer) unless `fresh` says the page was just saved and starts from
+   what was read. */
 async function memLoad(fresh){
   let typing = false;
   try {
     memData = await getJSON('/memory.json');
     memError = '';
-    typing = !fresh && !!document.querySelector('#memView') && (memIsDirty() || !!memEditing);
+    typing = !fresh && !!document.querySelector('#memView') && memIsDirty();
     if (!typing) memResetDraft();
   } catch (err) {
     memError = 'Could not read what Bench keeps. The board helper may need restarting. ' + (err.message || err);
@@ -426,11 +305,11 @@ async function memLoad(fresh){
 }
 
 /* Drawn again for the same page (a reload of todo.md, a refresh of the view)
-   keeps the typing and an open bucket brief. Arriving from anywhere else, where
+   keeps the typing. Arriving from anywhere else, where
    #memView is not on screen, starts clean. */
 function renderMemoryView(){
   const same = !!document.querySelector('#memView');
-  if (!same) { memEditing = null; memBucketParts = null; memFormError = ''; memPageError = ''; if (memData) memResetDraft(); }
+  if (!same) { memPageError = ''; if (memData) memResetDraft(); }
   memDraw(true, !same);
   memLoad();
 }

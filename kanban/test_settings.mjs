@@ -191,7 +191,7 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   // Spend and Schedules are panels of the Agents tab, and their old links open it.
   await evalJS(`openSettingsPage('agents')`)
   await wait(1200)
-  check('Agents holds Token Session and the clock card as panels', await evalJS(`!!document.querySelector('.agentsview #refCardsRoot #usageOut') && !!document.querySelector('.agentsview #refCardsRoot #schedOut')`))
+  check('Agents holds Token Session and the clock card as panels', await evalJS(`!!document.querySelector('#agentsPage [data-section=spending] #refSpendRoot #usageOut') && !!document.querySelector('#agentsPage [data-section=schedules] #refSchedRoot #schedOut')`))
   check('Spend and Schedules are no longer tabs', await evalJS(`!document.querySelector('#bucketFilters [data-value=spend]') && !document.querySelector('#bucketFilters [data-value=schedules]')`))
   for (const old of ['spend', 'schedules']) {
     await evalJS(`state.view = 'board'; renderView(); history.replaceState(null, '', '#settings/${old}'); window.dispatchEvent(new HashChangeEvent('hashchange'))`)
@@ -346,7 +346,7 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   const boardSet = () => (JSON.parse(readFileSync(join(data, 'settings.json'), 'utf8')).boards || {})[listName]
   const reopen = async () => { await evalJS(`$('#settingsBtn').click()`); await wait(800) }
   const openAgentsTab = async () => { await evalJS(`openSettingsPage('agents')`); await wait(1500) }
-  const agentSwitch = () => evalJS(`document.querySelector('#agentOptions [data-board-agents]').getAttribute('aria-checked')`)
+  const agentSwitch = () => evalJS(`document.querySelector('#agentsPage [data-board-agents]').getAttribute('aria-checked')`)
   check('it starts on the main memory folder, banners and agents on', await evalJS(`settingsRoot().querySelector('[data-board-memory-mode]').value === 'inherit'
     && settingsRoot().querySelector('[data-board-memory]').hidden
     && settingsRoot().querySelector('[data-board-banners]').getAttribute('aria-checked') === 'true'
@@ -379,8 +379,8 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await reopen()
   check('and it reopens with banners off', await evalJS(`settingsRoot().querySelector('[data-board-banners]').getAttribute('aria-checked')`) === 'false')
   await openAgentsTab()
-  await evalJS(`document.querySelector('#agentOptions [data-board-agents]').click()`)
-  await evalJS(`document.querySelector('[data-agent-options-save]').click()`)
+  await evalJS(`document.querySelector('#agentsPage [data-board-agents]').click()`)
+  await evalJS(`document.querySelector('[data-agents-save]').click()`)
   await wait(2500)
   check('switching agents off adds only agents', JSON.stringify(boardSet()) === '{"banners":false,"agents":false}', JSON.stringify(boardSet()))
   await reopen()
@@ -418,8 +418,8 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await press('Save')
   await wait(2500)
   await openAgentsTab()
-  await evalJS(`document.querySelector('#agentOptions [data-board-agents]').click()`)
-  await evalJS(`document.querySelector('[data-agent-options-save]').click()`)
+  await evalJS(`document.querySelector('#agentsPage [data-board-agents]').click()`)
+  await evalJS(`document.querySelector('[data-agents-save]').click()`)
   await wait(2500)
   check('switching both back on empties the entry', boardSet() === undefined, JSON.stringify(boardSet()))
   // Signed in, the server's settings are not the visitor's: no group.
@@ -464,17 +464,15 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
     if (await evalJS(`!!modalEl && modalEl.textContent.includes('Unsaved changes')`)) await modalPress('Discard')
     await wait(1000)
   }
-  const A = `document.querySelector('#agentOptions')`
+  const A = `document.querySelector('#agentsPage')`
   const aSet = (sel, v, ev = 'input') => evalJS(`(() => { const b = ${A}.querySelector(${JSON.stringify(sel)}); b.value = ${JSON.stringify(v)}; b.dispatchEvent(new Event('${ev}', { bubbles: true })) })()`)
-  const aSave = () => evalJS(`${A}.querySelector('[data-agent-options-save]').click()`)
-  const aSaveDisabled = () => evalJS(`${A}.querySelector('[data-agent-options-save]').disabled`)
+  const aSave = () => evalJS(`${A}.querySelector('.spage__head [data-agents-save]').click()`)
+  const aSaveDisabled = () => evalJS(`${A}.querySelector('[data-agents-save]').disabled`)
   const aLabel = sel => evalJS(`${A}.querySelector(${JSON.stringify(sel)} + ' option[value=""]').textContent`)
   mkdirSync(join(data, 'agents'), { recursive: true })
   writeFileSync(join(data, 'agents', 'fences.json'), JSON.stringify({ other: 1 }))
   await openAgents()
-  check('Agent options is on the Agents tab, always open, above the board switch and hours', await evalJS(`(() => { const o = ${A}.querySelector('[data-agent-options]'); const h = document.querySelector('#agentsRoot');
-    return !!o && o.tagName !== 'DETAILS' && !o.querySelector('summary') && !!h && !!(o.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING) })()`))
-  check('titled Agent options, with no "hours later" note', await evalJS(`${A}.querySelector('h2').textContent === 'Agent options' && !document.querySelector('#lists').textContent.includes('Set each agent’s hours later')`))
+  check('Models is a section of the Agents page, ahead of the bucket agents, the hours and Spending', await evalJS(`(() => { const ids = [...document.querySelectorAll('#agentsPage .spage__section')].map(x => x.dataset.section); return ids.join() === 'models,pa,buckets,schedules,spending' && !!${A}.querySelector('[data-section=models] [data-model=default]') && !${A}.querySelector('[data-agent-options]') })()`))
   check('the model list is the server\'s', await evalJS(`[...${A}.querySelectorAll('[data-model=chat] option')].map(o => o.value).join()`) === ',opus,sonnet,haiku')
   check('Use default names Sonnet', await aLabel('[data-model=plan]') === 'Use default (Sonnet)')
   await aSet('[data-model=default]', 'opus', 'change')
@@ -484,17 +482,13 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('with no default, others name Claude Code\'s default', await aLabel('[data-model=plan]') === 'Use default (Claude Code’s default)')
   check('the Default select names what each tool falls back to', (await aLabel('[data-model=default]')).includes('Claude Code’s default') && (await aLabel('[data-model=default]')).includes('Haiku for briefs'))
   await aSet('[data-model=default]', 'sonnet', 'change')
-  check('no start choice: when a bucket agent starts is its brief\'s', await evalJS(`!${A}.querySelector('[data-start]')`))
-  check('one Bucket agents group, with its avatar, a model for plans and one for the work', await evalJS(`(() => {
-    const g = [...${A}.querySelectorAll('.agentopts__group')].filter(g => /^Bucket agents/.test(g.querySelector('h4')?.textContent || ''));
-    return g.length === 1 && !!g[0].querySelector('h4 .avatar svg[width="18"]')
-      && !!g[0].querySelector('[data-model=plan]') && !!g[0].querySelector('[data-model=implement]');
-  })()`))
-  check('and no group for the old agents or the planners', await evalJS(`!/Plan agent|Implement agent|Bucket planners/.test(${A}.textContent) && !${A}.querySelector('[data-model=planner]')`))
-  check('chat and brief sit under Other', await evalJS(`[...${A}.querySelectorAll('.agentopts__group')].some(g => g.textContent.startsWith('Other') && g.querySelector('[data-model=chat]') && g.querySelector('[data-model=brief]'))`))
+  check('no start choice among the settings: when a bucket agent starts is its brief\'s, on its own card', await evalJS(`!${A}.querySelector('#agentModels [data-start], #agentSpendFields [data-start]')`))
+  check('the models are one list: default, plans, the work, chat and brief, as Tenon Fields', await evalJS(`[...${A}.querySelectorAll('[data-section=models] .tenon-field > label')].map(l => l.textContent).join() === 'Default model,Model for plans,Model for the work,Chat,Brief' && !${A}.querySelector('[data-section=models] .agentopts__group, [data-section=models] .field')`))
+  check('and no group for the old agents or the planners', await evalJS(`!/Plan agent|Implement agent|Bucket planners/.test(${A}.querySelector('[data-section=models]').textContent) && !${A}.querySelector('[data-model=planner]')`))
+  check('the budgets are number fields under Spending', await evalJS(`['[data-budget]', '[data-agent-budget=bucket]'].every(sel => { const c = ${A}.querySelector('[data-section=spending] ' + sel); return c && c.type === 'number' && c.closest('.tenon-field') })`))
   // The daily budget lives in the fences file, beside whatever else is in it.
   await aSet('[data-model=plan]', 'haiku', 'change')
-  await aSet('[data-budget]', 'lots')
+  await aSet('[data-budget]', '-3')
   check('a budget that is not a number blocks Save', await aSaveDisabled())
   check('and shows its message', await evalJS(`${A}.querySelector('[data-err=budget]').textContent`) === 'Enter an amount in dollars, or leave it empty.')
   await aSet('[data-budget]', '7.5')
@@ -515,7 +509,7 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await openSettingsPageFresh()
   check('the bucket agents have one budget field between them',
     await evalJS(`[...${A}.querySelectorAll('[data-agent-budget]')].map(i => i.dataset.agentBudget).join()`) === 'bucket')
-  await aSet('[data-agent-budget=bucket]', 'lots')
+  await aSet('[data-agent-budget=bucket]', '-3')
   check('an agent budget that is not a number blocks Save', await aSaveDisabled())
   check('and shows its message', await evalJS(`${A}.querySelector('[data-err=budget-bucket]').textContent`) === 'Enter an amount in dollars, or leave it empty.')
   await aSet('[data-agent-budget=bucket]', '5.5')

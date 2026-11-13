@@ -2574,28 +2574,9 @@
      Agent options is a <details> that starts shut, so the form opens on the two
      things that are required. */
   .setupform{display:flex; flex-direction:column; gap:14px}
-  /* The Agents tab's three columns, one below 900px. */
-  .agentscols{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:24px; align-items:start}
-  .agentscol{display:flex; flex-direction:column; gap:14px; min-width:0}
-  .agentscols .agentcards, .agentscols .planners, .agentscols .agentopts--open{max-width:none}
-  .agentscols .agentopts--open .agentopts__body{max-width:none}
-  .agentscols .agentcards-grid{grid-template-columns:1fr}
-  @media (max-width:900px){
-    .agentscols{grid-template-columns:1fr}
-  }
   .fielderr{color:var(--tenon-text-error)}
-  .agentopts{border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-default)}
-  .agentopts > summary{cursor:pointer; list-style:none; padding:9px 11px; font-weight:600}
-  .agentopts > h2{margin:0; padding:9px 11px 0; font-size:var(--tenon-typography-size-sm); font-weight:640; color:var(--tenon-text-subtle)}
-  .agentopts--open{max-width:1100px}
-  .agentopts--open .agentopts__body{max-width:520px}
-  .agentopts > summary::-webkit-details-marker{display:none}
-  .agentopts > summary::before{content:'\25B8  '; color:var(--tenon-text-faint)}
-  .agentopts[open] > summary::before{content:'\25BE  '}
-  .agentopts__body{display:flex; flex-direction:column; gap:14px; padding:2px 11px 12px}
   .agentopts__group{display:flex; flex-direction:column; gap:10px; padding-top:12px; border-top:1px solid var(--tenon-stroke-default)}
   .agentopts__group h4{display:flex; align-items:center; gap:8px; margin:0; font-size:var(--tenon-typography-size-sm); font-weight:650; color:var(--tenon-text-default)}
-  .agentopts__note{margin:-4px 0 0}
   /* First list, step 2: a bucket is a name, a Remove, and what goes in it. */
   .bucketrows{display:flex; flex-direction:column; gap:12px}
   .bucketrow{display:grid; grid-template-columns:1fr auto; gap:6px 8px; align-items:center}
@@ -3103,44 +3084,24 @@
    the hidden attribute, so the drawer's raw-edit boxes would never hide. */
 .tenon-textarea[hidden] { display: none; }
 
-/* The Agents tab's cards (agentCardsHTML() in 27-agents.js): what each agent
-   does, cannot do and needs from the person. Below the hour tracks once an
-   agent is set up, and the whole tab before that. */
-.agentsview { display: flex; flex-direction: column; gap: 24px; padding-bottom: 32px; }
-.agentcards { max-width: 1100px; }
-.agentcards h2 { font-size: var(--tenon-typography-size-sm); font-weight: 640; color: var(--tenon-text-subtle); margin: 0 0 10px; }
-.agentcards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.agentcard {
-  background: var(--tenon-background-raised); border: 1px solid var(--tenon-stroke-default);
-  border-radius: var(--tenon-radius-md); padding: 14px 16px;
-}
-.agentcard.on { border-color: var(--tenon-stroke-accent); box-shadow: 0 0 0 1px var(--tenon-stroke-accent); }
-.agentcard header { border: 0; padding: 0; display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.agentcard header .avatar { display: inline-flex; }
-.agentcard h3 { margin: 0; font-size: var(--tenon-typography-size-lg); font-weight: 640; color: var(--tenon-text-default); }
-.agentcard dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.agentcard dt { font-size: var(--tenon-typography-size-xs); font-weight: 640; color: var(--tenon-text-faint); text-transform: uppercase; letter-spacing: .04em; }
-.agentcard dd { margin: 2px 0 0; font-size: var(--tenon-typography-size-sm); color: var(--tenon-text-default); line-height: 1.45; }
-.agentcard-level { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
-.agentcard-level label { font-size: var(--tenon-typography-size-xs); font-weight: 640; color: var(--tenon-text-faint); text-transform: uppercase; letter-spacing: .04em; }
-.agentcard-level select { align-self: flex-start; }
+/* The Agents page (27-agents.js): inside the shared page layout. The facts under
+   the PA and Bucket agents sections, and one card per bucket agent. */
+.agentsview { padding-bottom: 32px; }
+.agentfacts { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.agentfacts dt { font-size: var(--tenon-typography-size-xs); font-weight: 640; color: var(--tenon-text-faint); text-transform: uppercase; letter-spacing: .04em; }
+.agentfacts dd { margin: 2px 0 0; font-size: var(--tenon-typography-size-sm); color: var(--tenon-text-default); line-height: 1.45; }
 .agentsetup { max-width: 640px; padding-top: 8px; }
 .agentsetup h1 { margin: 0 0 8px; font-size: var(--tenon-typography-size-lg); }
 .agentsetup p { margin: 0 0 14px; color: var(--tenon-text-subtle); line-height: 1.5; }
-.planners { max-width: 1100px; }
-.planners h2 { font-size: var(--tenon-typography-size-sm); font-weight: 640; color: var(--tenon-text-subtle); margin: 0 0 10px; }
-.planners ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.planners li {
+.agentbuckets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.agentbuckets li {
   background: var(--tenon-background-raised); border: 1px solid var(--tenon-stroke-default);
   border-radius: var(--tenon-radius-md); padding: 8px 14px; font-size: var(--tenon-typography-size-sm);
 }
 .bagent > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
 .bagent > summary::-webkit-details-marker { display: none; }
 .bagent > summary .planner-name { margin-left: auto; }
-.bagent__body { margin: 10px 0 2px; display: flex; flex-direction: column; gap: 10px; }
-.bagent__field dt { font-weight: 600; color: var(--tenon-text-default); margin: 0 0 2px; }
-.bagent__field dd { margin: 0; white-space: pre-wrap; color: var(--tenon-text-default); }
-.bagent__field dd.bagent__empty { color: var(--tenon-text-subtle); }
+.bagent__body { margin: 10px 0 2px; display: flex; flex-direction: column; gap: 14px; }
 .planner-bucket { color: var(--tenon-text-default); font-weight: 560; }
 .planner-name { color: var(--tenon-text-subtle); }
 
@@ -3262,7 +3223,6 @@ body.signed-in #runAgentBtn{display:none !important}
   .spage__section{grid-template-columns:1fr; gap:var(--tenon-dimension-150); padding-top:var(--tenon-dimension-400)}
   .spage__foot{padding-top:var(--tenon-dimension-400)}
 }
-.agentsview #refCardsRoot{max-width:860px}
 
 /* Memory (31-memory.js): one panel per section. */
 .memhead{display:flex; align-items:center; justify-content:space-between; gap:12px}

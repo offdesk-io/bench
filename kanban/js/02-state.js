@@ -427,7 +427,7 @@ const RESERVED_TIERS = [BACKLOG_TIER, TODO_TIER, DOING_TIER, WAIT_COL, DONE_COL]
    needs a name no heading in the file could ever produce. */
 const ALL_BUCKETS = '__all__';
 /* What each agent does, what it cannot do and what it needs from the person,
-   one card each at the top of the Agents tab (agentCardsHTML() in
+   one card each at the top of the Agents tab (the Agents page in
    27-agents.js). Written for someone who has never handed a task to an agent,
    so it names what they will see rather than how it works. The rules behind
    it are `[to:: ]` in CONVENTIONS.md and the two agents' READMEs; change this

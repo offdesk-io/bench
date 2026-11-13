@@ -87,13 +87,12 @@ try {
   check('Memory is a tab of the Settings page, not of the top bar', await evalJS(`!viewDefs().some(d => d.id === 'memory') && settingsTabs().some(t => t[0] === 'memory')`))
   await wait(500)
   check('the page is titled Memory', await evalJS(`document.querySelector('#memView h1.spage__title').textContent === 'Memory'`))
-  check('the sections are in order', await evalJS(sections) === 'profile,recorder,company,context,buckets', await evalJS(sections))
-  check('with the titles About you, Meeting recorder, Company and team, Other context, Buckets', await evalJS(titles) === 'About you,Meeting recorder,Company and team,Other context,Buckets', await evalJS(titles))
+  check('the sections are in order', await evalJS(sections) === 'profile,recorder,company,context', await evalJS(sections))
+  check('with the titles About you, Meeting recorder, Company and team, Other context', await evalJS(titles) === 'About you,Meeting recorder,Company and team,Other context', await evalJS(titles))
   check('there is a Save under the title and one at the foot', await evalJS(`!!document.querySelector('#memView .spage__head [data-mem-save-all]') && !!document.querySelector('#memView .spage__foot [data-mem-save-all]')`))
-  check('no section has an Edit or Cancel button, apart from a bucket\'s own', await evalJS(`![...document.querySelectorAll('#memView [data-mem-edit]')].some(b => !b.dataset.memEdit.startsWith('bucket:')) && !document.querySelector('#memView [data-mem-cancel]')`))
+  check('no section has an Edit or Cancel button, and Buckets is no longer here', await evalJS(`!document.querySelector('#memView [data-mem-edit], #memView [data-mem-cancel], #memView [data-section=buckets]')`))
   check('Company and Team are always open for typing', await evalJS(`!!document.querySelector('[data-mem-about]') && !!document.querySelector('[data-mem-add]') && !document.querySelector('[data-mem-about]').readOnly`))
   check('an empty Team says so', await evalJS(`/No team yet/.test(document.querySelector('[data-section=company]').textContent) && !document.querySelector('[data-mem-row]')`))
-  check('every bucket has a block', await evalJS(`document.querySelectorAll('.membucket').length === memData.buckets.length && memData.buckets.length > 0`))
   check('Other context holds the list\'s own section as text', await evalJS(`document.querySelector('[data-mem-context]').value.length > 20`))
   check('About you holds the facts file, working habits, writing rules and how to address you, in that order', await evalJS(
     `[...document.querySelectorAll('[data-section=profile] .tenon-field > .tenon-field__label')].map(x => x.textContent).join() === 'Facts file,Working habits,Writing rules,How to address you'`))
@@ -162,22 +161,6 @@ try {
   check('and a Save sends the emptied Team on its own', await puts() === '/people', await puts())
   check('which leaves no people', (await evalJS(`fetch('/memory.json').then(r => r.json()).then(j => j.people)`)).length === 0)
 
-  // --- A bucket brief goes through the section form -------------------------
-  const first = await evalJS(`memData.buckets[0].heading`)
-  await setVal('[data-mem-about]', 'Typed before opening a bucket.')
-  await click(`.membucket[data-mem-bucket=${JSON.stringify(first)}] [data-mem-edit]`)
-  check('a bucket opens the brief form', await evalJS(`document.querySelectorAll('[data-brief-section]').length === BRIEF_SECTIONS.length && !!${$q('[data-mem-brief-summary]')}`))
-  check('opening it keeps what was typed above', await evalJS(`document.querySelector('[data-mem-about]').value === 'Typed before opening a bucket.'`))
-  await evalJS(`document.querySelector('[data-mem-brief-summary]').value = 'From the Memory page.'`)
-  await click('[data-mem-bucket] [data-mem-save]')
-  await wait(800)
-  const brief = await evalJS(`fetch('/memory.json').then(r => r.json()).then(j => j.buckets[0])`)
-  check('and saves it through PUT /bucket-brief', /From the Memory page\./.test(brief.text) && brief.exists, JSON.stringify(brief).slice(0, 200))
-  check('saving a bucket leaves the unsaved Company text alone', await evalJS(`document.querySelector('[data-mem-about]').value === 'Typed before opening a bucket.'`))
-  await setVal('[data-mem-about]', 'We make **small** tools.\n\n- one\n- two')
-  await evalJS(`memLoad(true)`)
-  await wait(600)
-
   // --- Context: the old section shows, the first save moves it to context.md ---
   check('Context starts from the todo.md section when there is no context.md',
     await evalJS(`memData.context.exists === false && /./.test(memContextText()) && !!memContextSpan()`))
@@ -227,16 +210,6 @@ try {
   await evalJS(`memLoad(true)`)
   await wait(700)
   check('a read made for a fresh start drops the typing', await evalJS(`${$q('[data-mem-about]')}.value !== 'typed, not saved' && !document.querySelector('[data-mem-row]')`))
-  const firstHead = await evalJS(`memData.buckets[0].heading`)
-  await click(`.membucket[data-mem-bucket=${JSON.stringify(firstHead)}] [data-mem-edit]`)
-  await evalJS(`document.querySelector('[data-mem-brief-summary]').value = 'brief typed, not saved'`)
-  await evalJS(`renderMemoryView()`)
-  await wait(700)
-  check('an open bucket brief survives a re-render with its text', await evalJS(`!!${$q('[data-mem-brief-summary]')} && ${$q('[data-mem-brief-summary]')}.value === 'brief typed, not saved'`))
-  await evalJS(`memLoad(); refreshSettingsPage()`)
-  await wait(700)
-  check('and a late answer or a refresh', await evalJS(`!!${$q('[data-mem-brief-summary]')} && ${$q('[data-mem-brief-summary]')}.value === 'brief typed, not saved'`))
-  await click('[data-mem-bucket] [data-mem-cancel]')
   await evalJS(`memLoad(true)`)
   await wait(500)
 
@@ -269,54 +242,30 @@ try {
     const mid = document.querySelector('#lists').getBoundingClientRect();
     return Math.abs(r.left - mid.left) < 2 && r.width <= 1200.5
   })()`))
-  check('Buckets is one section holding every brief', await evalJS(`document.querySelectorAll('#memView [data-section=buckets] .membucket').length === memData.buckets.length && document.querySelectorAll('#memView [data-section=buckets]').length === 1`))
   await evalJS(`state.locked = false`)
-  // an empty subsection under a brief says so, in the style of "No brief yet."
-  await evalJS(`(() => {
-    memData.buckets = [{ heading: 'Foo', name: 'Foo', exists: true, filled: true,
-      text: '# Foo\\n\\nWhat lands here.\\n\\n## The processes I run in this bucket\\n\\n> hint only\\n\\n## Who is involved\\n\\n## What good looks like\\n\\nShips on time.' }];
-    memReset();
-  })()`)
-  const heads = `[...document.querySelectorAll('#memView [data-section=buckets] .memtext h4')].map(h => h.textContent + (h.nextElementSibling && h.nextElementSibling.classList.contains('memempty') ? ':empty' : '')).join('|')`
-  const headText = await evalJS(heads)
-  check('a brief heading with nothing under it shows an empty line', /The processes I run in this bucket:empty/.test(headText) && /Who is involved:empty/.test(headText) && !/What good looks like:empty/.test(headText), headText)
-  await evalJS(`memLoad(true)`)
-  await wait(600)
-
-  // two bucket headings that slug the same
-  await evalJS(`memData.buckets = [
-    { heading: 'Foo Bar', name: 'Foo Bar', exists: true, filled: true, text: '# Foo Bar\\n\\nOne.' },
-    { heading: 'foo-bar', name: 'foo-bar', exists: true, filled: true, text: '# foo-bar\\n\\nTwo.' }
-  ]; memReset()`)
-  check('buckets that slug alike get distinct ids', await evalJS(`(() => { const ids = [...document.querySelectorAll('.membucket')].map(a => a.id); return ids.length === 2 && ids[0] !== ids[1] })()`),
-    await evalJS(`[...document.querySelectorAll('.membucket')].map(a => a.id).join(',')`))
-  await evalJS(`memLoad(true)`)
-  await wait(600)
-
   // each section says what it is for, filled or empty
   const descs = `[...document.querySelectorAll('#memView .spage__section')].map(s => s.dataset.section + '=' + [...s.querySelectorAll('[data-mem-desc]')].map(d => d.textContent).join('+')).join('|')`
   const wantDescs = {
     profile: 'Facts about you that agents work from: how you work, write and want things done.',
     recorder: '',
     company: 'Who is who: role, team, who reports to whom, and the names that get confused.+What this business does, in a few lines every agent reads first.',
-    context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone.",
-    buckets: 'One per bucket: what kind of work lands there and how it should be handled.'
+    context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone."
   }
-  const wantStr = ['profile', 'recorder', 'company', 'context', 'buckets'].map(k => k + '=' + wantDescs[k]).join('|')
+  const wantStr = ['profile', 'recorder', 'company', 'context'].map(k => k + '=' + wantDescs[k]).join('|')
   check('group descriptions sit under their title in the label column, field help stays under its field', await evalJS(`(() => {
     const side = k => document.querySelector('#memView [data-section=' + k + '] .spage__side .spage__desc');
-    return !!side('profile') && !!side('company') && !!side('buckets') && !document.querySelector('#memView .spage__fields > p[data-mem-desc]')
+    return !!side('profile') && !!side('company') && !document.querySelector('#memView .spage__fields > p[data-mem-desc]')
       && !!document.querySelector('#memView [data-section=context] .tenon-field__note[data-mem-desc=context]') })()`))
   check('each section shows its description', await evalJS(descs) === wantStr, await evalJS(descs))
 
   // every section empty: each still renders, with a box or a placeholder to type in
   await evalJS(`(() => {
-    memData.about = { text: '' }; memData.people = []; memData.buckets = []; memData.profile = {};
+    memData.about = { text: '' }; memData.people = []; memData.profile = {};
     memData.context = { text: '', exists: false };
     const span = memContextSpan(); if (span) span.arr.splice(span.at, span.end - span.at);
     memReset();
   })()`)
-  check('with everything empty every section still renders', await evalJS(sections) === 'profile,recorder,company,context,buckets', await evalJS(sections))
+  check('with everything empty every section still renders', await evalJS(sections) === 'profile,recorder,company,context', await evalJS(sections))
   check('empty sections keep their description', await evalJS(descs) === wantStr)
   check('each carries a placeholder', await evalJS(`[...document.querySelectorAll('#memView .spage__section')].every(s => s.querySelector('.memempty, textarea[placeholder]'))`))
   check('Company and Team can still be typed into', await evalJS(`!!document.querySelector('[data-mem-about]') && !!document.querySelector('[data-mem-add]')`))
@@ -341,18 +290,15 @@ try {
   await wait(700)
   check('a locked tab says it is read-only, with no Save', await evalJS(`/read-only/.test(${$q('#memView')}.textContent) && !document.querySelector('[data-mem-save-all]')`))
   check('every field is readonly', await evalJS(`(() => { const f = [...document.querySelectorAll('#memView textarea, #memView input')]; return f.length > 5 && f.every(x => x.readOnly) })()`))
-  check('with no Add, Remove or bucket Edit', await evalJS(`!document.querySelector('#memView [data-mem-add], #memView [data-mem-remove], #memView [data-mem-edit]')`))
+  check('with no Add or Remove', await evalJS(`!document.querySelector('#memView [data-mem-add], #memView [data-mem-remove]')`))
   await evalJS(`window.__puts = []`)
   await evalJS(`memDraft.about = 'changed'; memDraft.context = 'changed'; memDraft.people.push({ name: 'X' })`)
-  await evalJS(`memStartEdit('bucket:' + memData.buckets[0].heading)`)
-  check('a locked tab opens no bucket form', await evalJS(`memEditing === null && !document.querySelector('[data-mem-brief-summary]')`))
-  await evalJS(`memEditing = 'bucket:' + memData.buckets[0].heading; memBucketParts = { summary: 'x', sections: {} }`)
-  const lockedSaves = await evalJS(`Promise.all([memSaveAll(), memSaveBucket(memEditing), settingsPageSave()]).then(r => JSON.stringify(r))`)
+  const lockedSaves = await evalJS(`Promise.all([memSaveAll(), settingsPageSave()]).then(r => JSON.stringify(r))`)
   await wait(400)
-  check('Save, the bucket Save and the unsaved-changes prompt\'s Save all refuse', lockedSaves === '[false,null,false]', lockedSaves)
+  check('Save and the unsaved-changes prompt\'s Save both refuse', lockedSaves === '[false,false]', lockedSaves)
   check('and no PUT goes out', await puts() === '', await puts())
   check('a locked page is never dirty, so leaving it asks nothing', await evalJS(`memIsDirty() === false && !settingsPageDirty()`))
-  await evalJS(`memDraft = null; memEditing = null; memBucketParts = null; state.locked = false; memLoad(true)`)
+  await evalJS(`memDraft = null; state.locked = false; memLoad(true)`)
   await wait(600)
 
   // --- the hash survives a view switch -------------------------------------

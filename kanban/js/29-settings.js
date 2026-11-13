@@ -90,11 +90,10 @@ function settingsEmptyLabel(key, models){
 }
 
 function settingsModelField(key, name, help, draft, choices){
-  return '<label class="field"><span>' + esc(name) + '</span>' +
-    '<select data-model="' + key + '">' +
-    '<option value="">' + esc(settingsEmptyLabel(key, draft.models)) + '</option>' +
-    choices.map(m => '<option value="' + esc(m) + '"' + (draft.models[key] === m ? ' selected' : '') + '>' + esc(settingsCap(m)) + '</option>').join('') +
-    '</select><span class="help">' + esc(help) + '</span></label>';
+  return tenonFieldHTML({ label: name, kind: 'select', attrs: 'data-model="' + key + '"', readonly: state.locked,
+    options: '<option value="">' + esc(settingsEmptyLabel(key, draft.models)) + '</option>' +
+      choices.map(m => '<option value="' + esc(m) + '"' + (draft.models[key] === m ? ' selected' : '') + '>' + esc(settingsCap(m)) + '</option>').join(''),
+    hint: help });
 }
 
 function settingsCountryOptions(draft, first){
@@ -217,7 +216,7 @@ function settingsPageLayoutHTML(title, sections, opts){
    'switch'), attrs (data-* and the like, as a string), value, type,
    placeholder, rows, options (a select's <option>s, as HTML), hint, hintAttrs,
    notes (extra lines under the hint, as HTML), err (the data attribute naming
-   the error line, e.g. 'data-err="name"'), required, readonly, on (a switch),
+   the error line, e.g. 'data-err="name"'), required, readonly (disabled on a select or a switch, which have no read-only), on (a switch),
    wrap (attributes on the block, e.g. 'data-region-field hidden'). */
 let tenonFieldSeq = 0;
 const TENON_CHEVRON = '<svg class="tenon-select__chevron" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
@@ -226,7 +225,7 @@ function tenonFieldHTML(o){
   const kind = o.kind || 'input';
   const hasHint = o.hint !== undefined && o.hint !== null && o.hint !== '';
   const common = ' id="' + id + '"' + (hasHint ? ' aria-describedby="' + hintId + '"' : '') + (o.required ? ' required' : '') +
-    (o.readonly ? ' readonly' : '') + (o.attrs ? ' ' + o.attrs : '');
+    (o.readonly ? (kind === 'select' || kind === 'switch' ? ' disabled' : ' readonly') : '') + (o.attrs ? ' ' + o.attrs : '');
   let control;
   if (kind === 'select') {
     control = '<span class="tenon-field__select"><select class="tenon-field__control"' + common + '>' + (o.options || '') + '</select>' + TENON_CHEVRON + '</span>';
@@ -782,12 +781,14 @@ function settingsPageDirty(){
     return !!(settingsLiveDraft && settingsHostEl && settingsHostEl.isConnected && settingsDraftSnapshot(settingsLiveDraft) !== settingsSnapshot);
   }
   if (settingsTab === 'memory') return typeof memIsDirty === 'function' && memIsDirty();
+  if (settingsTab === 'agents') return typeof agentsIsDirty === 'function' && agentsIsDirty();
   return false;
 }
 
 /* Saves the page on screen, true when it went through. */
 async function settingsPageSave(){
   if (settingsTab === 'memory') return memSaveAll();
+  if (settingsTab === 'agents') return agentsSaveAll();
   if (settingsTab === 'settings' && settingsLiveDraft) return runSettingsSave(settingsLiveDraft, false, false, { noReload: true });
   return true;
 }
@@ -888,41 +889,30 @@ async function drawSettingsTab(){
   host.querySelectorAll('[data-settings-save]').forEach(btn => { btn.onclick = () => runSettingsSave(draft, false, false); });
 }
 
-/* ---- Agent options, at the top of the Agents tab ----
+/* ---- The Agents page's settings ----
 
-   The models each job runs on and the daily budgets. They save to the same
-   keys through the same PUT /settings.json as before, from a Save of their
-   own, since they are no longer part of the Settings form. */
-function agentOptionsHTML(draft, choices){
-  const agents = '<div class="agentopts__group"><h4>' + plannerAvatarHTML('var(--tenon-text-secondary, #8a8a8a)', 18) + 'Bucket agents</h4>' +
-    SETTINGS_AGENTS.map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('') +
-    '<label class="field"><span>Daily budget ($)</span><input type="text" inputmode="decimal" data-agent-budget="bucket" value="' + escAttr(draft.agentBudgets.bucket) + '" placeholder="No limit">' +
-    '<span class="help">Every bucket’s agent on every board spends from this. Its runs stop for the day once it is spent. Empty means no limit.</span>' +
-    '<span class="help fielderr" data-err="budget-bucket" hidden></span></label></div>';
-  const other = SETTINGS_OTHER.map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('');
-  return '<section class="agentopts agentopts--open" data-agent-options aria-label="Agent options"><h2>Agent options</h2>' +
-    '<div class="agentopts__body">' +
-    (draft.list ? boardSwitchHTML('data-board-agents', draft.agentsOn, 'Agents', 'Lets this board’s bucket agents work. Off, they leave it alone.') : '') +
-    settingsModelField('default', 'Default model', 'Used by any model below that is left on Use default.', draft, choices) +
-    agents +
-    '<div class="agentopts__group"><h4>Other</h4>' + other + '</div>' +
-    '<div class="agentopts__group"><h4>Spending</h4>' +
-    '<label class="field"><span>All agents together, daily budget ($)</span><input type="text" inputmode="decimal" data-budget value="' + escAttr(draft.budget) + '" placeholder="No limit">' +
-    '<span class="help">Every agent’s scheduled runs stop for the day once this is spent, whatever its own budget. Empty means no limit.</span>' +
-    '<span class="help fielderr" data-err="budget" hidden></span></label></div>' +
-    '<div class="settingspage__actions"><button type="button" class="btn primary" data-agent-options-save>Save</button></div>' +
-    '</div></section>';
+   The models each job runs on, the board's Agents switch and the daily budgets,
+   drawn into the Agents page (27-agents.js) as Tenon Fields. They save to the
+   same keys through the same PUT /settings.json as before, from the page's one
+   Save, which also writes any bucket brief that changed (agentsSaveAll()). */
+const AGENT_MODEL_FIELDS = (draft, choices) =>
+  settingsModelField('default', 'Default model', 'Used by any model below that is left on Use default.', draft, choices) +
+  SETTINGS_AGENTS.concat(SETTINGS_OTHER).map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('');
+
+function agentSpendFieldsHTML(draft){
+  const num = o => tenonFieldHTML(Object.assign({ type: 'number', placeholder: 'No limit', readonly: state.locked }, o));
+  return num({ label: 'Daily budget, all agents together ($)', attrs: 'data-budget min="0" step="any" inputmode="decimal"', value: draft.budget,
+      hint: 'Every agent’s scheduled runs stop for the day once this is spent, whatever its own budget. Empty means no limit.', err: 'data-err="budget"' }) +
+    num({ label: 'Daily budget, bucket agents ($)', attrs: 'data-agent-budget="bucket" min="0" step="any" inputmode="decimal"', value: draft.agentBudgets.bucket,
+      hint: 'Every bucket’s agent on every board spends from this. Its runs stop for the day once it is spent. Empty means no limit.', err: 'data-err="budget-bucket"' });
 }
 
 function paintAgentOptionErrors(draft, host, attempted){
   const err = agentOptionErrors(draft);
   host.querySelectorAll('[data-err]').forEach(el => {
-    const show = !!err[el.dataset.err] && (draft.touched[el.dataset.err] || attempted);
-    el.textContent = show ? err[el.dataset.err] : '';
-    el.hidden = !show;
+    tenonFieldError(el, !!err[el.dataset.err] && (draft.touched[el.dataset.err] || attempted) ? err[el.dataset.err] : '');
   });
-  const save = host.querySelector('[data-agent-options-save]');
-  if (save) save.disabled = Object.keys(err).length > 0;
+  host.querySelectorAll('[data-agents-save]').forEach(save => { save.disabled = Object.keys(err).length > 0; });
 }
 
 function trackAgentOptions(draft, host){
@@ -941,7 +931,7 @@ function trackAgentOptions(draft, host){
   host.addEventListener('change', sync);
   host.addEventListener('click', e => {
     const sw = e.target.closest('[data-board-agents]');
-    if (!sw) return;
+    if (!sw || sw.disabled) return;
     const on = sw.getAttribute('aria-checked') !== 'true';
     sw.setAttribute('aria-checked', String(on));
     sw.classList.toggle('tenon-switch--on', on);
@@ -950,8 +940,13 @@ function trackAgentOptions(draft, host){
   paintAgentOptionErrors(draft, host);
 }
 
-async function saveAgentOptions(draft, host){
-  if (Object.keys(agentOptionErrors(draft)).length) { paintAgentOptionErrors(draft, host, true); return; }
+/* What the page's settings hold, to tell whether Save has anything to write. */
+const agentOptsSnapshot = d => JSON.stringify([d.models, d.budget, d.agentBudgets, d.agentsOn]);
+/* The open Agents page's settings draft and what it was loaded as; null before they arrive. */
+let agentsOpts = null;
+
+/* Writes the settings the page holds when they changed. True when it went through. */
+async function saveAgentOptions(draft){
   const dollars = v => v.trim() === '' ? null : Number(v);
   const agentBudgets = {};
   for (const k in draft.agentBudgets) agentBudgets[SETTINGS_BUDGET_IDS[k]] = dollars(draft.agentBudgets[k]);
@@ -963,21 +958,24 @@ async function saveAgentOptions(draft, host){
       await sendJSON('PUT', '/settings.json', { boards: { [draft.list]: { agents: draft.agentsOn } } });
       draft.agentsWas = draft.agentsOn;
     }
-  } catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
-  showToast('Saved.', 'good');
+  } catch (err) { showToast('Could not save: ' + (err.message || err)); return false; }
+  return true;
 }
 
-/* Fills `host` (the Agents tab's #agentOptions) once; a redraw of the tab leaves
-   it alone, so nothing typed in it is lost. */
-async function drawAgentOptions(host){
-  if (!host || host.firstChild || state.who) return;
+/* Fills the Agents page's models, board switch and budgets once; a redraw of the
+   tab leaves them alone, so nothing typed in them is lost. `page` is #agentsPage. */
+async function drawAgentOptions(page){
+  if (!page || page.dataset.opts || state.who) return;
+  page.dataset.opts = 'loading';
   let set;
   try { set = await fetch('/settings.json').then(r => r.json()); }
   catch (err) {
-    if (host.isConnected && !host.firstChild) host.innerHTML = '<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>';
+    delete page.dataset.opts;
+    const box = page.querySelector('#agentModels');
+    if (box && page.isConnected && !box.firstChild) box.innerHTML = '<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>';
     return;
   }
-  if (!host.isConnected || host.firstChild) return;
+  if (!page.isConnected) return;
   const models = Object.assign({ default: null, plan: null, implement: null, chat: null, brief: null }, set.models);
   delete models.planner;
   const dollars = v => v == null ? '' : String(v);
@@ -986,9 +984,14 @@ async function drawAgentOptions(host){
   const list = state.dataset || '';
   const agentsOn = ((set.boards || {})[list] || {}).agents !== false;
   const draft = { models, budget: dollars(set.daily_budget), agentBudgets, touched: {}, list, agentsOn, agentsWas: agentsOn };
-  host.innerHTML = agentOptionsHTML(draft, (set.choices && set.choices.models) || []);
-  trackAgentOptions(draft, host);
-  host.querySelector('[data-agent-options-save]').onclick = () => saveAgentOptions(draft, host);
+  page.querySelector('#agentModels').innerHTML = AGENT_MODEL_FIELDS(draft, (set.choices && set.choices.models) || []);
+  page.querySelector('#agentBoardSwitch').innerHTML = draft.list
+    ? tenonFieldHTML({ label: 'Agents', kind: 'switch', attrs: 'data-board-agents', on: draft.agentsOn, readonly: state.locked,
+        hint: 'Lets this board’s bucket agents work. Off, they leave it alone.' }) : '';
+  page.querySelector('#agentSpendFields').innerHTML = agentSpendFieldsHTML(draft);
+  page.dataset.opts = 'ready';
+  agentsOpts = { draft, base: agentOptsSnapshot(draft) };
+  trackAgentOptions(draft, page);
 }
 
 $('#settingsBtn').onclick = () => { closeDataMenu(); openSettingsPage('settings'); };
