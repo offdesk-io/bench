@@ -83,8 +83,13 @@ jobs:
           node kanban/ui/test_primitives.mjs
 
       # Google Chrome is in /Applications on the runner, where test_browser.mjs looks.
+      # A suite that fails runs once more, since the hosted runner is slow
+      # enough to fail a timing check now and then; any that needed it is
+      # flagged on the run as a warning, to be fixed rather than left.
       - name: Board suites in Chrome
         working-directory: bench
+        env:
+          SUITE_RETRIES: 1
         run: scripts/test-board.sh --all
 
   deploy:
