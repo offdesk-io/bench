@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /* Reports — the counted half and the written half, now the Reports page, the
- * second tab after Overview.
+ * second tab after Overview, with Tasks finished leading Overview's row.
  *
  *   python3 kanban/server.py &          # or BOARD_PORT=... at one already up
  *   node kanban/test_reports.mjs
@@ -155,15 +155,15 @@ await evalJS(`(() => {
 })()`)
 check('the tab is locked', await evalJS(`state.locked === true`))
 
-await evalJS(`state.view = 'reports'; renderView()`)
+await evalJS(`state.view = 'overview'; renderView()`)
 await new Promise(r => setTimeout(r, 700))
 
-/* ---- the two columns, on the Reports page ---- */
+/* ---- Tasks finished leads Overview's row ---- */
 
-check('counted leads the row and written closes it', await evalJS(`(() => {
+check('Tasks finished leads the Overview row', await evalJS(`(() => {
   const t = [...document.querySelectorAll('.lists.split .tenon-column .tenon-column__head h3')].map(h => h.textContent);
-  return t[0] + '|' + t[t.length - 1];
-})()`) === 'Tasks finished|Written reports', await evalJS(`
+  return t[0];
+})()`) === 'Tasks finished', await evalJS(`
   [...document.querySelectorAll('.lists.split .tenon-column .tenon-column__head h3')].map(h => h.textContent).join('|')`))
 
 check('the counted head says how many the window holds', await evalJS(`(() => {
@@ -181,7 +181,7 @@ check('the window picker is in the counted column’s head, not its body', await
   !${countedCol}.querySelector('.tenon-column__body #reportWindow')
 `))
 
-/* Every column on Reports folds, these two included — and a <summary> folds
+/* Every column on Overview folds, these two included — and a <summary> folds
    on any click inside it that nothing cancels, which is what the delegated
    guard in 09-columns.js is for. */
 check('picking a window does not fold the column it is in', await evalJS(`(() => {
@@ -300,7 +300,13 @@ check('All says what it is rather than printing a start date', await evalJS(`
 await evalJS(`document.querySelector('#reportWindow button[data-window="30"]').click()`)
 await new Promise(r => setTimeout(r, 400))
 
-/* ---- the written half ---- */
+/* ---- the written half, on the Reports page ---- */
+
+await evalJS(`state.view = 'reports'; renderView()`)
+await new Promise(r => setTimeout(r, 700))
+check('Reports holds the written reports only, with no Tasks finished panel', await evalJS(`
+  [...document.querySelectorAll('.lists.split .tenon-column .tenon-column__head h3')].map(h => h.textContent).join('|')
+`) === 'Written reports' && await evalJS(`!document.querySelector('#reportWindow, #countedOut')`))
 
 check('every report in the folder gets a row', await evalJS(`
   document.querySelectorAll('#writtenOut .repitem').length
@@ -351,6 +357,9 @@ await evalJS(`forgetWrittenReports(); ensureWrittenReports()`)
 await new Promise(r => setTimeout(r, 500))
 
 /* ---- cancelled work is not finished work ---- */
+
+await evalJS(`state.view = 'overview'; renderView()`)
+await new Promise(r => setTimeout(r, 500))
 
 check('a cancelled and an archived task both parse their tag off the line', await evalJS(`
   (() => {

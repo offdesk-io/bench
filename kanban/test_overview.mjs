@@ -16,9 +16,10 @@
  * .capped class in the same synchronous pass as the render call, with no
  * setTimeout to paper over a race if one existed.
  *
- * Five columns until 19 Sep 2026, seven since: Tasks finished and Written
- * reports were a tab of their own and sit at the two ends of this row now,
- * Tasks finished leading it at twice a reference column's width. What
+ * Five columns until 19 Sep 2026, then seven, then three when Context and
+ * Delegate to Claude went and Reports became a tab. Four now: Tasks finished
+ * is back, leading the row at twice a reference column's width, and Written
+ * reports stays on the Reports tab. What
  * they hold is kanban/test_reports.mjs's; what this suite adds about them is
  * that they are there, that they fold like the rest, and that the row's tracks
  * counted them.
@@ -116,33 +117,39 @@ check('the tab is locked', await evalJS(`state.locked === true`))
    and the point of the check is that it stays safe. */
 await evalJS(`state.view = 'overview'; renderView()`)
 
-/* ---- the shell: three columns, in reading order ---- */
+/* ---- the shell: Tasks finished, then three columns, in reading order ---- */
 
-check('the three columns are drawn, in reading order', await evalJS(`
+check('the four columns are drawn, in reading order', await evalJS(`
   [...document.querySelectorAll('.lists.split .tenon-column h3')].map(h => h.textContent).join('|')
-`) === 'Big rocks|This week|Quick wins',
+`) === 'Tasks finished|Big rocks|This week|Quick wins',
   await evalJS(`[...document.querySelectorAll('.lists.split .tenon-column h3')].map(h => h.textContent).join('|')`))
 
-check('the split grid carries three tracks', await evalJS(`
+check('the split grid carries four tracks', await evalJS(`
   (document.querySelector('.lists.split').style.gridTemplateColumns.match(/minmax/g) || []).length
-`) === 3, await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
+`) === 4, await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
 
-check('and the row is as wide as the three tracks it holds', await evalJS(`
+check('and the row is as wide as the four tracks it holds', await evalJS(`
   document.querySelector('.lists.split').style.minWidth
-`) === (394 * 3) + 'px', await evalJS(`document.querySelector('.lists.split').style.minWidth`))
+`) === (788 + 394 * 3) + 'px', await evalJS(`document.querySelector('.lists.split').style.minWidth`))
 
 /* Context lives on the Memory page and Delegate to Claude is not drawn. */
 check('Overview has no Context column and no Delegate to Claude panel', await evalJS(`
   !/Context|Delegate to Claude/.test([...document.querySelectorAll('#lists h3')].map(h => h.textContent).join('|')) &&
   !document.querySelector('#lists .ctxgroup, #lists .ref.ctx')
 `))
-check('and no report columns either, they have their own page', await evalJS(`
-  !/Tasks finished|Written reports/.test(document.querySelector('#lists').textContent)
+check('Written reports is not here, it has the Reports page', await evalJS(`
+  !/Written reports/.test(document.querySelector('#lists').textContent)
 `))
 
+/* Two reference columns and the gap between them, so the wide column lines up
+   with the pair beside it rather than being merely bigger than them. */
+check('Tasks finished leads the row at exactly two reference columns wide', await evalJS(`
+  document.querySelector('.lists.split').style.gridTemplateColumns.split(') ')[0] + ')'
+`) === 'minmax(774px, 2fr)', await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
+
 check('a hint with a tag in it renders the tag as code, not literal backticks', await evalJS(`
-  document.querySelector('.lists.split .tenon-column:nth-child(2) .tenon-column__desc code')?.textContent
-`) === 'week', await evalJS(`document.querySelector('.lists.split .tenon-column:nth-child(2) .tenon-column__desc')?.innerHTML`))
+  document.querySelector('.lists.split .tenon-column:nth-child(3) .tenon-column__desc code')?.textContent
+`) === 'week', await evalJS(`document.querySelector('.lists.split .tenon-column:nth-child(3) .tenon-column__desc')?.innerHTML`))
 
 /* ---- each section counts what it holds ---- */
 
@@ -157,21 +164,7 @@ check('This week counts the one week-tagged task', await countOf('This week') ==
    Until 21 Sep 2026 an untagged task was skipped for having no `ai:`. */
 check('Quick wins counts the message task and the small one', await countOf('Quick wins') === '2')
 
-/* ---- the two report columns, on the Reports page ---- */
-
-await evalJS(`state.view = 'reports'; renderView()`)
-check('Reports is a tab right after Overview and #reports opens it', await evalJS(`
-  [...document.querySelectorAll('#viewTabs [role=radio], [data-view]')].map(r => r.dataset.value || r.dataset.view).filter(Boolean).slice(0, 2).join() === 'overview,reports' &&
-  state.view === 'reports' && /reports/.test(location.hash)
-`), await evalJS(`location.hash`))
-check('the Reports page draws Tasks finished then Written reports on two tracks', await evalJS(`
-  [...document.querySelectorAll('.lists.split .tenon-column h3')].map(h => h.textContent).join('|') + '/' +
-  (document.querySelector('.lists.split').style.gridTemplateColumns.match(/minmax/g) || []).length
-`) === 'Tasks finished|Written reports/2', await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
-check('Tasks finished leads at exactly two reference columns wide', await evalJS(`
-  document.querySelector('.lists.split').style.gridTemplateColumns.split(') ')[0] + ')'
-`) === 'minmax(774px, 2fr)', await evalJS(`document.querySelector('.lists.split').style.gridTemplateColumns`))
-
+/* ---- Tasks finished, the lead column of the row ---- */
 
 check('Tasks finished carries the window picker in its head', await evalJS(`(() => {
   const c = [...document.querySelectorAll('.lists.split .tenon-column')].find(c => c.querySelector('h3')?.textContent === 'Tasks finished');
@@ -182,12 +175,12 @@ check('Tasks finished carries the window picker in its head', await evalJS(`(() 
    the column became a <details> with a <summary> for one: 12.5px type and a
    second chevron on a line of its own. They are scoped under `.tenon-column__body` now,
    so the head is the same object as any other column's. */
-check('and its head is drawn exactly like its neighbour\'s', await evalJS(`(() => {
+check('and its head is drawn exactly like a reference column\'s', await evalJS(`(() => {
   const at = t => [...document.querySelectorAll('.lists.split .tenon-column')].find(c => c.querySelector('h3')?.textContent === t);
   const shape = el => { const s = el.querySelector('summary'), cs = getComputedStyle(s);
     return [cs.fontSize, cs.padding, getComputedStyle(s, '::before').content,
             s.querySelectorAll('.tenon-column__chevron').length].join('/') };
-  return shape(at('Tasks finished')) === shape(at('Written reports')) ? 'same' : shape(at('Tasks finished')) + ' vs ' + shape(at('Written reports'));
+  return shape(at('Tasks finished')) === shape(at('Big rocks')) ? 'same' : shape(at('Tasks finished')) + ' vs ' + shape(at('Big rocks'));
 })()`) === 'same', await evalJS(`(() => {
   const at = t => [...document.querySelectorAll('.lists.split .tenon-column')].find(c => c.querySelector('h3')?.textContent === t);
   const s = at('Tasks finished').querySelector('summary'), cs = getComputedStyle(s);
@@ -204,6 +197,19 @@ check('and a count and a description, like every other column here', await evalJ
   const c = [...document.querySelectorAll('.lists.split .tenon-column')].find(c => c.querySelector('h3')?.textContent === 'Tasks finished');
   return c.querySelector('.tenon-column__head-end .tenon-column__count')?.textContent + '|' + c.querySelector('.tenon-column__desc')?.textContent;
 })()`))
+/* ---- Written reports, on the Reports page ---- */
+
+await evalJS(`state.view = 'reports'; renderView()`)
+check('Reports is a tab right after Overview and #reports opens it', await evalJS(`
+  [...document.querySelectorAll('#viewTabs [role=radio], [data-view]')].map(r => r.dataset.value || r.dataset.view).filter(Boolean).slice(0, 2).join() === 'overview,reports' &&
+  state.view === 'reports' && /reports/.test(location.hash)
+`), await evalJS(`location.hash`))
+check('the Reports page draws Written reports alone, with no Tasks finished', await evalJS(`
+  [...document.querySelectorAll('.lists.split .tenon-column h3')].map(h => h.textContent).join('|')
+`) === 'Written reports', await evalJS(`[...document.querySelectorAll('.lists.split .tenon-column h3')].map(h => h.textContent).join('|')`))
+check('and no charts panel: no window picker, no completed-by-bucket report', await evalJS(`
+  !document.querySelector('#lists #reportWindow') 
+`))
 check('Written reports folds on the same key the other six use', await evalJS(`(() => {
   const c = [...document.querySelectorAll('.lists.split .tenon-column')].find(c => c.querySelector('h3')?.textContent === 'Written reports');
   return c?.tagName === 'DETAILS' && c.dataset.columnCollapse === 'ov:Written reports';
@@ -248,7 +254,7 @@ await evalJS(`localStorage.removeItem('bench-overview-closed')`)
 /* ---- Quick wins' own sort control ---- */
 
 check('Quick wins carries its own sort toggle, not the board\'s', await evalJS(`
-  !!document.querySelector('.lists.split .tenon-column:nth-child(3) [data-quicksort]')
+  !!document.querySelector('.lists.split .tenon-column:nth-child(4) [data-quicksort]')
 `))
 
 /* ---- the cards: Tenon's Card, with the attributes the delegated listener reads ---- */

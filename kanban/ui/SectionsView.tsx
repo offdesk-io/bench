@@ -86,17 +86,29 @@ export interface OverviewViewProps {
   bigRocks: SectionBody & { open: boolean }
   thisWeek: SectionBody & { open: boolean }
   quickWins: SectionBody & { open: boolean }
+  /** The counted Tasks finished column, leading the row. null before a document
+   *  is loaded: there is nothing to count yet. */
+  reports: ReportsColumnsProps | null
 }
 
-/* Three reference columns, each on its own track with a 380px floor. The row
-   fills the window evenly at desktop width and scrolls sideways below the floor
-   (and snaps one column per screen on a phone, see board.css). Context moved to
-   the Memory page, so nothing else shares the row. */
+/* Tasks finished leads the row, then three reference columns, each on its own
+   track with a 380px floor. The row fills the window at desktop width and
+   scrolls sideways below the floor (and snaps one column per screen on a phone,
+   see board.css). Context moved to the Memory page, so nothing else shares the
+   row.
+
+   Tasks finished is two reference columns wide, exactly: 380 twice plus the
+   14px gap between them, so it lines up with the pairs beside it. It grows
+   twice as fast too, 2fr against their 1fr. */
 const REF_TRACK = { css: 'minmax(380px,1fr)', min: 394 }
+const FINISHED_TRACK = { css: 'minmax(774px,2fr)', min: 788 }
 
 export function OverviewView(props: OverviewViewProps) {
-  const { bigRocks, thisWeek, quickWins } = props
-  const tracks = [REF_TRACK, REF_TRACK, REF_TRACK]
+  const { bigRocks, thisWeek, quickWins, reports } = props
+  /* What got done is the thing to read before picking up anything else, so it
+     leads, and the row runs backwards through the week from there. */
+  const tracks = reports ? [FINISHED_TRACK] : []
+  tracks.push(REF_TRACK, REF_TRACK, REF_TRACK)
   const gridStyle: CSSProperties = {
     gridTemplateColumns: tracks.map(t => t.css).join(' '),
     minWidth: tracks.reduce((n, t) => n + t.min, 0) + 'px',
@@ -105,6 +117,7 @@ export function OverviewView(props: OverviewViewProps) {
   return (
     <>
       <div className="lists split" style={gridStyle}>
+        {reports ? <TasksFinishedColumn {...reports} /> : null}
         <Section title="Big rocks" hint="High impact, L effort. Needs protected time."
           body={bigRocks} collapsible collapseKey="ov:Big rocks" open={bigRocks.open} />
         <Section title="This week" hint={<>Everything tagged <code>week</code>, soonest first.</>}
@@ -125,21 +138,17 @@ export interface ReportsViewProps {
   reports: ReportsColumnsProps | null
 }
 
-/* Tasks finished is two reference columns wide, exactly: 380 twice plus the
-   14px gap between them, and it grows twice as fast, 2fr against Written
-   reports' 1fr, so the pair fills the window. */
-const FINISHED_TRACK = { css: 'minmax(774px,2fr)', min: 788 }
-const WRITTEN_TRACK = { css: 'minmax(420px,1fr)', min: 434 }
+/* Written reports alone: a reading width and no more. */
+const WRITTEN_TRACK = { css: 'minmax(420px,600px)', min: 434 }
 
 export function ReportsView({ reports }: ReportsViewProps) {
   if (!reports) return null
   const gridStyle: CSSProperties = {
-    gridTemplateColumns: FINISHED_TRACK.css + ' ' + WRITTEN_TRACK.css,
-    minWidth: FINISHED_TRACK.min + WRITTEN_TRACK.min + 'px',
+    gridTemplateColumns: WRITTEN_TRACK.css,
+    minWidth: WRITTEN_TRACK.min + 'px',
   }
   return (
     <div className="lists split" style={gridStyle}>
-      <TasksFinishedColumn {...reports} />
       <WrittenReportsColumn {...reports} />
     </div>
   )

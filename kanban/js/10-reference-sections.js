@@ -1,8 +1,8 @@
 'use strict';
 
 /* =========================================================================
-   4b. Reference sections. Overview is three columns — Big rocks, This week and Quick
-       wins.
+   4b. Reference sections. Overview is Tasks finished (12-reports.js) then three columns — Big rocks, This
+       week and Quick wins.
        Dependency chain sits on Matrix, beside the nine cells.
 
    These used to be rendered as prose straight out of the markdown, which meant

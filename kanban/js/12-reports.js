@@ -7,12 +7,13 @@
    got done", which is the question that comes up in a one-to-one or a quarterly
    review and has never had an answer here that did not mean counting by hand.
 
-   They are the Reports page, the second tab after Overview. What is left in
+   Tasks finished is the lead column of Overview, and Written reports is the Reports
+   page, the second tab after it. What is left in
    this file is everything but the shell: the window picker and its arithmetic,
    the archive read that makes a 90-day count trustworthy, and the four
    build*() functions the components in kanban/ui/ReportsBlocks.tsx draw from.
    reportsColumnProps() near the bottom is the seam — renderSections() in
-   18-timeline.js calls it, and ReportsView lists the two columns.
+   18-timeline.js calls it, and OverviewView lists Tasks finished and ReportsView lists Written reports.
 
    The counted half reads straight from state.doc, the same as every other
    column on the row: nothing is fetched, nothing is stored, and a report of a
@@ -614,7 +615,7 @@ let writtenState = { list: null, error: null, fetched: false };
 
 /* Everything the two report columns draw from, in one object — the shape
    ReportsColumnsProps (kanban/ui/ReportsColumns.tsx) spells out. renderSections()
-   in 18-timeline.js hands it to ReportsView, which lists the two columns.
+   in 18-timeline.js hands it to OverviewView and ReportsView, one column each.
 
    The counted reports are components — see ReportsBlocks.tsx — so what crosses
    here is the data they draw from, not markup. mdBlocks and mdInline stay
@@ -641,10 +642,10 @@ function reportsColumnProps(){
 /* Redraw whichever view is holding the report columns. Named rather than
    inlined because archiveEntriesSync() calls back into it when the archive
    finishes loading, long after the view was drawn, and the trend's own key and
-   chart-type toggles reach it too. Silent when Reports is not on screen —
+   chart-type toggles reach it too. Silent when neither Overview nor Reports is on screen —
    both of those can land after the owner has moved to another tab. */
 function renderCountedReports(){
-  if (state.view === 'reports') renderSections('reports');
+  if (state.view === 'overview' || state.view === 'reports') renderSections(state.view);
 }
 
 /* /reports.json, once per arrival at Reports. The counted half needs nothing
