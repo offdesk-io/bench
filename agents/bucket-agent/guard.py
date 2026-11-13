@@ -1,9 +1,10 @@
-"""The guard around an unattended run of types 1 to 5: what it may leave behind.
+"""The guard around a bucket agent's files run: what it may leave behind.
 
-A write-up, a draft, a prompt, working data or a deck may only add new files to
-one project folder. The tool list already says so (hooks.options() grants Write
-and Edit on that folder alone), and this checks afterwards anyway, the same way
-the Plan agent hashes todo.md rather than trusting its tool list.
+Copied from the retired Implement agent's guard. Any work that is not code may only
+add new files to one project folder. The tool list already says so
+(hooks.options() grants Write and Edit on that folder alone), and this checks
+afterwards anyway, the same way the runner hashes todo.md rather than trusting
+its tool list.
 
 Before the run the folder is photographed and every file in it copied aside.
 After it, anything the agent changed or removed is put back from the copy, and
@@ -11,8 +12,11 @@ its version is set aside under `_set-aside-<date>/` in the same folder, so no
 work is lost and nothing the owner had is overwritten. A new version of a file belongs
 beside it as `name-v2.md`, which `next_version()` names.
 
-Outside the folder, the dataset folder is watched too, less a few files the
-board and the queues write on their own. A new file there is moved into the
+Outside the folder, the dataset folder is watched too, less the files the
+board and the queues write on their own. A run can start while the owner is at
+the board, so that is everything the board server writes as it is used.
+todo.md is reported and left to plans.todo_moved(), which can tell the board's
+save from anything else's. A new file there is moved into the
 set-aside folder. A changed one cannot be put back, since only the project
 folder was copied, so it is copied aside and reported, and the run stops.
 """
@@ -31,8 +35,15 @@ MAX_BYTES = 200 * 1024 * 1024
 SKIP_DIRS = {".git", "node_modules", "__pycache__"}
 
 # In the dataset folder, written by something other than this agent while it
-# runs: the queues the board drains, its own backups, and every lock.
-OUTSIDE_IGNORED = ("tick-queue.json", "attach-queue.json", "backups/", "todo.md.tmp")
+# runs: the queues the board drains, its own backups, every lock, and what the
+# board server writes while the owner uses it.
+OUTSIDE_IGNORED = ("tick-queue.json", "attach-queue.json", "backups/", "todo.md.tmp",
+                   ".known-todo.md", ".known-todo.md.tmp", ".board.lock", "activity.jsonl",
+                   "history.jsonl", "agent-runs.json", "notify-queue.json", "notify-queue.lock",
+                   "notify-state.json", "pa-working.json", "briefings.json", "chat-spend.json",
+                   "chat-viewed.json", "sessions.json", "claude.json", "column-names.json",
+                   "bucket-colors.json", "bucket-themes.json", "chat-sessions/", "chats/",
+                   "plans/", "reports/")
 
 SET_ASIDE = "_set-aside-%s"
 
@@ -129,7 +140,8 @@ def after(state, day, revert_new=False):
     Returns a dict: `added` (new files left in the folder), and the breaches,
     each a list of relative paths: `overwritten`, `removed` (both put back),
     `outside_new` (moved aside), `outside_changed` (copied aside, not put back)
-    and `todo` (todo.md changed, which is left alone: the board is its writer).
+    and `todo` (todo.md changed, which is left alone: the board is its writer,
+    and plans.todo_moved() says whether anything else wrote it).
     `revert_new` also moves every new file aside, for a run that failed part
     way or said it did nothing.
     """
@@ -195,8 +207,6 @@ def breaches(report):
     if report["outside_changed"]:
         said.append("changed %s outside the project folder, which could not be put back"
                     % ", ".join(report["outside_changed"][:5]))
-    if report["todo"]:
-        said.append("todo.md changed during the run")
     return said
 
 

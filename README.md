@@ -12,9 +12,9 @@ You need macOS or Linux, Python 3, and Node 20 or newer.
 3. It links the skills into `~/.claude/skills/`. Claude Code only sees a skill once it is linked there, and one loop links the whole set, `do` included:
    ```
    mkdir -p ~/.claude/skills
-   for s in "${BENCH_ROOT:-$HOME/Code/bench}"/agents/pa_agent/skills/* "${BENCH_ROOT:-$HOME/Code/bench}"/agents/implement-agent/skills/do; do ln -sfn "$s" ~/.claude/skills/; done
+   for s in "${BENCH_ROOT:-$HOME/Code/bench}"/agents/pa_agent/skills/* "${BENCH_ROOT:-$HOME/Code/bench}"/agents/bucket-agent/skills/do; do ln -sfn "$s" ~/.claude/skills/; done
    ```
-   A real folder already sitting under one of those names is left alone and reported. It also links `pa-agent.md` into `~/.claude/agents/`, and `implement-agent.md` into the checkout's own `.claude/agents/`.
+   A real folder already sitting under one of those names is left alone and reported. It also links `pa-agent.md` into `~/.claude/agents/`. The bucket agents need no link: their runner reads its one definition from `agents/bucket-agent/`.
 4. It installs `chevron`, the Python library the PA renders its briefs with (see `core/render.py`), unless it is already there: `pip3 install --user chevron`.
 5. It creates `data/`, which git ignores, and copies `core/settings.example.json` to `data/settings.json` and `agents/pa_agent/profile.example.md` to `data/profile.md`, only when they are missing. The board reads your first name from the profile (it names who the review steps of a handover are assigned to) and falls back to "Me" without one.
 6. It offers the hourly wake that starts the scheduled agents, when `../PACKAGES/agents-engine` is next to the checkout and has the `wake install` command. The default is no. `--yes` accepts and `--no-wake` skips the question. The wake is installed with this checkout as its root, so it wakes the agents inside it and no others. The board's Agents tab is scoped the same way, to `agents/`.
@@ -22,9 +22,9 @@ You need macOS or Linux, Python 3, and Node 20 or newer.
 
 A list is a folder under `data/` holding a `todo.md`. To make the first one by hand: `mkdir -p data/work`, `cp kanban/demo.md data/work/todo.md` (or write your own, see CONVENTIONS.md), and `printf work > data/.current` to say which list is live.
 
-The board's Settings screen changes your name, country, models and when each agent starts later, so nothing in `data/settings.json` or `data/profile.md` needs editing by hand.
+The board's Settings screen changes your name, country, models and the bucket agents' budget later, so nothing in `data/settings.json` or `data/profile.md` needs editing by hand. When each bucket's agent starts is in that bucket's brief.
 
-Models live in one optional file, `data/settings.json`, which git ignores. Copy `core/settings.example.json` to start it. `models` picks `opus`, `sonnet` or `haiku` per job (`plan`, `implement`, `chat`, `brief`) with `default` for the rest. Without the file, or with a null, every job runs on the model it used before. `BENCH_MODEL_<JOB>` in the environment wins over the file, and a list's own `claude.json` still wins for its chat. `agents.plan.start` and `agents.implement.start` are `scheduled` (wait for the agent's hours, the default) or `now` (the board starts a run as soon as a task is handed over, or a plan approved, and saved). The board reads and writes it at `/settings.json`.
+Models live in one optional file, `data/settings.json`, which git ignores. Copy `core/settings.example.json` to start it. `models` picks `opus`, `sonnet` or `haiku` per job (`plan`, `implement`, `chat`, `brief`) with `default` for the rest. Without the file, or with a null, every job runs on the model it used before. `BENCH_MODEL_<JOB>` in the environment wins over the file, and a list's own `claude.json` still wins for its chat. `plan` and `implement` are the bucket agents' two jobs: writing a plan, and doing the work. The board reads and writes it at `/settings.json`.
 
 The same file can name a memory folder, `memory_root`, for when the facts about you are kept outside Bench so agents elsewhere can share them. The profile and each list's people, company text and Context are facts about you rather than board state, so with it set Bench reads `<memory_root>/me/profile.md` and `<memory_root>/bench/<list>/people.md`, `about.md` and `context.md` first and falls back to `data/` for any that are not there. Boards, queues, locks, history and runs stay in `data/`. Bench also keeps `<memory_root>/boards.md`, one line per list with the current one marked, rewritten when a list is made, when the current list changes and each time the board starts, so an agent outside Bench can see which boards exist without reading `data/`. Bench knows nothing about what a list is for or whether it is frozen, so whatever follows a list's folder on its line, and any mark besides `current`, is carried over from the file as it was. Unset, nothing changes. It is under Settings on the board.
 
@@ -38,9 +38,9 @@ Three sibling folders are optional. Each is looked up as `../PACKAGES/<name>` ne
 | `../PACKAGES/work-streams` | no work-stream queues (`/streams.json` answers 404) |
 | `../PACKAGES/agents-engine` | the Agents tab of the Settings page shows a stub saying it has nothing to show |
 
-The agents (`agents/plan-agent`, `agents/implement-agent`) need the `claude` command line tool and do nothing until a list is switched on in the Agents tab of the Settings page. The tests are in `docs/TESTING.md`: run them with `scripts/test-board.sh --all`.
+The bucket agents (`agents/bucket-agent`) need the `claude` command line tool and do nothing on a list until its buckets' briefs are filled in and the list is switched on in the Agents tab of the Settings page. The tests are in `docs/TESTING.md`: run them with `scripts/test-board.sh --all`.
 
-**Claude Code is optional.** Without it, the board works in full: lists, buckets, columns, editing, backups, reports, the archive and Settings. What needs it: the chat window and the PA, the Plan and Implement agents, and bucket briefs. With no `claude` on the path, the board hides all of those. The Agents tab says what to install, and the run buttons refuse rather than start something that cannot run. Install Claude Code and log in, then reload the board to turn them on.
+**Claude Code is optional.** Without it, the board works in full: lists, buckets, columns, editing, backups, reports, the archive and Settings. What needs it: the chat window and the PA, the bucket agents, and bucket briefs. With no `claude` on the path, the board hides all of those. The Agents tab says what to install, and the run buttons refuse rather than start something that cannot run. Install Claude Code and log in, then reload the board to turn them on.
 
 ## Deploying to the agency server
 
@@ -92,8 +92,7 @@ per bucket of the board, holding the brief that says what work I actually do in
 it, and that bucket's own skills:
 
 ```
-data/work/buckets/people/people.md              the brief
-data/work/buckets/people/work-people-agent.md   the bucket's planner
+data/work/buckets/people/people.md              the brief, which defines the bucket's agent
 data/work/buckets/people/skills/                the skills that bucket's work runs on
 data/work/buckets/README.md                     which buckets that list has
 ```
@@ -102,18 +101,21 @@ Per data set rather than one shared set at the root, because a brief is only tru
 of one list: `work` and `personal` have different buckets, different processes
 and different people.
 
-The planning agent's planners and `implement-agent` both read the brief, and so do I.
-A brief exists because a planner knows its bucket only in general terms: which
-process a task belongs to, what that process produces, which skill already does
-it and who is involved are things only the brief says. It lives at
+The brief is the bucket's agent: its frontmatter says whether it plans first or
+works with a free rein and whether it starts when a task is handed over or in
+the board's hours, and its sections are what the agent is for, the processes it
+runs, the guidelines it follows, what it may and must never touch, and what good
+looks like. The agent knows its bucket only through it, and so it is what I read
+too: which process a task belongs to, what that process produces, which skill
+already does it and who is involved are things only the brief says. It lives at
 `data/<dataset>/buckets/<stream>/<stream>.md`, where the stream is the bucket
 heading with its number stripped, lowercased and hyphenated (`## 3. DS` is
 `ds`), fixed in the list's `buckets/README.md` when the bucket is created so a
 rename does not move it. A new brief starts from
-`agents/plan-agent/bucket-brief.template.md`, which carries a
-`<!-- NOT FILLED IN YET -->` line; while that line is there `bucket_brief()`
-treats the file as absent and no agent is pointed at it, so delete it once the
-brief is written. The template is the tracked half, so a fresh clone can rebuild
+`agents/bucket-agent/bucket-brief.template.md`, which carries a
+`<!-- NOT FILLED IN YET -->` line; while that line is there, or any required
+section is empty, `core/bucket_agents.py` says the agent is not ready and the
+board hands it nothing, so delete it once the brief is written. The template is the tracked half, so a fresh clone can rebuild
 the shape without carrying any of the content.
 
 Nothing else in the repo holds a task, a name or a date. One folder is the only
@@ -185,7 +187,7 @@ once that folder sits inside one approved in `data/<dataset>/project-folders.jso
 drawer's Project section writes that file (after asking), starts a new folder under the
 list's projects folder when set, otherwise under `data/projects/`, with a `CLAUDE.md` in
 it, and opens a folder in Finder. `core/project_folders.py` holds the one check every
-route and the planning agent use: real paths compared with `os.path.commonpath`, so a
+route and the bucket agents use: real paths compared with `os.path.commonpath`, so a
 symlink or a `..` cannot lead out of an approved folder.
 
 The board reads the pointer and nothing else. It never opens the folder, so what is in there
@@ -208,7 +210,7 @@ with a Sign out button, which posts to nginx's own `/auth/logout`.
 
 What only works on the owner's Mac is refused, and its buttons are hidden: revealing a
 folder in Finder or approving one on disk, the Agents tab and its launchd schedules, Spend
-and schedules, starting the Plan agent, and the Claude chat, which would run on the server
+and schedules, starting the bucket agents, and the Claude chat, which would run on the server
 owner's own Claude login. The settings and the profile belong to the server, so a visitor
 can read them and not change them. Every POST must carry `X-Board: 1`, because on a public
 address a form on another site could otherwise post with the visitor's cookie. "Me" on the
@@ -433,7 +435,7 @@ A column is a `### Name` heading, and like a bucket it has no id: it is whicheve
 name a heading uses, read the same everywhere that name turns up.
 
 Five of them are read that way outside the board too. Backlog, To do, Doing,
-Reviewing and Done are matched by their exact text by the planning agent, `core/todo.py` and the board's own recurring-task roll, so
+Reviewing and Done are matched by their exact text by the bucket agents, `core/todo.py` and the board's own recurring-task roll, so
 renaming one for real would leave a second, empty column of the old name behind.
 Typing a new name over one of those five sets a **label** instead: the heading in
 `todo.md` stays exactly as it was, the board draws the word you typed, and the
@@ -443,7 +445,7 @@ confused. Labels live in `data/<dataset>/column-names.json`, for the same reason
 preference about looking at the list, not a fact the list carries, and `todo.md`
 has exactly one writer. Typing the real heading back clears the label. Nothing
 outside the board reads that file, so a renamed column is still "To do" to the
-planning agent and in every plan; that is the price of the rename costing nothing.
+bucket agents and in every plan; that is the price of the rename costing nothing.
 
 Not every bucket carries every heading, but the
 board draws all of them on every bucket's view regardless, empty wherever that
@@ -645,39 +647,41 @@ two is. If a section needs a paragraph to say one thing, it needs one sentence.
 ### Plans
 
 There is no Plans tab. Each plan sits in the card of the task it is about. Plans are written
-overnight by the planning agent in `agents/plan-agent/`, and **nothing in a plan
+by the agent of a plan-first bucket (`agents/bucket-agent/`), and **nothing in a plan
 has been done** — each one researches what the task actually involves and proposes
 a course of action — but a plan is a document and nothing more: it holds
 content, and where it stands is the state of the sub-tasks on its task.
 
-Handing a task to the Plan agent, by choosing it in the drawer's Delegate to, lays
-four sub-tasks out on the card and moves it to Doing: Plan (the agent), Review the
-plan (you), Implement (the Implement agent), Review the work (you), each blocked by
-the one before. When the plan is written the agent's Plan sub-task is ticked
+Handing a task to its bucket's agent, by choosing it in the drawer's Delegate to,
+lays its sub-tasks out on the card and moves it to Doing. A plan-first bucket gets
+four: Plan (the agent), Review the plan (you), Implement (the agent), Review the
+work (you), each blocked by the one before. A free-rein bucket gets the last two,
+and the task itself is the instruction. When the plan is written the agent's Plan sub-task is ticked
 through the board's queue, and Review the plan carries a `Plan:` note naming the
 file, so opening that sub-task offers to read the plan and to talk it through.
 Approving ticks the review; sending it back unticks the Plan with what was wrong as
-a `feedback:` note under it, which the next night reads as an instruction.
+a `feedback:` note under it, which the agent's next run reads as an instruction.
 
 The files are in `data/<dataset>/plans/`, one per task, listed by the server at
 `/plans.json`. Replanning a task rewrites its own file in place, with a `History`
 section keeping the earlier revisions.
 
-The full account of how the planning agent decides what to plan and when it is
-allowed to spend is in [agents/plan-agent/README.md](agents/plan-agent/README.md). The short version
-of the part that matters: it runs at the hours its schedule file names and at no
-others, with a floor in `schedule.py` that refuses the working day whatever that
-file says.
+The full account of how the bucket agents decide what to work on and when they
+are allowed to spend is in [agents/bucket-agent/README.md](agents/bucket-agent/README.md).
+The short version of the part that matters: an on-assign bucket starts within a
+minute of a handover, a scheduled one only in the hours set for its board, and
+both stay inside the daily spending caps. Work an agent cannot check before it
+starts, Figma above all, waits for the `do` skill, with you in the session.
 
 ### Schedule
 
 **Spend** and **Schedules** are two panels of the Agents tab of the Settings page (Data, Settings), beside Memory,
-Settings and Backups, with **Run the Plan agent now** in the Data menu. Not part of the board,
+Settings and Backups, with **Run the bucket agents now** in the Data menu. Not part of the board,
 because they are about the machinery around the list rather than about the list. Both only show
 when an agent can run on this machine, so not without Claude Code or `agents-engine`.
 
-Three things here run on a clock rather than when you ask them to: the nightly
-agent's twelve launchd wakes, the desktop banners thread, and the weekly
+Three things here run on a clock rather than when you ask them to: the bucket
+agents' hourly wake, the desktop banners thread, and the weekly
 backup thread inside `server.py`. Before this they were three places to go and
 look, and "did the nightly job actually run" had no answer short of reading a log.
 
@@ -685,7 +689,7 @@ It reads two sources, and they are not alternatives. **Live** — `launchctl pri
 the plist's own wake times, whether the server's banner thread is alive — says
 whether a job is armed and when it fires next, which no log can know, since a
 log will happily describe a job that was unloaded a week ago. **The ledger** —
-`plans/plan-agent.log`, the backup listing — says what it actually did, which
+`plans/bucket-agent.log`, the backup listing — says what it actually did, which
 `launchctl` cannot. A job that is not installed says so and gives the command to
 install it. The banners job is a thread in this server, so it has no schedule to
 read and no ledger: it says whether it is running, and when it is not, why
@@ -696,7 +700,7 @@ The second card is the usage windows, which had no home outside running
 `core/windows.py --history` at a terminal. The last 30 days, one row a window,
 with the ones that started in the night picked out.
 
-Everything in the sheet is read-only. Run the Plan agent now is the one press, and
+Everything in the sheet is read-only. Run the bucket agents now is the one press, and
 it asks first, because it spends money.
 
 ### Handing a prompt over
@@ -1304,7 +1308,7 @@ date re-guessed by hand.
 ## 1. People                      <- bucket
 ### Doing                         <- state
 - [ ] **A task** [impact:: high] [effort:: M] [due:: 2026-08-21] [to:: Mia]
-  - [ ] A sub-step [due:: 2026-08-19] [to:: Implement agent]
+  - [ ] A sub-step [due:: 2026-08-19] [to:: Work people agent]
     - Suggested message: "..."   <- ready to send
     - Prompt: "..."              <- ready to hand to Claude
     - Jira (PLAT): "..."         <- a ticket still to raise
@@ -1326,8 +1330,10 @@ board. Left to right that is Backlog, To do, Doing, Reviewing, Done. A ticked ta
 under Done, and a file with a ticked task under another heading reads as if it
 were under Done, so nothing has to be converted by hand.
 
-`[to:: ]` is who does the work: `Plan agent`, `Implement agent`, or a person's name
-from `people.md`. It is optional: most of the list is work you are doing yourself,
+`[to:: ]` is who does the work: a bucket's agent, by the name `core/bucket_agents.py`
+gives it (`Work people agent`), or a person's name from `people.md`. The two
+retired names, `Plan agent` and `Implement agent`, still parse, so a line written
+before bucket agents reads until the PA moves it over. It is optional: most of the list is work you are doing yourself,
 and a task without it shows nothing. It replaces the old `[ai:: ]` tag; a backup that still carries `ai:` is
 read and the tag dropped. It works on a sub-step as readily as on a task, and never
 comes down from the task to its steps. When it is set on a person, the name
@@ -1371,7 +1377,7 @@ line per task added, edited or deleted, with who, their name, when, and which
 fields. It is append-only and nothing reads it back into the list. Two kinds
 of change have nobody's tab behind them. A card an agent's queued request
 changed (a tick, a handover, a move) is credited to the agent, as
-`implement-agent` in the tags and "Implement agent" in the log, even though the
+`work-people-agent` in the tags and "Work people agent" in the log, even though the
 save that wrote it came from whoever's tab drained the queue. An edit written
 straight to `todo.md`, the way the pa skill writes, is found the next time the
 server reads the list, by comparing it with the last version the server wrote

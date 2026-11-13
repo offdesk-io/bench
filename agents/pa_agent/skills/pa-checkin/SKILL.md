@@ -49,10 +49,9 @@ The headline, overdue, due today/tomorrow/this week, doing, waiting, blocked, we
 python3 -c "
 import sys, json
 sys.path.insert(0, 'core')
-sys.path.insert(0, 'agents/plan-agent')
-import todo, aggregate, render, plan
+import todo, aggregate, render, bucket_agents
 tasks = todo.parse_doc(open('data/<dataset>/todo.md', encoding='utf-8').read())
-ctx = aggregate.today_view(tasks, processes_of=plan.brief_processes)
+ctx = aggregate.today_view(tasks, processes_of=lambda b: bucket_agents.processes('<dataset>', b))
 print(render.render('agents/pa_agent/skills/pa-checkin/templates/<name>.md', ctx))
 print('--- process matches ---')
 print(json.dumps(ctx['process_matches'], indent=1))

@@ -5,7 +5,7 @@ by hand against the same rules every time.
 See IMPROVEMENTS.md, "Every report the PA sends is rendered by hand, so the
 templates are instructions rather than code." The arithmetic mostly already
 existed, in two half-written, hand-agreeing copies: check_overdue() in
-check_todo.py and the headline-first ranking in agents/plan-agent/pick.py. This is
+check_todo.py and the headline-first ranking in the old Plan agent's picker. This is
 the one copy, built on core/todo.py the way both of those already read the
 file, and it produces the whole of a template's context — not asked to know
 about Mustache, chevron or any particular skill.
@@ -88,8 +88,8 @@ def process_matches(tasks, processes_of, today=None, limit=PROCESS_OFFERS):
     """Open To do and Doing tasks that read as a process their bucket's brief
     already names, best first, at most `limit` of them.
 
-    `processes_of(bucket)` is agents/plan-agent/plan.py's brief_processes(),
-    handed in rather than imported, because the brief is the planning agent's
+    `processes_of(bucket)` is core/bucket_agents.py's processes() for one list,
+    handed in rather than imported, because the brief is the bucket agent's
     file and this module reads only todo.md. It returns None for a bucket
     with no written brief, which leaves that bucket's tasks out.
 
@@ -312,7 +312,7 @@ def today_view(tasks, today=None, processes_of=None):
 
 def meeting_view(tasks, title, today=None):
     """The fields meeting-prep needs for one named recurring task, or None
-    when nothing matches — title matched loosely, the same way plan.py's
+    when nothing matches — title matched loosely, the same way brief.py's
     own `--task` does, since the owner asks for a meeting by a shorthand rather
     than pasting the exact line."""
     today = today or dt.date.today()

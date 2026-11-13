@@ -44,10 +44,10 @@ function renameBucket(b, name){
   b.raw = null;
   // bucketFilter is held by name, so a toggled-on tab has to follow it.
   if (state.bucketFilter.has(was)) { state.bucketFilter.delete(was); state.bucketFilter.add(clean); }
-  /* A rename must not move the bucket's brief, its folder or its planner. The
+  /* A rename must not move the bucket's brief, its folder or its agent. The
      stream is fixed when a bucket is created and pinned in buckets/README.md,
      so this moves that row onto the new heading and changes nothing else on
-     disk — without it, `bucket_stream()` would slugify the new heading and the
+     disk — without it, `stream_of()` (core/bucket_agents.py) would slugify the new heading and the
      bucket would silently acquire a stream with no brief behind it. */
   scaffoldBucket(clean, { was });
   markDirty(); refreshView();
@@ -182,6 +182,16 @@ function deleteButtonHTML(i, len, opts){
 /* The editor is one sheet holding every bucket, because the questions it answers
    are comparative — is this the right name next to the other three, is this the
    right order. A per-bucket menu on each tab could not show that. */
+/* Whether a bucket's agent is ready to take work, as one small badge on its
+   row: its mode when it is, and what is missing when it is not. */
+function bucketAgentBadgeHTML(columnName){
+  const a = bucketAgentOfColumn(columnName);
+  if (!a) return '';
+  const text = a.ready ? (a.mode === 'plan-first' ? 'Agent: plan first' : 'Agent: free rein') : 'Agent: not set up';
+  const title = a.ready ? a.name + ' is set up.' : a.name + ' is not set up. It still needs ' + (bucketAgentMissingText(a) || 'its brief') + '.';
+  return '<span class="bkagent ' + (a.ready ? 'ready' : 'notready') + '" title="' + esc(title) + '">' + esc(text) + '</span>';
+}
+
 function openBucketEditor(){
   if (state.locked || !state.doc) return;
   /* An open task drawer behind this is stale the moment a bucket is renamed —
@@ -247,6 +257,7 @@ function openBucketEditor(){
            the bucket as the board draws it — it is a file, and a page of
            prose — so it is a button to somewhere rather than a control here.
            See openBucketBrief. */
+        bucketAgentBadgeHTML(b.name) +
         '<button type="button" class="btn small" data-brief="' + i + '" ' +
           'title="What the agents read for what this bucket’s work actually is">Brief</button>' +
         deleteButtonHTML(i, list.length, { delAttr: 'data-del', noun: 'bucket' }) +
@@ -366,35 +377,89 @@ function openBucketEditor(){
   loadSummaries().then(draw);
 }
 
-/* The four section headings the brief template carries, in the order the
-   template writes them. Fixed, since the brief editor below reassembles a
-   file in exactly this shape and a heading typed differently in a hand-edited
-   brief would otherwise fall out of every section and land nowhere. */
+/* The section headings the brief template carries. BRIEF_SECTIONS is the four
+   the board has always shown (the memory page's form and the agent wizard
+   index into it, so its order stays); BRIEF_ALL is all eight, in the template's
+   own order, which is what the brief editor below reads and writes. The four
+   BRIEF_SECTIONS lack, the agent's purpose, guidelines, what it may touch and
+   what it must never touch, belong to the bucket's agent (core/bucket_agents.py).
+   Fixed, since the editor reassembles a file in exactly this shape and a
+   heading typed differently in a hand-edited brief would otherwise fall out of
+   every section and land nowhere. */
 const BRIEF_SECTIONS = [
   'The processes I run in this bucket',
   'What already does it',
   'Who is involved',
   'What good looks like here'
 ];
-const BRIEF_DESCRIPTIONS = [
-  'One per heading. For each: what triggers it, roughly how often, and what it produces. Name the artefact, not the activity: a filled-in form, a deck, a ticket on a named board, a message to one person.',
-  'Which of my skills covers which process, and where a gap is real. The most valuable thing a night can come back with is that the work is already automated, and it can only find that out if it is told where to look. Name the gaps too, with the task slug for each, since building one of those is a fair thing for a plan to propose and rebuilding an existing skill is not. Close with one line on the five generic skills and where they apply in this bucket.',
-  'Names, and what each person owns **in this bucket**. Not their role, not their team, not who they report to: `people.md` is the one copy of that and a brief that restates it is a second copy waiting to go stale. The list\'s own `context.md` holds what changes weekly, leave and immovable dates. Surnames are one initial.',
-  'What I would accept without changes, and what always comes back for a rewrite.'
+const BRIEF_ALL = [
+  'What this agent is for',
+  'The processes I run in this bucket',
+  'Guidelines it follows',
+  'What it may touch',
+  'What it must never touch',
+  'What already does it',
+  'Who is involved',
+  'What good looks like here'
 ];
+const BRIEF_DESCRIPTIONS = {
+  'What this agent is for': 'What the bucket’s agent is here to do, in two or three sentences, and what it leaves to you.',
+  'The processes I run in this bucket': 'One per heading. For each: what triggers it, roughly how often, and what it produces. Name the artefact, not the activity: a filled-in form, a deck, a ticket on a named board, a message to one person.',
+  'Guidelines it follows': 'The rules every piece of work here keeps to: tone, format, the order things happen in, who gets told and when. Write the ones you would otherwise correct.',
+  'What it may touch': 'The folders, files, boards and tools it may read and change, each named.',
+  'What it must never touch': 'What stays off limits whatever the task says: people it never messages, files it never writes, anything that cannot be undone.',
+  'What already does it': 'Which of my skills covers which process, and where a gap is real. The most valuable thing a night can come back with is that the work is already automated, and it can only find that out if it is told where to look. Name the gaps too, with the task slug for each, since building one of those is a fair thing for a plan to propose and rebuilding an existing skill is not. Close with one line on the five generic skills and where they apply in this bucket.',
+  'Who is involved': 'Names, and what each person owns **in this bucket**. Not their role, not their team, not who they report to: `people.md` is the one copy of that and a brief that restates it is a second copy waiting to go stale. The list\'s own `context.md` holds what changes weekly, leave and immovable dates. Surnames are one initial.',
+  'What good looks like here': 'What I would accept without changes, and what always comes back for a rewrite.'
+};
+/* How the agent works, from the brief's frontmatter. Written to the same two
+   keys core/bucket_agents.py reads. */
+const BRIEF_MODES = [['plan-first', 'Plan first: writes a plan, waits for your yes, then does the work'],
+                     ['free-rein', 'Free rein: does the work straight away, inside its guidelines']];
+const BRIEF_STARTS = [['on-assign', 'On assignment: as soon as a task is handed to it'],
+                      ['scheduled', 'Scheduled: only in the bucket’s set hours']];
 // The empty-marker line and the note under it, deleted together the moment a
 // section that used to hold nothing gets typed into — see keepBriefMarker().
 const BRIEF_MARKER = '<!-- NOT FILLED IN YET -->';
 
-/* Splits a brief's whole text into its named parts: the title line, the
-   one-line summary under it, and each of BRIEF_SECTIONS as a trimmed body.
-   Marker and note lines are dropped here — keepBriefMarker() is what decides
-   whether they come back on save. Tolerant of a brief that predates a
-   section (missing sections read as ''), since a hand-edited or very old
-   brief should still open rather than losing whatever text it does carry. */
-function parseBriefText(text){
+/* A leading `---` block read as the raw lines inside it and the text after.
+   `front` is null when the text has none. */
+function splitBriefFront(text){
   const lines = String(text || '').split('\n');
+  if (lines[0] !== undefined && lines[0].trim() === '---') {
+    for (let end = 1; end < lines.length; end++) {
+      if (lines[end].trim() === '---') return { front: lines.slice(1, end), rest: lines.slice(end + 1).join('\n') };
+    }
+  }
+  return { front: null, rest: String(text || '') };
+}
+/* One frontmatter value as the agent reader sees it: no quotes, no trailing
+   comment. */
+function briefFrontValue(line){
+  return line.slice(line.indexOf(':') + 1).replace(/\s+#.*$/, '').trim().replace(/^['"]|['"]$/g, '').trim();
+}
+
+/* Splits a brief's whole text into its named parts: the frontmatter (`mode`
+   and `start`, and every other line of it kept as written in `frontLines`),
+   the title line, the one-line summary under it, and each of BRIEF_ALL as a
+   trimmed body. Marker and note lines are dropped here — keepBriefMarker() is
+   what decides whether they come back on save. Any `## ` section that is not
+   one of BRIEF_ALL is kept whole in `extra`, so saving never loses text the
+   editor has no field for. Tolerant of a brief that predates a section
+   (missing sections read as ''), since a hand-edited or very old brief should
+   still open rather than losing whatever text it does carry. */
+function parseBriefText(text){
+  const split = splitBriefFront(text);
+  const frontLines = split.front || [];
+  let mode = '', start = '';
+  frontLines.forEach(l => {
+    const key = l.indexOf(':') > 0 && !l.trim().startsWith('#') ? l.slice(0, l.indexOf(':')).trim().toLowerCase() : '';
+    if (key === 'mode') { const v = briefFrontValue(l); mode = BRIEF_MODES.some(m => m[0] === v) ? v : ''; }
+    if (key === 'start') { const v = briefFrontValue(l); start = BRIEF_STARTS.some(m => m[0] === v) ? v : ''; }
+  });
+  const lines = split.rest.split('\n');
   let i = 0;
+  while (lines[i] === '') i++;
   const title = (lines[i] || '').replace(/^#\s*/, '').trim(); i++;
   while (lines[i] === '') i++;
   let summary = '';
@@ -404,7 +469,7 @@ function parseBriefText(text){
   }
   const rest = lines.slice(i).join('\n');
   const sections = {};
-  BRIEF_SECTIONS.forEach((name, idx) => {
+  BRIEF_ALL.forEach(name => {
     const re = new RegExp(
       '^##\\s*' + name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*$', 'm');
     const m = re.exec(rest);
@@ -414,38 +479,58 @@ function parseBriefText(text){
     const to = nextHeading ? from + nextHeading.index : rest.length;
     sections[name] = rest.slice(from, to).trim();
   });
-  return { title, summary, sections };
+  const extra = [];
+  const known = BRIEF_ALL.map(n => n.toLowerCase());
+  rest.split(/^(?=##\s)/m).forEach(chunk => {
+    const h = /^##\s*(.+?)\s*$/m.exec(chunk.split('\n')[0] || '');
+    if (h && known.indexOf(h[1].toLowerCase()) < 0) extra.push(chunk.replace(/\s+$/, ''));
+  });
+  return { title, summary, sections, mode, start, frontLines, extra };
 }
 
 /* The inverse of parseBriefText — rebuilds the file in the template's own
    shape so a round trip through the structured fields changes nothing but
-   the words typed into them. The marker and its explaining note are written
-   back only when told to (see keepBriefMarker), never decided here. */
+   the words typed into them. The frontmatter keeps every line it had, with
+   `mode` and `start` replaced when set and added when the brief had none. The
+   marker and its explaining note are written back only when told to (see
+   keepBriefMarker), never decided here. */
 function serializeBriefText(parts, keepMarker){
-  let body = '# ' + parts.title + '\n\n' + parts.summary + '\n\n';
+  let front = (parts.frontLines || []).slice();
+  const setKey = (key, value) => {
+    if (!value) return;
+    const at = front.findIndex(l => l.indexOf(':') > 0 && !l.trim().startsWith('#') &&
+      l.slice(0, l.indexOf(':')).trim().toLowerCase() === key);
+    if (at > -1) { if (briefFrontValue(front[at]) !== value) front[at] = key + ': ' + value; }
+    else front.push(key + ': ' + value);
+  };
+  setKey('mode', parts.mode);
+  setKey('start', parts.start);
+  let body = front.length ? '---\n' + front.join('\n') + '\n---\n\n' : '';
+  body += '# ' + parts.title + '\n\n' + parts.summary + '\n\n';
   if (keepMarker) {
     body += BRIEF_MARKER + '\n\n' +
       '> Delete the line above once this is written. While it is there, no agent is\n' +
       '> pointed at this file.\n\n';
   }
-  BRIEF_SECTIONS.forEach(name => {
+  BRIEF_ALL.forEach(name => {
     body += '## ' + name + '\n\n' + (parts.sections[name] || '') + '\n\n';
   });
+  (parts.extra || []).forEach(chunk => { body += chunk + '\n\n'; });
   return body.replace(/\n{3,}/g, '\n\n').trim() + '\n';
 }
 
 /* A brief starts with the marker on, since it opens on the template. It comes
    off the moment any section that used to be empty has something in it —
    the same "the owner wrote something real" signal the server's own brief_text()
-   uses for the one-line summary, applied here to the four sections too, so
+   uses for the one-line summary, applied here to the sections too, so
    the owner never has to remember to delete the line by hand. */
 function keepBriefMarker(wasEmpty, parts){
-  return wasEmpty && !BRIEF_SECTIONS.some(name => (parts.sections[name] || '').trim());
+  return wasEmpty && !BRIEF_ALL.some(name => (parts.sections[name] || '').trim());
 }
 
 /* The brief behind a bucket: `data/<dataset>/buckets/<stream>/<stream>.md`,
-   the file both planning agents and the implementing agent read for what a
-   bucket's work actually is. The editor above renames, colours, reorders and
+   the file that defines the bucket's agent and says what the bucket's work
+   actually is. The editor above renames, colours, reorders and
    deletes, and until now touched none of it — the file existed only to
    someone who opened it outside the board.
 
@@ -462,7 +547,7 @@ function keepBriefMarker(wasEmpty, parts){
    Held here rather than re-read from the DOM on save, for the same reason the
    single textarea used to be: showModal closes the sheet before running a
    button, so the fields are gone by the time one runs. */
-let briefParts = { title: '', summary: '', sections: {} };
+let briefParts = { title: '', summary: '', sections: {}, mode: '', start: '', frontLines: [], extra: [] };
 let briefWasEmpty = false;
 async function openBucketBrief(bucketName, back){
   let brief;
@@ -479,10 +564,8 @@ async function openBucketBrief(bucketName, back){
   briefWasEmpty = !brief.exists || !brief.filled;
 
   const marker = brief.marker || '';
-  /* Three things worth knowing before typing, and only when each is true: a
-     brief that does not exist yet, one that is still the untouched template,
-     and a bucket whose heading is mapped to nothing — the last is the one
-     that explains why two buckets can open the same file. */
+  /* Two things worth knowing before typing, and only when each is true: a
+     brief that does not exist yet, and one that is still the untouched template. */
   const notes =
     (brief.exists
       ? ''
@@ -491,27 +574,34 @@ async function openBucketBrief(bucketName, back){
     (brief.exists && !brief.filled
       ? '<p>This one still carries <code>' + esc(marker) + '</code>, so no agent is ' +
         'pointed at it. Filling in a section clears it automatically.</p>'
-      : '') +
-    (brief.fallback
-      ? '<p>This bucket’s heading is mapped to the <strong>' + esc(brief.stream) +
-        '</strong> fallback rather than a stream of its own, so this is the ' +
-        'catch-all brief — every unmapped bucket reads it.</p>'
       : '');
 
-  const sectionFields = BRIEF_SECTIONS.map((name, i) =>
+  const sectionFields = BRIEF_ALL.map((name, i) =>
     '<label class="field briefsection">' +
       '<span>' + esc(name) + '</span>' +
-      '<div class="tenon-modal__subtitle"><span>' + esc(BRIEF_DESCRIPTIONS[i]) + '</span></div>' +
+      '<div class="tenon-modal__subtitle"><span>' + esc(BRIEF_DESCRIPTIONS[name]) + '</span></div>' +
       '<textarea data-brief-section="' + i + '" spellcheck="false" ' +
         'aria-label="' + esc(name) + '">' + esc(briefParts.sections[name] || '') + '</textarea>' +
     '</label>'
   ).join('');
+  const choice = (id, label, list, cur, blank) =>
+    '<label class="field"><span>' + esc(label) + '</span><select id="' + id + '">' +
+      (blank ? '<option value=""' + (cur ? '' : ' selected') + '>' + esc(blank) + '</option>' : '') +
+      list.map(m => '<option value="' + esc(m[0]) + '"' + (m[0] === cur ? ' selected' : '') + '>' + esc(m[1]) + '</option>').join('') +
+    '</select></label>';
+  const agent = bucketAgentOfColumn(bucketName);
+  const agentLine = agent
+    ? '<p class="briefagent">' + esc(agent.name) + ': ' + (agent.ready ? 'set up, ' + esc(agent.mode === 'plan-first' ? 'plan first' : 'free rein')
+      : 'not set up yet' + (bucketAgentMissingText(agent) ? ', it still needs ' + esc(bucketAgentMissingText(agent)) : '')) + '.</p>'
+    : '';
 
   showModal('Brief: ' + bucketName,
-    'What the planning agents and the implementing agent read for the work in this ' +
-    'bucket — the processes it holds, what each produces, which skill already ' +
-    'does it, and who is involved. Markdown, saved to <code>' + esc(brief.path) + '</code>.',
-    '<div class="repdoc">' + notes + '</div>' +
+    'The bucket’s agent, as you define it: how it works, what it is for, the processes ' +
+    'it runs, its guidelines, what it may and must never touch, and what good looks ' +
+    'like. Markdown, saved to <code>' + esc(brief.path) + '</code>.',
+    '<div class="repdoc">' + notes + agentLine + '</div>' +
+    choice('briefMode', 'How the agent works', BRIEF_MODES, briefParts.mode, 'Choose how it works') +
+    choice('briefStart', 'When it starts', BRIEF_STARTS, briefParts.start || 'on-assign') +
     '<label class="field"><span>One line: what kind of work lands here</span>' +
       '<input type="text" id="briefSummary" value="' + esc(briefParts.summary) + '" ' +
         'aria-label="What kind of work lands in this bucket"></label>' +
@@ -522,6 +612,7 @@ async function openBucketBrief(bucketName, back){
           const text = serializeBriefText(briefParts, keepBriefMarker(briefWasEmpty, briefParts));
           const res = await putJSON('/bucket-brief', { bucket: bucketName, text });
           checkAgentsSetup();
+          reloadBucketAgentsPanel();
           showToast(res.filled ? 'Brief saved.'
             : 'Brief saved — still carrying the empty marker, so no agent reads it yet.',
             res.filled ? '' : 'bad');
@@ -537,9 +628,13 @@ async function openBucketBrief(bucketName, back){
      and replanPlan() keep theirs in a variable. */
   const summaryBox = modalEl && modalEl.querySelector('#briefSummary');
   if (summaryBox) summaryBox.oninput = () => { briefParts.summary = summaryBox.value; };
+  const modeBox = modalEl && modalEl.querySelector('#briefMode');
+  if (modeBox) modeBox.onchange = () => { briefParts.mode = modeBox.value; };
+  const startBox = modalEl && modalEl.querySelector('#briefStart');
+  if (startBox) startBox.onchange = () => { briefParts.start = startBox.value; };
   const sectionBoxes = modalEl ? modalEl.querySelectorAll('[data-brief-section]') : [];
   sectionBoxes.forEach(box => {
-    const name = BRIEF_SECTIONS[+box.dataset.briefSection];
+    const name = BRIEF_ALL[+box.dataset.briefSection];
     box.oninput = () => { briefParts.sections[name] = box.value; };
   });
   if (summaryBox) { summaryBox.focus(); summaryBox.setSelectionRange(0, 0); }

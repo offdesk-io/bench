@@ -15,7 +15,7 @@ This skill owns the to-do list. Everything that changes the file happens here, w
 
 `todo.md` has one writer and this is it. The board holds the whole document in the browser and writes all of it back when it saves, within seconds of anything marking the document dirty. So a second thing editing the file underneath an open tab is overwritten silently, and it has taken the real list twice. That is why you never write the file yourself either: every change goes through the board server's own save, `scripts/pa_save.py`, which merges your edit with any save a tab made while you worked (see Applying a change).
 
-Every other part of this system is arranged around that. The companion reads and never writes. The planning agent writes plans and a queue file. `pa-attach` writes a queue file the board drains. `implement-agent` carries out an agreed plan and asks for the list change in its report rather than making it. The other `pa-*` skills hold the conversation and hand the outcome here.
+Every other part of this system is arranged around that. The companion reads and never writes. Each bucket's agent writes plans and a queue file. `pa-attach` writes a queue file the board drains. `do` carries out a bucket agent's work with the owner and asks for the list change rather than making it. The other `pa-*` skills hold the conversation and hand the outcome here.
 
 That means two things for you. Apply what you are handed rather than re-opening the decision, since the conversation already happened. And never spawn a subagent to do the writing: a subagent cannot stop and ask, and it would be a second writer.
 
@@ -129,7 +129,7 @@ Whenever you have the whole file open, look for these and raise them without bei
 
 **Work that should not be done at all.** A task that has sat untouched for three sessions, or whose reason no longer holds, or that exists because of a decision that has since changed. Say so and offer to cut it. Cutting one real task beats reordering ten.
 
-**Work that can be handed over.** Anything nobody has an agent on that could go to one now that something else exists, for example a rubric being defined, a snapshot being taken, a format being settled. Say why, and offer it; handing it over is the owner's act, on the card, and it lays out the sub-tasks. Also offer to just do the work in this session rather than leaving it queued.
+**Work that can be handed over.** Anything that could go to its bucket's agent now that something else exists, for example a rubric being defined, a snapshot being taken, a format being settled. Say why, and offer it; handing it over is the owner's act, on the card, and it lays out the sub-tasks. Delegating a task always goes to the agent of the bucket it sits in. If that bucket's agent is not set up (`python3 core/bucket_agents.py <list>` says so), offer `pa-bucket-setup` first: the board hands nothing to a bucket that is not ready. Also offer to just do the work in this session rather than leaving it queued.
 
 The reverse matters as much. When something is taken back off an agent, delete its prompt and its `rank:` at the same time, and take the agent's sub-tasks with it. A prompt left on a task the owner has taken back reads as a standing instruction to hand it over, and the next session will believe it. The board does this automatically when the assignee is changed there.
 
@@ -174,7 +174,7 @@ python3 "${BENCH_ROOT:-$HOME/Code/bench}"/agents/pa_agent/skills/pa/scripts/pa_w
 
 After the push, run the same script with `done` and the same path. Run `done` even when the edit failed or you stopped to ask, since the board holds its reload until the file goes or is ten minutes old. If you stop to ask mid-batch, run `done` first and `start` again when you resume. `pa-working.json` is a file on the Mac, so on the shared board there is nothing to tell and you skip both.
 
-**There are no sections to rebuild.** The file is four buckets and nothing else. This week, Quick wins, Big rocks, Dependency chain and Delegate to Claude are worked out by the board every time it renders. Never add them back as text: a section in the file is a copy, and a copy has to be maintained by hand every session or it starts describing a file that has moved on.
+**There are no sections to rebuild.** The file is four buckets and nothing else. This week, Quick wins, Big rocks and Dependency chain are worked out by the board every time it renders. Never add them back as text: a section in the file is a copy, and a copy has to be maintained by hand every session or it starts describing a file that has moved on.
 
 So the whole update is the tag:
 
@@ -182,8 +182,8 @@ So the whole update is the tag:
 | --- | --- |
 | How much it matters, how heavy it is | `[impact:: high\|med\|low]` plus `[effort:: S\|M\|L]` |
 | When it must be finished | `[due:: YYYY-MM-DD]` |
-| Who does it | `[to:: Plan agent\|Implement agent\|<a name from people.md>]`, plus `rank:N` on an agent's |
-| Handing a task to an agent | the four sub-tasks the board's Delegate to lays out, written by hand only if the owner asks you to: Plan, Review the plan, Implement, Review the work, slugs `<task id>-plan`, `-plan-review`, `-implement`, `-work-review`, each `blocked-by:` the one before, each with its own `id:`, the reviews `[to:: <owner name>]`, and the task in Doing |
+| Who does it | `[to:: <List> <bucket> agent\|<a name from people.md>]` (any name ending in ` agent` is a bucket's agent), plus `rank:N` on an agent's |
+| Handing a task to an agent | the sub-tasks the board's Delegate to lays out, written by hand only if the owner asks you to. A plan-first bucket gets four: Plan, Review the plan, Implement, Review the work, slugs `<task id>-plan`, `-plan-review`, `-implement`, `-work-review`. A free-rein bucket gets Implement and Review the work. Each is `blocked-by:` the one before, each has its own `id:`, Plan and Implement are `[to:: <bucket agent name>]`, the reviews `[to:: <owner name>]`, and the task is in Doing |
 | An agent working on a sub-task now | a bare `` `doing` `` on that sub-task, its only state tag; unticked is To do and the tick is Done |
 | A plan the owner has sent back | a `- feedback: …` note under the Plan sub-task, which is unticked, so the next night plans it again |
 | A plan's file | a `- Plan: plans/<file>.md` note under the Review the plan sub-task |
@@ -365,7 +365,7 @@ template that tried to would be a second copy of them.
 
 **The headline has not moved in two weeks.** Say it once. Either it is genuinely a big piece of work and wants breaking into steps, or it was the wrong pick and something else is really blocking the owner. Offer both readings and let the owner choose. Do not silently swap it.
 
-**A bucket's own agent sets the rules for its tasks.** If `data/<dataset>/buckets/<bucket>/<dataset>-<bucket>-agent.md` exists, read it before writing a message or prompt for a task in that bucket, and follow it. A message the owner has to word themself is written as a draft to edit, never as something to send. The conventions cover the format.
+**A bucket's own agent sets the rules for its tasks.** If `data/<dataset>/buckets/<bucket>/<bucket>.md` exists, read it before writing a message or prompt for a task in that bucket, and follow it. A message the owner has to word themself is written as a draft to edit, never as something to send. The conventions cover the format.
 
 **A delegable task needs an input the owner has not given, a file path, a data source, a budget.** Write the prompt anyway with a `[bracketed]` gap in it, and name the gap when reporting back. A prompt held back until the input arrives is friction sitting in front of the task, which is the thing this skill exists to remove.
 
@@ -379,7 +379,7 @@ template that tried to would be a second copy of them.
 
 - `data/.current`, which dataset is live right now, e.g. `personal`. Read this first; everything below is relative to `data/<that name>/`, not the bare `data/` root. The board's own dropdown is what changes it.
 - `data/<dataset>/todo.md` — the list. `data/` holds every dataset and everything derived from each, and is the whole of what git ignores. The four buckets. The standing facts about people and dates are in `context.md`, beside `people.md` and `about.md`, all three read and written through the memory lookup (`<memory_root>/bench/<dataset>/` when Bench's `memory_root` is set and holds the file, else `data/<dataset>/`), and written through the server's `PUT /context` route or the path the lookup gives, never into `todo.md`. Between them the only source of truth.
-- `kanban/index.html` plus `kanban/server.py`, launched by `board.command` at the root — the board. It reads and writes the current dataset's todo.md, and works out This week, Quick wins, Big rocks, Dependency chain and Delegate to Claude from the tags. Those five exist nowhere else.
+- `kanban/index.html` plus `kanban/server.py`, launched by `board.command` at the root — the board. It reads and writes the current dataset's todo.md, and works out This week, Quick wins, Big rocks and Dependency chain from the tags. Those four exist nowhere else.
 - `<name>/` in the list's projects folder when set, otherwise `data/<dataset>/projects/<name>/` — one folder per project, holding the background in a `CLAUDE.md` and the source documents beside it, for work carrying more context than a task line can hold. Private like everything in `data/`. The tasks stay in todo.md and point at the folder; the folder never holds a task list.
 - `agents/pa_agent/PA.md` — standing behaviour: who the owner is, where the list lives, the two tiers of prioritisation, the standing rules and the tone. Read every session, before the conventions.
 - `CONVENTIONS.md` — the file format: buckets, states, tags, date rules, suggested messages, meeting agendas, capacity ceiling. Read this every session.
@@ -389,7 +389,7 @@ template that tried to would be a second copy of them.
 - `scripts/pa_save.py` — the only way this skill writes a list, through the board server's save. Its copies sit in `data/.pa-save/<host>/<dataset>/` between a pull and a push.
 - `data/<dataset>/backups/todo-backup-*.md` — written by the board, one per run, before its first save. Useful if something is clobbered.
 - `data/<dataset>/backups/done-archive.md` — finished work the board has lifted out of `todo.md` once it had been ticked off for more than 30 days. Append-only and never pruned. **A task missing from the list is not necessarily a task that never existed — look here before concluding anything was lost, and never re-add something from here to todo.md unless the owner asks.**
-- `data/<dataset>/briefings.json` — a generated briefing per task (direction, what's done, what's still needed), written overnight by `agents/plan-agent/brief.py` and read by `newChat()` and by this skill. Never write this file by hand; refresh one entry with `python3 "${BENCH_ROOT:-$HOME/Code/bench}"/agents/plan-agent/brief.py --task "<title>"` after a groom that changes what a task is actually asking for — worth doing so the next chat or plan on it starts from what you just settled rather than what the overnight pass last saw.
+- `data/<dataset>/briefings.json` — a generated briefing per task (direction, what's done, what's still needed), written on the bucket agents' scheduled wake by `agents/bucket-agent/brief.py` and read by `newChat()` and by this skill. Never write this file by hand; refresh one entry with `python3 "${BENCH_ROOT:-$HOME/Code/bench}"/agents/bucket-agent/brief.py --task "<title>"` after a groom that changes what a task is actually asking for — worth doing so the next chat or plan on it starts from what you just settled rather than what the overnight pass last saw.
 
 **Answering "what is on this week" means reading the `week` tags**, not looking for a section. Same for the other four views. If you find yourself wanting to write one of them into the file to answer a question, answer in chat instead.
 
@@ -401,7 +401,12 @@ template that tried to would be a second copy of them.
 | `pa-retrieve-tasks` | Pulls action items from the meeting recorder and reviews them one by one. Hands you the ones the owner kept, each with its provenance line. |
 | `pa-checkout` | Walks Doing and Reviewing. Hands you what the owner decided about each. |
 | `pa-focus` | Walks To do and Doing, asking what is honestly in flight. Hands you what goes back to Backlog. |
-| `pa-review-plans` | Goes through the planning agent's plans. Writes plan statuses itself, hands you the note that goes on each task. |
+| `pa-review-plans` | Goes through the bucket agents' plans. Writes plan statuses itself, hands you the note that goes on each task. |
 | `pa-mobile` | Any of the above, from a phone, asked as multiple choice and reported from the mobile templates. Hands you the same changes. |
-| `do` | Hands an agreed plan to `implement-agent`. That agent never writes the list, so anything it needs changed comes to you as a request in its report. |
+| `pa-bucket-setup` | Interviews the owner about a bucket and writes its agent's definition into the bucket's file. Never writes `todo.md`. |
+| `do` | Carries out a bucket agent's Implement sub-task with the owner there. It never writes the list, so anything it needs changed comes to you as a request. |
 | `pa-attach` | Files a conversation against a task through `attach-queue.json`, which the board drains. Nothing reaches you. |
+
+## Moving old handovers to bucket agents
+
+Handovers written before bucket agents carry `[to:: Plan agent]` or `[to:: Implement agent]`. `python3 "${BENCH_ROOT:-$HOME/Code/bench}"/agents/pa_agent/skills/pa/scripts/bucket_handover_migration.py <list>` reads one list and prints, per task, the change that moves it to its bucket's agent: the tags become the agent's name, and in a free-rein bucket an open, unticked Plan and Review the plan pair is dropped. A task whose bucket is not ready, or that has no bucket, is flagged and left as it is (offer `pa-bucket-setup` for the first). The script never writes. You apply the printed changes through `pa_save.py` when the owner says yes, after naming the list.

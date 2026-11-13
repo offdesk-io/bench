@@ -7,7 +7,7 @@ already knows, or ends three clauses after its point is harder to act on, whoeve
 wrote it.
 
 Spelling, vocabulary and how a message opens are the owner's own, set in
-the profile (`<memory_root>/me/profile.md` (when `memory_root` is set and the file exists) or `data/profile.md`). `agents/plan-agent/check_plan.py` enforces the part of this that
+the profile (`<memory_root>/me/profile.md` (when `memory_root` is set and the file exists) or `data/profile.md`). `agents/bucket-agent/check_plan.py` enforces the part of this that
 can be counted. The rest is read and applied.
 
 ## The twelve

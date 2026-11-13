@@ -28,29 +28,27 @@
    and nothing else. The list is made by POST /datasets, the same route the
    Lists menu's "New list" uses.
    ========================================================================= */
+/* The bucket agents' two jobs, each on a model of its own. How each bucket's
+   agent works and when it starts are in that bucket's brief, not here. */
 const SETTINGS_AGENTS = [
-  ['plan', 'Plan agent', 'Plans a task and waits for you to approve it.'],
-  ['implement', 'Implement agent', 'Carries out a plan you approved.'],
+  ['plan', 'Model for plans', 'What a plan-first bucket’s agent writes its plan on.'],
+  ['implement', 'Model for the work', 'What a bucket’s agent does the work on, with a plan or without.'],
 ];
-/* The id the agents engine keys each agent's daily budget by in fences.json. */
-const SETTINGS_BUDGET_IDS = { plan: 'plan-agent', implement: 'implement-agent' };
+/* The id the agents engine keys a daily budget by in fences.json. */
+const SETTINGS_BUDGET_IDS = { bucket: 'bucket-agent' };
 const SETTINGS_OTHER = [
   ['chat', 'Chat', 'The chat window.'],
   ['brief', 'Brief', 'Bucket briefs.'],
 ];
 /* What a job runs on when nothing is chosen anywhere: briefs use Haiku
-   (MODEL in agents/plan-agent/brief.py), everything else leaves the choice to
+   (MODEL in agents/bucket-agent/brief.py), everything else leaves the choice to
    Claude Code. */
 const SETTINGS_OWN_MODEL = { brief: 'Haiku' };
 const SETTINGS_CLAUDE_DEFAULT = 'Claude Code’s default';
-const SETTINGS_STARTS = [
-  ['scheduled', 'Wait for its scheduled hours'],
-  ['now', 'Start straight away'],
-];
 /* Pre-selections for a first run; Settings opens on what is saved. */
 const ONBOARD_MODELS = { default: 'sonnet', brief: 'haiku' };
 /* The first list. Editable and removable; the description becomes the opening
-   of each bucket's brief, which is what the generic planner reads. */
+   of each bucket's brief, which defines that bucket's agent. */
 const ONBOARD_LIST = 'Work';
 const ONBOARD_BUCKETS = [
   { name: 'Making', about: 'Designing, writing or building something new. Ends in a file, a draft or a prototype.' },
@@ -86,7 +84,6 @@ function settingsResolved(key, models){
   return SETTINGS_OWN_MODEL[key] || SETTINGS_CLAUDE_DEFAULT;
 }
 function settingsEmptyLabel(key, models){
-  if (key === 'planner') return 'Same as the Plan agent (' + settingsResolved('plan', models) + ')';
   return key === 'default'
     ? 'Not set: ' + settingsResolved(key, models)
     : 'Use default (' + settingsResolved(key, models) + ')';
@@ -137,21 +134,11 @@ function boardGroupHTML(draft, first){
     '<span class="help">Where facts about you and this list’s people are kept. Same as main uses the memory folder above, None keeps everything in data/' + esc(draft.list) + '/.</span>' +
     '<span class="help fielderr" data-err="board-memory" hidden></span></label>' +
     boardSwitchHTML('data-board-banners', b.banners, 'Desktop banners', 'A banner when a task on this board is due. Off, it sends none.') +
-    boardSwitchHTML('data-board-agents', b.agents, 'Agents', 'Lets the Plan and Implement agents work on this board. Off, they leave it alone.') +
+    boardSwitchHTML('data-board-agents', b.agents, 'Agents', 'Lets this board’s bucket agents work. Off, they leave it alone.') +
     '</div>';
 }
 
 function settingsFormHTML(draft, choices, first){
-  const agents = SETTINGS_AGENTS.map(([key, name, help]) =>
-    '<div class="agentopts__group"><h4>' + agentAvatarHTML(name, 18) + esc(name) + '</h4>' +
-    settingsModelField(key, 'Model', help, draft, choices) +
-    '<label class="field"><span>When you hand it a task</span><select data-start="' + key + '">' +
-    SETTINGS_STARTS.map(([v, l]) => '<option value="' + v + '"' + (draft.agents[key].start === v ? ' selected' : '') + '>' + esc(l) + '</option>').join('') +
-    '</select></label>' +
-    '<label class="field"><span>Daily budget ($)</span><input type="text" inputmode="decimal" data-agent-budget="' + key + '" value="' + escAttr(draft.agentBudgets[key]) + '" placeholder="No limit">' +
-    '<span class="help">Its scheduled runs stop for the day once this is spent. Empty means no limit.</span>' +
-    '<span class="help fielderr" data-err="budget-' + key + '" hidden></span></label></div>').join('');
-  const other = SETTINGS_OTHER.map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('');
   return '<div class="setupform">' +
     '<label class="field"><span>Name</span><input type="text" data-name value="' + escAttr(draft.name) + '" placeholder="First name">' +
     '<span class="help">' + (draft.signedIn ? 'What the PA calls you.' : 'Who the review sub-tasks are assigned to.') + '</span>' +
@@ -172,22 +159,6 @@ function settingsFormHTML(draft, choices, first){
     '<label class="field"><span>Reply chime</span>' +
     '<button type="button" role="switch" class="tenon-switch' + (draft.chime ? ' tenon-switch--on' : '') + '" data-chime aria-checked="' + draft.chime + '"></button>' +
     '<span class="help">A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.</span></label>' +
-    (agentsCanRun() ?
-    '<details class="agentopts" data-agent-options><summary>Agent options</summary>' +
-    '<div class="agentopts__body">' +
-    settingsModelField('default', 'Default model', 'Used by any model below that is left on Use default.', draft, choices) +
-    agents +
-    '<div class="agentopts__group"><h4>' + plannerAvatarHTML('var(--tenon-text-secondary, #8a8a8a)', 18) + 'Bucket planners</h4>' +
-    settingsModelField('planner', 'Model', 'The planner each bucket runs its tasks against. They start with the Plan agent and spend from its daily budget, so they have no budget of their own.', draft, choices) +
-    '</div>' +
-    '<div class="agentopts__group"><h4>Other</h4>' + other + '</div>' +
-    '<div class="agentopts__group"><h4>Spending</h4>' +
-    '<label class="field"><span>All agents together, daily budget ($)</span><input type="text" inputmode="decimal" data-budget value="' + escAttr(draft.budget) + '" placeholder="No limit">' +
-    '<span class="help">Every agent’s scheduled runs stop for the day once this is spent, whatever its own budget. Empty means no limit.</span>' +
-    '<span class="help fielderr" data-err="budget" hidden></span></label></div>' +
-    '</div></details>' +
-    '<p class="help agentopts__note">Set each agent’s hours later in the board’s Agents tab.</p>'
-    : '<p class="help agentopts__note">Agents are off on this machine. The Agents tab says why.</p>') +
     '</div>');
 }
 
@@ -200,12 +171,9 @@ async function loadSettingsDraft(first){
     fetch('/holiday-countries.json').then(r => r.json()),
   ]);
   const models = Object.assign({ default: null, plan: null, implement: null, chat: null, brief: null }, set.models);
+  /* Plans used to have a model of their own for the bucket planners; nothing reads it now. */
+  delete models.planner;
   if (first) for (const k in ONBOARD_MODELS) if (!models[k]) models[k] = ONBOARD_MODELS[k];
-  const agents = { plan: { start: 'scheduled' }, implement: { start: 'scheduled' } };
-  for (const k in agents) if (set.agents && set.agents[k] && set.agents[k].start) agents[k].start = set.agents[k].start;
-  const dollars = v => v == null ? '' : String(v);
-  const agentBudgets = {};
-  for (const k in SETTINGS_BUDGET_IDS) agentBudgets[k] = dollars((set.agent_budgets || {})[SETTINGS_BUDGET_IDS[k]]);
   /* A profile that still has the old Holidays: line has no country of its own:
      the select reads "Keep current" until the owner picks one, and saving anything
      else leaves the line as it is. */
@@ -228,7 +196,7 @@ async function loadSettingsDraft(first){
     touched: {},
     countries: places.countries || [], regions: legacy.length ? [] : ((places.regions || {})[prof.country] || []),
     chime: set.chime !== false,
-    models, agents, budget: dollars(set.daily_budget), agentBudgets } };
+    models } };
 }
 
 function settingsErrors(draft, first){
@@ -237,6 +205,12 @@ function settingsErrors(draft, first){
   if (first && !draft.country) err.country = 'Choose a country.';
   if (/[<>`]/.test(draft.about.addressing || '')) err['about-addressing'] = 'Leave out < > and backticks.';
   if (!draft.signedIn && draft.board && draft.board.mode === 'own' && !draft.board.path.trim()) err['board-memory'] = 'Enter the folder’s full path.';
+  return err;
+}
+
+/* The budget fields of Agent options, which sits on the Agents tab. */
+function agentOptionErrors(draft){
+  const err = {};
   const badDollars = v => v.trim() && !(Number(v) >= 0);
   if (badDollars(draft.budget)) err.budget = 'Enter an amount in dollars, or leave it empty.';
   for (const k in draft.agentBudgets) if (badDollars(draft.agentBudgets[k])) err['budget-' + k] = 'Enter an amount in dollars, or leave it empty.';
@@ -271,8 +245,7 @@ function paintCountryNote(draft){
 
 /* Keeps the empty option of every "Use default" select naming the model it
    resolves to, so changing Default relabels them straight away. */
-function paintModelLabels(draft){
-  const root = settingsRoot();
+function paintModelLabels(draft, root){
   if (!root) return;
   root.querySelectorAll('[data-model]').forEach(sel => {
     const empty = sel.querySelector('option[value=""]');
@@ -313,17 +286,8 @@ function trackSettingsForm(draft, first){
     if (ba) draft.board.agents = ba.getAttribute('aria-checked') === 'true';
     const pr = root.querySelector('[data-projects]');
     if (pr) draft.projectsRoot = pr.value;
-    root.querySelectorAll('[data-model]').forEach(s => { draft.models[s.dataset.model] = s.value || null; });
-    root.querySelectorAll('[data-start]').forEach(s => { draft.agents[s.dataset.start].start = s.value; });
     if (e && e.target && e.target.matches('[data-name]')) draft.touched.name = true;
     if (e && e.target && e.target.matches('[data-country]')) draft.touched.country = true;
-    const b = root.querySelector('[data-budget]');
-    if (b) { draft.budget = b.value; if (e && e.target === b) draft.touched.budget = true; }
-    root.querySelectorAll('[data-agent-budget]').forEach(i => {
-      draft.agentBudgets[i.dataset.agentBudget] = i.value;
-      if (e && e.target === i) draft.touched['budget-' + i.dataset.agentBudget] = true;
-    });
-    paintModelLabels(draft);
     paintCountryNote(draft);
     paintSetupErrors(draft, first);
   };
@@ -378,11 +342,10 @@ async function saveSettingsDraft(draft, first){
   }
   await put('/profile-basics.json', basics);
   if (draft.signedIn) return;
-  const dollars = v => v.trim() === '' ? null : Number(v);
-  const agentBudgets = {};
-  for (const k in draft.agentBudgets) agentBudgets[SETTINGS_BUDGET_IDS[k]] = dollars(draft.agentBudgets[k]);
-  const body = { models: draft.models, agents: draft.agents, chime: draft.chime,
-    daily_budget: dollars(draft.budget), agent_budgets: agentBudgets };
+  /* The models and budgets are Agent options, saved from the Agents tab; the
+     welcome keeps the first run's two starting models. */
+  const body = { chime: draft.chime };
+  if (first) body.models = draft.models;
   if (draft.memoryRoot.trim() !== draft.was.memoryRoot) body.memory_root = draft.memoryRoot.trim() || null;
   if (draft.list && draft.projectsRoot.trim() !== draft.was.projectsRoot)
     body.projects_roots = { [draft.list]: draft.projectsRoot.trim() || null };
@@ -476,7 +439,7 @@ function listFormHTML(list){
     '<span class="help">Your first list. It becomes a folder under <code>data/</code> and the name on the Lists menu.</span>' +
     '<span class="help fielderr" data-list-err hidden></span></label>' +
     '<div class="field"><span>Buckets</span>' +
-    '<span class="help">The groups your tasks sort into. Say what goes in each and what it ends in; the planning agent reads this before it plans anything there.</span></div>' +
+    '<span class="help">The groups your tasks sort into. Say what goes in each and what it ends in; each bucket\u2019s agent reads this before it works on anything there.</span></div>' +
     '<div class="bucketrows" data-rows>' + bucketRowsHTML(list) + '</div>' +
     '<span class="help fielderr" data-buckets-err hidden></span>' +
     '<div><button type="button" class="btn dashed small" data-b-add>+ Add a bucket</button></div>' +
@@ -735,39 +698,92 @@ async function drawSettingsTab(){
   host.querySelector('[data-settings-save]').onclick = () => runSettingsSave(draft, false, false);
 }
 
+/* ---- Agent options, at the top of the Agents tab ----
+
+   The models each job runs on and the daily budgets. They save to the same
+   keys through the same PUT /settings.json as before, from a Save of their
+   own, since they are no longer part of the Settings form. */
+function agentOptionsHTML(draft, choices){
+  const agents = '<div class="agentopts__group"><h4>' + plannerAvatarHTML('var(--tenon-text-secondary, #8a8a8a)', 18) + 'Bucket agents</h4>' +
+    SETTINGS_AGENTS.map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('') +
+    '<label class="field"><span>Daily budget ($)</span><input type="text" inputmode="decimal" data-agent-budget="bucket" value="' + escAttr(draft.agentBudgets.bucket) + '" placeholder="No limit">' +
+    '<span class="help">Every bucket’s agent on every board spends from this. Its runs stop for the day once it is spent. Empty means no limit.</span>' +
+    '<span class="help fielderr" data-err="budget-bucket" hidden></span></label></div>';
+  const other = SETTINGS_OTHER.map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('');
+  return '<section class="agentopts agentopts--open" data-agent-options aria-label="Agent options"><h2>Agent options</h2>' +
+    '<div class="agentopts__body">' +
+    settingsModelField('default', 'Default model', 'Used by any model below that is left on Use default.', draft, choices) +
+    agents +
+    '<div class="agentopts__group"><h4>Other</h4>' + other + '</div>' +
+    '<div class="agentopts__group"><h4>Spending</h4>' +
+    '<label class="field"><span>All agents together, daily budget ($)</span><input type="text" inputmode="decimal" data-budget value="' + escAttr(draft.budget) + '" placeholder="No limit">' +
+    '<span class="help">Every agent’s scheduled runs stop for the day once this is spent, whatever its own budget. Empty means no limit.</span>' +
+    '<span class="help fielderr" data-err="budget" hidden></span></label></div>' +
+    '<div class="settingspage__actions"><button type="button" class="btn primary" data-agent-options-save>Save</button></div>' +
+    '</div></section>';
+}
+
+function paintAgentOptionErrors(draft, host, attempted){
+  const err = agentOptionErrors(draft);
+  host.querySelectorAll('[data-err]').forEach(el => {
+    const show = !!err[el.dataset.err] && (draft.touched[el.dataset.err] || attempted);
+    el.textContent = show ? err[el.dataset.err] : '';
+    el.hidden = !show;
+  });
+  const save = host.querySelector('[data-agent-options-save]');
+  if (save) save.disabled = Object.keys(err).length > 0;
+}
+
+function trackAgentOptions(draft, host){
+  const sync = e => {
+    host.querySelectorAll('[data-model]').forEach(sel => { draft.models[sel.dataset.model] = sel.value || null; });
+    const b = host.querySelector('[data-budget]');
+    if (b) { draft.budget = b.value; if (e && e.target === b) draft.touched.budget = true; }
+    host.querySelectorAll('[data-agent-budget]').forEach(i => {
+      draft.agentBudgets[i.dataset.agentBudget] = i.value;
+      if (e && e.target === i) draft.touched['budget-' + i.dataset.agentBudget] = true;
+    });
+    paintModelLabels(draft, host);
+    paintAgentOptionErrors(draft, host);
+  };
+  host.addEventListener('input', sync);
+  host.addEventListener('change', sync);
+  paintAgentOptionErrors(draft, host);
+}
+
+async function saveAgentOptions(draft, host){
+  if (Object.keys(agentOptionErrors(draft)).length) { paintAgentOptionErrors(draft, host, true); return; }
+  const dollars = v => v.trim() === '' ? null : Number(v);
+  const agentBudgets = {};
+  for (const k in draft.agentBudgets) agentBudgets[SETTINGS_BUDGET_IDS[k]] = dollars(draft.agentBudgets[k]);
+  try {
+    await sendJSON('PUT', '/settings.json', { models: draft.models,
+      daily_budget: dollars(draft.budget), agent_budgets: agentBudgets });
+  } catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
+  showToast('Saved.', 'good');
+}
+
+/* Fills `host` (the Agents tab's #agentOptions) once; a redraw of the tab leaves
+   it alone, so nothing typed in it is lost. */
+async function drawAgentOptions(host){
+  if (!host || host.firstChild || state.who) return;
+  let set;
+  try { set = await fetch('/settings.json').then(r => r.json()); }
+  catch (err) {
+    if (host.isConnected && !host.firstChild) host.innerHTML = '<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>';
+    return;
+  }
+  if (!host.isConnected || host.firstChild) return;
+  const models = Object.assign({ default: null, plan: null, implement: null, chat: null, brief: null }, set.models);
+  delete models.planner;
+  const dollars = v => v == null ? '' : String(v);
+  const agentBudgets = {};
+  for (const k in SETTINGS_BUDGET_IDS) agentBudgets[k] = dollars((set.agent_budgets || {})[SETTINGS_BUDGET_IDS[k]]);
+  const draft = { models, budget: dollars(set.daily_budget), agentBudgets, touched: {} };
+  host.innerHTML = agentOptionsHTML(draft, (set.choices && set.choices.models) || []);
+  trackAgentOptions(draft, host);
+  host.querySelector('[data-agent-options-save]').onclick = () => saveAgentOptions(draft, host);
+}
+
 $('#settingsBtn').onclick = () => { closeDataMenu(); openSettingsPage('settings'); };
 
-/* ---- Starting an agent straight away ------------------------------------
-   Settings > Agent options says, per agent, whether a task handed to it waits
-   for its hours or starts at once. "At once" is the run the board already
-   offers (Run the Plan agent now; the Agents tab's Run now), pressed for the owner.
-   The agents read todo.md from disk, so a hand-over or approval only asks for a
-   start here, and the start goes out after the save that carries it. */
-const pendingAgentStarts = new Set();
-function queueAgentStart(agent){ pendingAgentStarts.add(agent); }
-
-async function flushAgentStarts(){
-  if (!pendingAgentStarts.size) return;
-  if (!agentsCanRun()) { pendingAgentStarts.clear(); return; }
-  const want = Array.from(pendingAgentStarts);
-  pendingAgentStarts.clear();
-  let set;
-  try { set = await getJSON('/settings.json'); } catch (err) { return; }
-  /* A board with its agents switched off starts none. */
-  if (((set.boards || {})[state.dataset] || {}).agents === false) return;
-  for (const agent of want) {
-    if (!set.agents || !set.agents[agent] || set.agents[agent].start !== 'now') continue;
-    try {
-      if (agent === 'plan') {
-        await postJSON('/planning_agent/run');
-        if (typeof watchRunStartedHere === 'function') watchRunStartedHere();
-        showToast('The Plan agent is running.', 'good');
-      } else {
-        await postJSON('/agents-api/run', { agent: 'implement-agent', action: 'run', target: state.dataset });
-        showToast('The Implement agent is running.', 'good');
-      }
-    } catch (err) {
-      showToast('Could not start the ' + (agent === 'plan' ? 'Plan' : 'Implement') + ' agent: ' + (err.message || err), 'bad');
-    }
-  }
-}

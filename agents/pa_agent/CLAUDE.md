@@ -17,8 +17,9 @@ There is one writer and everything else feeds it.
 | `pa-mobile` | The phone surface over any of the above. Asks in multiple choice, renders from its own templates, writes through `pa`. |
 | `pa-checkout` | Walks Doing and Reviewing. Reviews and asks; `pa` writes. |
 | `pa-focus` | Walks To do and Doing, trimming what is not really in flight. Reviews and asks; `pa` writes. |
-| `pa-review-plans` | Triages the planning agent's plans. Writes plan statuses through the board's own routes, hands task notes to `pa`. |
-| `do` | Hands an agreed plan to `implement-agent`. That agent never writes the list, so its requested changes come back through `pa`. |
+| `pa-bucket-setup` | Interviews the owner about one bucket and writes its agent's definition into the bucket's own file, then runs `core/bucket_agents.py` to say whether it is ready. Never writes `todo.md`. |
+| `pa-review-plans` | Triages the bucket agents' plans. Writes plan statuses through the board's own routes, hands task notes to `pa`. |
+| `do` | Carries out a bucket agent's Implement sub-task with the owner in the session, under that bucket's brief. Ticks go through the queue and list changes through `pa`. |
 | `pa-attach` | Files a conversation against a task through `attach-queue.json`, which the board drains. Touches nothing else. |
 | `pa-reports` | Makes a report off the list from its catalogue of types and sends it. Reads only; screenshots go through a locked headless board. |
 | `pa-board` | Reads one column of one board as a numbered list, optionally one bucket, and shows a task's full properties on request. Reads only. |
@@ -31,8 +32,8 @@ wrong, rather than six copies that drift.
 
 **Why `pa` is a skill and not a subagent.** Writing means stopping to ask, and a
 subagent cannot: it runs in its own context and returns one report, so every
-question becomes a guess. It is the same reason `implement-agent` only ever runs
-from a session the owner is in. The one job here that would suit a subagent is a
+question becomes a guess. It is the same reason Figma work only ever runs
+through `do`, in a session the owner is in. The one job here that would suit a subagent is a
 read-only status read, and nothing has needed it yet.
 
 The PA also exists as a session agent, `pa-agent.md`, run whole with
@@ -45,9 +46,9 @@ has the one writer.
 
 ## What lives where
 
-- `PA.md` — standing behaviour, read by every skill and by the planning agent's six
-  planners and `implement-agent`. It stayed a plain file rather than folding into
-  `pa` precisely because those seven read it and never write anything.
+- `PA.md` — standing behaviour, read by every skill and by the bucket agents.
+  It stayed a plain file rather than folding into
+  `pa` precisely because those read it and never write anything.
 - `../../CONVENTIONS.md` — the file format.
 - `skills/pa/scripts/check_todo.py` — the mechanical checker. It lived under
   `pa-checkin` and moved with the writing.
@@ -87,7 +88,7 @@ second copy that goes stale the moment the folder is edited. Add a skill by link
 ln -s <bench repo>/agents/pa_agent/skills/<name> ~/.claude/skills/<name>
 ```
 
-To link them all at once: `for s in "${BENCH_ROOT:-$HOME/Code/bench}"/agents/pa_agent/skills/*; do ln -sfn "$s" ~/.claude/skills/; done; ln -sfn "${BENCH_ROOT:-$HOME/Code/bench}"/agents/implement-agent/skills/do ~/.claude/skills/do`. `BENCH_ROOT` is how every skill finds the checkout, and it defaults to `~/Code/bench` when unset.
+To link them all at once: `for s in "${BENCH_ROOT:-$HOME/Code/bench}"/agents/pa_agent/skills/*; do ln -sfn "$s" ~/.claude/skills/; done; ln -sfn "${BENCH_ROOT:-$HOME/Code/bench}"/agents/bucket-agent/skills/do ~/.claude/skills/do`. `BENCH_ROOT` is how every skill finds the checkout, and it defaults to `~/Code/bench` when unset.
 
 The folder is the source, so an edit takes effect the next time the skill fires.
 

@@ -46,7 +46,10 @@ sys.path.insert(0, HERE)
 sys.path.insert(0, os.path.join(ROOT, "core"))
 
 import server  # noqa: E402
-from test_board_access import Server, seed, access, TIAGO, JEROME, BOARD  # noqa: E402
+from test_board_access import Server, seed, access, BOARD  # noqa: E402
+
+OWNER = {"X-Offdesk-Email": "owner@example.com", "X-Offdesk-Name": "Owner", "X-Offdesk-Teams": "shared"}
+OTHER = {"X-Offdesk-Email": "other@example.com", "X-Offdesk-Name": "Other", "X-Offdesk-Teams": "shared,spare"}
 
 PASS = []
 FAIL = []
@@ -105,8 +108,6 @@ def in_process(root):
         fh.write(LIST)
     server.dataset_dir = lambda name=None: tmp
     server.current_dataset = lambda: "memory-test"
-    server.planning_agent_plan.paths.DATA_ROOT = root
-    os.environ["PLANNING_DATASET"] = "memory-test"
     # The list's memory files are looked up under the data root, which is
     # `root` here, so the real data/ and its settings.json are never read.
     server.DATA_ROOT = root
@@ -365,47 +366,47 @@ def in_process(root):
 
 def signed_in(root):
     data = os.path.join(root, "signed-in")
-    seed(data, "offdesk", LIST)
-    access(data, "offdesk", TIAGO["X-Offdesk-Email"], teams=["offdesk"])
-    seed(data, "tiago-own", LIST)
-    access(data, "tiago-own", TIAGO["X-Offdesk-Email"])
-    with open(os.path.join(data, "tiago-own", "about.md"), "w", encoding="utf-8") as fh:
+    seed(data, "shared", LIST)
+    access(data, "shared", OWNER["X-Offdesk-Email"], teams=["shared"])
+    seed(data, "own-board", LIST)
+    access(data, "own-board", OWNER["X-Offdesk-Email"])
+    with open(os.path.join(data, "own-board", "about.md"), "w", encoding="utf-8") as fh:
         fh.write("SECRET-ABOUT")
     outsider = {"X-Offdesk-Email": "nobody@example.com", "X-Offdesk-Name": "Nobody"}
     own = os.path.join(root, "SERVER-ONLY-FOLDER")
     os.makedirs(own)
     with open(os.path.join(data, "settings.json"), "w", encoding="utf-8") as fh:
-        json.dump({"boards": {"offdesk": {"memory_root": own, "banners": False},
-                              "tiago-own": {"agents": False}}}, fh)
+        json.dump({"boards": {"shared": {"memory_root": own, "banners": False},
+                              "own-board": {"agents": False}}}, fh)
     srv = Server(data, "header")
     ok("the signed-in server starts", srv.wait())
     try:
-        code, body, _ = srv.ask("GET", "/settings.json", dict(JEROME))
+        code, body, _ = srv.ask("GET", "/settings.json", dict(OTHER))
         got = json.loads(body) if code == 200 else {}
         ok("signed in, boards name only those the person can see, and no path",
-           got.get("boards") == {"offdesk": {"memory_root": "SERVER-ONLY-FOLDER", "banners": False}}
+           got.get("boards") == {"shared": {"memory_root": "SERVER-ONLY-FOLDER", "banners": False}}
            and root not in body, "%d %s" % (code, body[:300]))
-        code, _, _ = srv.ask("PUT", "/settings.json", dict(TIAGO, **BOARD), {"boards": {"offdesk": {"agents": False}}})
+        code, _, _ = srv.ask("PUT", "/settings.json", dict(OWNER, **BOARD), {"boards": {"shared": {"agents": False}}})
         ok("signed in, boards cannot be saved", code == 403, "got %d" % code)
         os.remove(os.path.join(data, "settings.json"))
-        code, body, _ = srv.ask("GET", "/memory.json", dict(TIAGO))
+        code, body, _ = srv.ask("GET", "/memory.json", dict(OWNER))
         ok("a person who can see a board reads its memory", code == 200, "%d %s" % (code, body[:200]))
-        code, body, _ = srv.ask("PUT", "/about", dict(JEROME, **BOARD), {"text": "mine"})
+        code, body, _ = srv.ask("PUT", "/about", dict(OTHER, **BOARD), {"text": "mine"})
         ok("a team member can write the shared board's about text", code == 200, "%d %s" % (code, body[:200]))
-        with open(os.path.join(data, "offdesk", "about.md"), encoding="utf-8") as fh:
+        with open(os.path.join(data, "shared", "about.md"), encoding="utf-8") as fh:
             ok("into the board they are on", fh.read() == "mine")
         for method, path, body in (("GET", "/memory.json", None), ("GET", "/about.json", None),
                                    ("PUT", "/about", {"text": "x"}), ("PUT", "/people", {"people": []})):
             code, text, _ = srv.ask(method, path, dict(outsider, **BOARD), body)
             ok("%s %s is refused for someone with no board" % (method, path), code == 404 and "SECRET" not in text,
                "%d %s" % (code, text[:200]))
-        # Another person sees their own board, never Tiago's: Jerome's current
-        # board falls to the one he can see, so Tiago's about text does not leak.
-        code, text, _ = srv.ask("GET", "/memory.json", dict(JEROME))
+        # Another person sees their own board, never the owner's: their current
+        # board falls to the one they can see, so the owner's about text does not leak.
+        code, text, _ = srv.ask("GET", "/memory.json", dict(OTHER))
         ok("a board outside someone's access never shows in their memory", "SECRET-ABOUT" not in text, text[:200])
-        code, text, _ = srv.ask("PUT", "/about", dict(JEROME, **{"X-Board": "1", "Content-Type": "application/json"}),
+        code, text, _ = srv.ask("PUT", "/about", dict(OTHER, **{"X-Board": "1", "Content-Type": "application/json"}),
                                 {"text": "overwrite"})
-        with open(os.path.join(data, "tiago-own", "about.md"), encoding="utf-8") as fh:
+        with open(os.path.join(data, "own-board", "about.md"), encoding="utf-8") as fh:
             ok("and their write never lands on it", fh.read() == "SECRET-ABOUT")
     finally:
         srv.stop()

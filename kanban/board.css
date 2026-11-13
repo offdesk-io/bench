@@ -366,6 +366,10 @@
   .bkrow input[data-name]{flex:0 1 160px}
   .bkrow input.bksummary{flex:2 1 auto; color:var(--tenon-text-faint)}
   .bkrow input.bksummary:focus{color:var(--tenon-text-default)}
+  /* Whether the bucket's agent is ready to take work. */
+  .bkagent{flex:none; font-size:var(--tenon-typography-size-sm); white-space:nowrap; color:var(--tenon-text-faint)}
+  .bkagent.ready{color:var(--tenon-text-default)}
+  .briefagent{margin:6px 0 0}
   /* The brief button. Shrink-proof beside the name input, which takes the
      rest of the row — a two-line "Brief" is the one thing that would make
      these rows different heights from one another. */
@@ -2172,12 +2176,6 @@
   /* Trails the cards rather than leading them, since what it reports is that
      the column stopped rendering, not a fact about the work itself. */
   .refmore{margin:10px 0 0 !important; font-size: var(--tenon-typography-size-sm) !important; color:var(--tenon-text-faint) !important}
-  .refrow{display:flex; align-items:flex-start; gap:9px}
-  .refrow .ref{flex:1; min-width:0}
-  .refnum{
-    flex:none; width:22px; height:22px; margin-top:9px; border-radius:var(--tenon-radius-default); background:var(--tenon-background-neutral);
-    color:var(--tenon-text-subtle); font-size: var(--tenon-typography-size-sm); font-weight:700; line-height:22px; text-align:center;
-  }
   /* Dependency chain: the blocker(s) sit beside the card waiting on them.
      Each blocker gets its own arrow into the target, so a task with several
      blockers still reads as several distinct dependencies rather than one
@@ -2579,6 +2577,9 @@
   .fielderr{color:var(--tenon-text-error)}
   .agentopts{border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-default)}
   .agentopts > summary{cursor:pointer; list-style:none; padding:9px 11px; font-weight:600}
+  .agentopts > h2{margin:0; padding:9px 11px 0; font-size:var(--tenon-typography-size-sm); font-weight:640; color:var(--tenon-text-subtle)}
+  .agentopts--open{max-width:1100px}
+  .agentopts--open .agentopts__body{max-width:520px}
   .agentopts > summary::-webkit-details-marker{display:none}
   .agentopts > summary::before{content:'\25B8  '; color:var(--tenon-text-faint)}
   .agentopts[open] > summary::before{content:'\25BE  '}
@@ -3126,10 +3127,16 @@
 .planners h2 { font-size: var(--tenon-typography-size-sm); font-weight: 640; color: var(--tenon-text-subtle); margin: 0 0 10px; }
 .planners ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .planners li {
-  display: flex; justify-content: space-between; gap: 12px;
   background: var(--tenon-background-raised); border: 1px solid var(--tenon-stroke-default);
   border-radius: var(--tenon-radius-md); padding: 8px 14px; font-size: var(--tenon-typography-size-sm);
 }
+.bagent > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
+.bagent > summary::-webkit-details-marker { display: none; }
+.bagent > summary .planner-name { margin-left: auto; }
+.bagent__body { margin: 10px 0 2px; display: flex; flex-direction: column; gap: 10px; }
+.bagent__field dt { font-weight: 600; color: var(--tenon-text-default); margin: 0 0 2px; }
+.bagent__field dd { margin: 0; white-space: pre-wrap; color: var(--tenon-text-default); }
+.bagent__field dd.bagent__empty { color: var(--tenon-text-subtle); }
 .planner-bucket { color: var(--tenon-text-default); font-weight: 560; }
 .planner-name { color: var(--tenon-text-subtle); }
 

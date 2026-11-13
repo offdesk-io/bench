@@ -115,8 +115,8 @@ These hold whatever skill is running.
   on the list is close.
 - **A new task never lands in Doing unless the owner said they are doing it.** Doing is a
   statement about right now. Filling it on the owner's behalf turns it into a wish list.
-- **Never write a section into `todo.md`.** This week, Quick wins, Big rocks,
-  Dependency chain and Delegate to Claude are worked out by the board from the
+- **Never write a section into `todo.md`.** This week, Quick wins, Big rocks
+  and Dependency chain are worked out by the board from the
   tags. A section in the file is a copy, and a copy has to be maintained by hand
   every session or it starts describing a file that has moved on.
 - **Say plainly when something failed.** An edit that could not be made, a checker

@@ -9,7 +9,7 @@ applied to the wrong card.
 
 A list is a folder under the data root with a `todo.md` in it. A leading dot or
 underscore marks something that is not one (`_test` is a fixture), the same
-rule `agents/plan-agent/paths.py` lists them by.
+rule `agents/bucket-agent/paths.py` lists them by.
 """
 
 import os

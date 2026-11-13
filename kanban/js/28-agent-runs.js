@@ -5,12 +5,12 @@
 
    A task handed over carries its agent's part as sub-tasks (handOver(),
    04-tier-two-the-one-thing.js), and those say whose move it is. They cannot
-   say whether the Plan agent has started, is stuck or failed: an agent never
+   say whether its agent has started, is stuck or failed: an agent never
    writes todo.md. The agents keep that in data/<dataset>/agent-runs.json
    (core/agent_runs.py), one record per sub-task, and the board reads it from
    /agent-runs.json.
 
-   The line is "Plan agent · waiting for you · 02:05": whose part the task is at,
+   The line is "Personal family agent · waiting for you · 02:05": whose part the task is at,
    what it is doing, and when that last changed. Worked out from the sub-tasks
    first and the record second, so a task whose run the board has never heard of
    still reads "queued" rather than nothing.
@@ -20,8 +20,8 @@
 let agentRuns = {};
 let agentRunsSig = '';
 
-/* A run marked running for longer than this died without saying so. Both
-   agents stop a task well inside it (20 minutes for the Implement agent). */
+/* A run marked running for longer than this died without saying so. The
+   bucket agents stop a task well inside it. */
 const RUN_STALE_MS = 3 * 60 * 60 * 1000;
 
 async function loadAgentRuns(){
@@ -44,6 +44,11 @@ async function loadAgentRuns(){
 loadAgentRuns();
 setInterval(() => { if (!document.hidden) loadAgentRuns(); }, 60 * 1000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) loadAgentRuns(); });
+
+/* "starts when assigned" or "starts in the board's hours". */
+function bucketAgentStartWords(a){
+  return a.start === 'scheduled' ? "starts in this board's hours" : 'starts when assigned';
+}
 
 function agentRunFor(sub){
   return (sub && sub.stableId && agentRuns[sub.stableId]) || null;
@@ -103,26 +108,38 @@ function agentRunStatus(t){
       return Object.assign(base, { tone: 'failed', failed: true,
         text: who + ' · failed · ' + runWhen(rec.at),
         title: st === 'stale' ? 'It started and never finished.' : (rec.why || 'The run failed.') });
+    const ba = bucketAgentNamed(who);
+    if (ba && !ba.ready && st !== 'running')
+      return Object.assign(base, { tone: 'failed', text: who + ' · not set up',
+        title: 'Its brief still needs ' + (bucketAgentMissingText(ba) || 'filling in') + '.' });
     if (st === 'queued')
       return Object.assign(base, { tone: 'queued',
-        text: who + ' · retrying ' + (who === 'Plan agent' ? 'tonight' : 'on the next /do'),
+        text: who + ' · retrying' + (ba ? (ba.start === 'scheduled' ? " in this board's hours" : ' shortly') : ''),
         title: 'You asked for it to be tried again at ' + runWhen(rec.retry || rec.at) });
     if (st === 'done')
       return Object.assign(base, { tone: 'queued', text: who + ' · finished · ' + runWhen(rec.at),
         title: 'Finished. The board ticks the sub-task when it next drains what the agent asked for.' });
-    return Object.assign(base, { tone: 'queued',
-      text: who + ' · queued' + (who === 'Plan agent' ? ' for tonight' : ''),
-      title: who === 'Plan agent' ? 'Not started. The Plan agent works overnight.'
-        : 'Not started. The Implement agent takes it on its next run, or through /do.' });
+    if (ba) {
+      const waits = ba.start === 'scheduled' && !bucketAgentInHours();
+      return Object.assign(base, { tone: 'queued',
+        text: who + ' · ' + (waits ? "outside this board's hours" : 'queued, ' + bucketAgentStartWords(ba)),
+        title: waits ? 'Not started. It starts in the hours set for this board.'
+          : 'Not started. ' + (ba.start === 'scheduled' ? 'It starts in the next of its hours.' : 'It starts as soon as a task is assigned to it.') });
+    }
+    /* A name no bucket of this list goes by, such as a handover from before
+       bucket agents that the PA has not moved over yet: nothing will pick it up. */
+    return Object.assign(base, { tone: 'queued', text: who + ' · queued',
+      title: 'Not started. No bucket agent of this list goes by that name.' });
   }
   /* The owner's review. The agent named is the one whose work it is. */
   const prev = hs.slice(0, at).reverse().find(x => x.kind === 'plan' || x.kind === 'implement');
-  const who = (prev && agentOf(prev.step.to)) || (cur.kind === 'plan-review' ? 'Plan agent' : 'Implement agent');
+  const who = (prev && agentOf(prev.step.to)) || 'Its agent';
   const rec = prev && agentRunFor(prev.step);
   const when = rec ? runWhen(rec.at) : '';
   const decide = rec && rec.label === 'needs a decision';
+  const waitFor = cur.kind === 'plan-review' ? 'waiting for you to review the plan' : 'waiting for you to review the work';
   return { sub: cur.step.stableId, agent: who, tone: 'you',
-    text: who + ' · ' + (decide ? 'needs a decision from you' : 'waiting for you') + (when ? ' · ' + when : ''),
+    text: who + ' · ' + (decide ? 'needs a decision from you' : waitFor) + (when ? ' · ' + when : ''),
     title: cur.kind === 'plan-review' ? 'The plan is written and waits for your review.'
       : 'The work is done and waits for your review.' };
 }
@@ -130,15 +147,14 @@ function agentRunStatus(t){
 /* =========================================================================
    A failed run, and the three ways out of it.
 
-   A run that errors or gives up shows as "Implement agent · failed · 02:05" on
+   A run that errors or gives up shows as "Personal family agent · failed · 02:05" on
    the card, and the companion puts up a banner for it (core/agent_runs.py
    fail(), failures only). Opening the task shows the same line with three
    buttons:
 
      Read the log   the run's own error output, in a sheet
-     Retry          the same run again: tonight for the Plan agent, on the next
-                    /do (or its next unattended run) for the Implement agent.
-                    The agents fold the retry into the item's fingerprint, so a
+     Retry          the same run again, when its bucket next starts work.
+                    The runner folds the retry into the item's fingerprint, so a
                     run the shared runner had set aside after failing goes again.
      Take it back   the agent comes off every open step of the handover, and off
                     the task, so the task is the owner's again.
@@ -158,9 +174,7 @@ function runBlockHTML(t, st){
       '<button type="button" class="btn small" data-run="retry"' + ro + '>Retry</button>' +
       '<button type="button" class="btn small reject" data-run="takeback"' + ro + '>Take it back</button>' +
     '</div>' +
-    '<span class="help">' + esc(st.agent === 'Plan agent'
-      ? 'Retry runs it again tonight. Take it back makes the task yours.'
-      : 'Retry runs it again on the next /do. Take it back makes the task yours.') + '</span>';
+    '<span class="help">Retry asks its agent to try again. Take it back makes the task yours.</span>';
   return '<div class="field runblock"><span>Agent</span>' + runLineHTML(st) + btns + '</div>';
 }
 
@@ -217,7 +231,7 @@ async function retryRun(sub, t){
     return;
   }
   const st = agentRunStatus(t);
-  showToast(st && st.agent === 'Implement agent' ? 'It will run again on the next /do.' : 'It will run again tonight.', 'good');
+  showToast('Its agent will try again.', 'good');
   refreshView();
   if (state.openTask) openDrawer(state.openTask);
 }
@@ -267,10 +281,10 @@ function mountSubRun(t, step){
    The activity feed: the brief, the plan, the output, and a reply.
 
    On the panel of each sub-task a handover lays out. Read top to bottom it is
-   the task's agent history: what the owner asked for, what the Plan agent wrote and
-   when, each time the owner sent it back, what the Implement agent produced, and
-   whether the owner approved each. What the Implement agent produced is drawn by
-   kind (core/agent_runs.py, `output`):
+   the task's agent history: what the owner asked for, what its agent planned and
+   when, each time the owner sent it back, what the work produced, and whether
+   the owner approved each. What the work produced is drawn by kind
+   (core/agent_runs.py, `output`):
 
      files     links that open the task's project folder in the drawer
      drafts    a `.draft.md` message shown in full, with Copy
@@ -369,7 +383,7 @@ function activityFeedHTML(t){
 
   const agentEntry = (step, verb) => {
     if (!step) return;
-    const who = agentOf(step.to) || (step === plan ? 'Plan agent' : 'Implement agent');
+    const who = agentOf(step.to) || 'Its agent';
     const rec = agentRunFor(step);
     const st = runState(rec);
     const when = rec && rec.at ? ' · ' + esc(runWhen(rec.at)) : '';

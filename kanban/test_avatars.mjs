@@ -25,7 +25,7 @@ const check = (name, pass, detail = '') => {
 }
 
 const chrome = spawn(CHROME_BIN, [
-  '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
+  '--headless=new', '--mute-audio', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-avatars-test-profile'}`, '--window-size=1400,1000',
   `http://127.0.0.1:${BOARD}/kanban/index.html`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -151,19 +151,26 @@ try {
   }
   check('the Delegate to field shows no avatar while it is set to a person', await evalJS(`
     !document.querySelector('#f-to-dd .tenon-dropdown__button .avatar')`))
+  /* The agent Delegate to offers is the bucket's own. */
+  await evalJS(`(() => {
+    bucketAgentData = { list: state.dataset || '', buckets: [{ bucket: 'b', name: 'Test b agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] }],
+      columns: { [locate(state.openTask).bucket.name]: 'b' } };
+    openDrawer(state.openTask);
+  })()`)
+  await wait(150)
   await evalJS(`document.querySelector('#f-to-dd .tenon-dropdown__button').click()`)
   check('each agent in the Delegate to dropdown carries its avatar', await evalJS(`(() => {
-    const d = document.createElement('div'); d.innerHTML = avatarSvg('Plan agent', 18);
-    const svg = document.querySelector('#f-to-dd [data-value="Plan agent"] svg');
+    const d = document.createElement('div'); d.innerHTML = avatarSvg('Test b agent', 18);
+    const svg = document.querySelector('#f-to-dd [data-value="Test b agent"] svg');
     return !!svg && svg.outerHTML === d.firstElementChild.outerHTML &&
       !document.querySelector('#f-to-dd [data-value=""] svg');
   })()`))
   await evalJS(`document.querySelector('#f-to-dd .tenon-dropdown__button').click()`)
-  await pick('Plan agent')
+  await pick('Test b agent')
   check('choosing an agent draws its avatar on the field', await evalJS(`(() => {
     const svg = document.querySelector('#f-to-dd .tenon-dropdown__button svg');
-    const d = document.createElement('div'); d.innerHTML = avatarSvg('Plan agent', 18);
-    return !!svg && svg.outerHTML === d.firstElementChild.outerHTML && document.querySelector('#f-to').value === 'Plan agent';
+    const d = document.createElement('div'); d.innerHTML = avatarSvg('Test b agent', 18);
+    return !!svg && svg.outerHTML === d.firstElementChild.outerHTML && document.querySelector('#f-to').value === 'Test b agent';
   })()`))
   await pick('')
   check('and choosing Nobody again clears it, without closing the drawer', await evalJS(`

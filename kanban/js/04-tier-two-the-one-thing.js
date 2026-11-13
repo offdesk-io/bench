@@ -442,74 +442,116 @@ function locate(id){
   }
   return null;
 }
-/* ---- Handing a task to an agent, and the two reviews that follow ----
-   Handing a task over is the owner's act, and it becomes sub-tasks on the card rather than
-   a column of its own. To the Plan agent it is four, each blocked by the one
-   before: Plan (Plan agent), Review the plan (the owner), Implement (Implement agent),
-   Review the work (the owner). Straight to the Implement agent, because the task
-   already says how it is to be done, it is the last two. The board mints the
-   slugs from the task's id and the step (`ab12cd-plan`, `ab12cd-plan-review`,
+/* ---- The bucket agents ----
+   Each bucket has one agent, defined in its brief (core/bucket_agents.py).
+   /api/bucket-agents says, per bucket, its name ("Personal family agent"), its
+   mode (plan-first or free-rein) and whether the brief is filled in enough to
+   run on (`ready`, and `missing` when it is not). `columns` maps the board's
+   column names to their bucket, since a column's name and its bucket's folder
+   are not always the same word. Loaded with each list; empty where there is no
+   server, and then nothing can be handed over.
+
+   agentOf() in core/todo.js reads any `[to::]` ending in " agent" as an agent,
+   which is what a tick, a card's face and the Delegate to filter ask it. */
+const NO_BUCKET_AGENTS = { list: null, buckets: [], columns: {}, hours: [], on: true };
+let bucketAgentData = NO_BUCKET_AGENTS;
+let bucketAgentLoad = null, bucketAgentLoadList = null, bucketAgentSeq = 0;
+/* The data, only while it is the current list's. A list switch leaves the old
+   list's buckets behind until the new answer lands, and they are never used. */
+function bucketAgentsNow(){
+  return bucketAgentData.list === (state.dataset || '') ? bucketAgentData : NO_BUCKET_AGENTS;
+}
+/* Each load takes a number, and a response is kept only while it is still the
+   newest load and the board is still on the list it asked about, so a slow
+   answer cannot overwrite a newer one (a brief saved meanwhile) or another
+   list's. */
+function loadBucketAgents(){
+  const list = state.dataset || '';
+  const seq = ++bucketAgentSeq;
+  bucketAgentLoadList = list;
+  bucketAgentLoad = (async () => {
+    let got = null;
+    try { got = await getJSON('/api/bucket-agents?list=' + encodeURIComponent(list)); } catch (err) { got = null; }
+    /* The board's switch and hours come from the runner's own state, through
+       the agents engine; best effort, and absent in the demo build. */
+    let on = true, hours = [];
+    try {
+      const st = await getJSON('/agents-api/state.json');
+      const ag = ((st && st.agents) || []).find(a => a.id === 'bucket-agent');
+      const tg = ag && (ag.targets || []).find(x => x.id === list);
+      if (tg) { on = !!tg.on; hours = tg.hours || []; }
+    } catch (err) { /* keep the defaults */ }
+    if (seq !== bucketAgentSeq || list !== (state.dataset || '')) return;
+    const had = bucketAgentsNow().buckets.length;
+    bucketAgentData = { list, buckets: (got && got.buckets) || [], columns: (got && got.columns) || {}, hours, on };
+    /* Only a redraw when something on screen can have changed. */
+    if (state.doc && (had || bucketAgentData.buckets.length)) refreshView();
+  })();
+  return bucketAgentLoad;
+}
+/* Resolves once the list's bucket agents have been asked for, so a tick that
+   names one is not read before the names are known. */
+async function bucketAgentsLoaded(){
+  if (!bucketAgentLoad || bucketAgentLoadList !== (state.dataset || '')) await loadBucketAgents();
+  else await bucketAgentLoad;
+}
+function bucketAgentNamed(name){
+  const v = String(name || '').trim().toLowerCase();
+  return v ? bucketAgentsNow().buckets.find(b => String(b.name).toLowerCase() === v) || null : null;
+}
+/* The agent of the bucket a column belongs to, or null. */
+function bucketAgentOfColumn(columnName){
+  const data = bucketAgentsNow();
+  const bucket = data.columns[columnName] || columnName;
+  return data.buckets.find(b => b.bucket === bucket) || null;
+}
+function bucketAgentOfTask(t){
+  const loc = t && locate(t.id);
+  return loc ? bucketAgentOfColumn(loc.bucket.name) : null;
+}
+/* What is wrong with an agent that is not ready, in the owner's words. */
+const BUCKET_AGENT_MISSING = {
+  marker: 'the NOT FILLED IN YET line is still in the brief', mode: 'how it works (plan first or free rein)',
+  start: 'a valid start', purpose: 'what it is for', processes: 'its processes', guidelines: 'its guidelines',
+  may_touch: 'what it may touch', never_touch: 'what it must never touch', good: 'what good looks like'
+};
+function bucketAgentMissingText(a){
+  return (a.missing || []).map(m => BUCKET_AGENT_MISSING[m] || m).join(', ');
+}
+/* Whether a scheduled bucket agent may start now: the board's agents are on
+   and this hour is one of its hours. */
+function bucketAgentInHours(){
+  const data = bucketAgentsNow();
+  return data.on !== false && data.hours.indexOf(new Date().getHours()) > -1;
+}
+/* ---- Handing a task to its bucket's agent, and the two reviews that follow ----
+   Handing a task over is the owner's act, and it becomes sub-tasks on the card
+   rather than a column of its own. A plan-first bucket's agent gets four, each
+   blocked by the one before: Plan (the agent), Review the plan (the owner),
+   Implement (the agent), Review the work (the owner). A free-rein one goes
+   straight to the work, so it gets the last two. The board mints the slugs
+   from the task's id and the step (`ab12cd-plan`, `ab12cd-plan-review`,
    `ab12cd-implement`, `ab12cd-work-review`) so they are unique across the file
    and readable, and gives every sub-task an id of its own for an agent to name
-   when it asks for a tick. The card moves to Doing if it was in To do or Backlog.
-   `[to::]` on the task itself records who has it. */
+   when it asks for a tick. The card moves to Doing if it was in To do or
+   Backlog. `[to::]` on the task itself records who has it. A bucket whose
+   agent is not ready takes nothing. */
 const HANDOVER_STEPS = {
-  'plan':        { title: 'Plan',            to: 'Plan agent' },
+  'plan':        { title: 'Plan' },
   'plan-review': { title: 'Review the plan', to: OWNER_NAME },
-  'implement':   { title: 'Implement',       to: 'Implement agent' },
+  'implement':   { title: 'Implement' },
   'work-review': { title: 'Review the work', to: OWNER_NAME }
 };
-/* ---- How much of an agent's work waits on the owner: its handover level ----
-   Set per agent, per list, on the agent's card in the Agents tab.
-     off         the agent is not offered under Delegate to and takes nothing.
-     plan-first  the four sub-tasks above: the owner reads and approves the plan
-                 before the work starts. The Plan agent's default.
-     just-do-it  the same four, but Review the plan carries a `Handover: just
-                 do it` note, and when the plan lands the board ticks that
-                 review for the owner (drainTickQueue(), 10-reference-sections.js),
-                 so the work goes on to Implement and the owner meets it at Review the
-                 work, with the plan still there to read. A plan that folded,
-                 asking the owner something, still waits for the owner.
-   The Implement agent has no plan of its own, so it is just do it or off.
-   Read at the moment of handover and written onto the card, so changing the
-   level later leaves the tasks already handed over as they were. Kept in
-   localStorage like the drawer's width: it is how the owner likes to work with an
-   agent, not a fact about any task. */
-const HANDOVER_LEVELS = {
-  'Plan agent':      ['plan-first', 'just-do-it', 'off'],
-  'Implement agent': ['just-do-it', 'off']
-};
-const HANDOVER_LEVEL_LABEL = { 'plan-first': 'Plan first', 'just-do-it': 'Just do it', 'off': 'Off' };
-const JUST_DO_IT_NOTE = '- Handover: just do it';
-function handoverLevelsKey(){ return 'bench-handover:' + (state.dataset || ''); }
-function handoverLevels(){
-  try { const got = JSON.parse(localStorage.getItem(handoverLevelsKey()) || '{}'); return got && typeof got === 'object' ? got : {}; }
-  catch (err) { return {}; }
-}
-function handoverLevel(agent){
-  const allowed = HANDOVER_LEVELS[agentOf(agent)];
-  if (!allowed) return '';
-  const saved = handoverLevels()[agentOf(agent)];
-  return allowed.indexOf(saved) > -1 ? saved : allowed[0];
-}
-function setHandoverLevel(agent, level){
-  const allowed = HANDOVER_LEVELS[agentOf(agent)];
-  if (!allowed || allowed.indexOf(level) < 0) return false;
-  const all = handoverLevels();
-  all[agentOf(agent)] = level;
-  try { localStorage.setItem(handoverLevelsKey(), JSON.stringify(all)); } catch (err) { return false; }
-  return true;
-}
-/* Whether a Review the plan sub-task was laid out to approve itself. */
-function justDoIt(t, line){
-  return stepNoteText(t, line).split('\n').some(l => l.trim().toLowerCase() === JUST_DO_IT_NOTE.toLowerCase());
+
+function handOver(t, agent){
+  const a = bucketAgentNamed(agent);
+  if (state.locked || !a || !a.ready) return false;
+  return layOutHandover(t, a.name, a.mode === 'plan-first'
+    ? ['plan', 'plan-review', 'implement', 'work-review']
+    : ['implement', 'work-review']);
 }
 
-function handOver(t, agent, level){
-  if (state.locked || !agentOf(agent)) return false;
-  agent = agentOf(agent);
-  level = level || handoverLevel(agent);
-  if (level === 'off') return false;
+function layOutHandover(t, agent, kinds){
   t.to = agent;
   t.dirty = true;
   /* Already laid out when a sub-task carries the slug a handover makes. An
@@ -519,21 +561,16 @@ function handOver(t, agent, level){
   if (subSteps(t).some(s => agentOf(s.to) && made.test(s.slug))) return false;
   const taken = idsInDoc(state.doc);
   if (!t.stableId) { t.stableId = mintId(taken); taken.add(t.stableId); }
-  const kinds = agent === 'Plan agent'
-    ? ['plan', 'plan-review', 'implement', 'work-review']
-    : ['implement', 'work-review'];
   const existing = subSteps(t);
   const indent = existing.length ? existing[0].indent : '  ';
   let before = '';
   kinds.forEach(kind => {
     const id = mintId(taken); taken.add(id);
     const slug = t.stableId + '-' + kind;
-    const f = { done: false, bold: false, title: HANDOVER_STEPS[kind].title, to: HANDOVER_STEPS[kind].to,
+    const to = HANDOVER_STEPS[kind].to || agent;
+    const f = { done: false, bold: false, title: HANDOVER_STEPS[kind].title, to,
                 slug, blockedBy: before ? [before] : [], stableId: id, body: [], dirty: true, extra: [] };
     t.body.push(indent + serializeTask(f)[0]);
-    /* Written as the review's own note, the way setStepNoteText() indents one,
-       and not through it: that marks an undo point half way through a handover. */
-    if (kind === 'plan-review' && level === 'just-do-it') t.body.push(indent + '  ' + JUST_DO_IT_NOTE);
     before = slug;
   });
   const loc = locate(t.id);
@@ -588,7 +625,7 @@ function sendBack(t, line, why){
     const now = stepNoteText(t, prev.line);
     setStepNoteText(t, prev.line, (now ? now + '\n' : '') + '- feedback: ' + said.replace(/\n+/g, ' '));
   }
-  if (agentOf(back.to) === 'Implement agent') moveCardTo(t, DOING_TIER);
+  if (/-implement$/.test(back.slug || '')) moveCardTo(t, DOING_TIER);
   markDirty();
   return true;
 }

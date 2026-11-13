@@ -8,13 +8,13 @@ whether or not the board is running. This file stays so that every caller
 that reaches it by path, inside Bench and out, keeps working with the same
 arguments:
 
-    python3 companion/notify.py "Plan agent" "3 plans written, 2 skipped"
-    python3 companion/notify.py --view plans "Plan agent" "3 plans waiting"
+    python3 companion/notify.py "Bucket agents" "3 plans written, 2 skipped"
+    python3 companion/notify.py --view plans "Bucket agents" "3 plans waiting"
     python3 companion/notify.py --task ds-audit "Due today" "The audit is owed"
     python3 companion/notify.py --dataset _test "Title" "Body"
 
     sys.path.insert(0, ".../companion"); import notify
-    notify.queue("Plan agent", "3 plans written", view="plans")
+    notify.queue("Bucket agents", "3 plans written", view="plans")
 
 What it adds is Bench's: no dataset means the board on screen
 (data/.current), and the queue for a board is the one the board drains,

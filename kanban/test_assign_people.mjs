@@ -32,7 +32,7 @@ const until = async (fn, ms = 8000) => {
 }
 
 const chrome = spawn(CHROME_BIN, [
-  '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
+  '--headless=new', '--mute-audio', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-merge-test-profile'}`, '--window-size=1400,1000',
   `${BASE}/kanban/index.html`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -115,10 +115,12 @@ try {
   check('on the Mac a list with people in it round-trips unchanged', macTrip)
   await evalJS(`loadBoardPeople()`)
   check('the Mac board asks for no people', await evalJS(`state.boardPeople.length === 0`))
+  await evalJS(`bucketAgentData = { list: state.dataset || '', buckets: [{ bucket: 'b', name: 'Test b agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] }],
+    columns: { [locate(findTaskByKey('ap0005').id).bucket.name]: 'b' } }`)
   const macPick = await evalJS(`(() => { openDrawer(findTaskByKey('ap0005').id);
     const o = PICK_SPECS['f-to'].options.map(o => o.value); closeDrawer(); return o; })()`)
   check('on the Mac Delegate to offers no board people',
-    !macPick.some(v => /@/.test(v)) && macPick.includes('Plan agent'), JSON.stringify(macPick))
+    !macPick.some(v => /@/.test(v)) && macPick.includes('Test b agent'), JSON.stringify(macPick))
 
   // --- signed in -------------------------------------------------------------------
   await evalJS(`(async () => {
@@ -127,6 +129,10 @@ try {
     renderView();
   })()`)
   check('signed in, the board\'s people load', await evalJS(`state.boardPeople.length === 5`))
+  // A load of the real (empty) list can land after the Mac case; wait for it, then set the data again.
+  await evalJS(`(async () => { await bucketAgentLoad;
+    bucketAgentData = { list: state.dataset || '', buckets: [{ bucket: 'b', name: 'Test b agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] }],
+      columns: { [locate(findTaskByKey('ap0001').id).bucket.name]: 'b' } }; })()`)
   const pick = await evalJS(`(() => { openDrawer(findTaskByKey('ap0001').id);
     const o = PICK_SPECS['f-to'].options; closeDrawer();
     return o.map(x => ({ v: x.value, l: x.label, g: x.group || '', i: x.iconHtml || '' })); })()`)
@@ -151,7 +157,7 @@ try {
   check('and nobody outside the board is offered',
     pick.filter(o => /@/.test(o.v)).map(o => o.v).sort().join() ===
       'ana@example.com,carla@example.com,jerome@example.com,tiagopedras+claude@gmail.com')
-  const agent = pick.find(o => o.v === 'Plan agent')
+  const agent = pick.find(o => o.v === 'Test b agent')
   check('agents keep their square faces', !!agent && !/person/.test(agent.i) && /<rect|<path/.test(agent.i))
 
   const card = title => evalJS(`(() => { const el = Array.from(document.querySelectorAll('#board .tenon-card')).find(c => c.textContent.includes(${JSON.stringify(title)})); return el ? el.innerHTML : ''; })()`)

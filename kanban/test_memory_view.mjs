@@ -23,7 +23,7 @@ const check = (name, pass, detail = '') => {
 }
 
 const chrome = spawn(CHROME_BIN, [
-  '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
+  '--headless=new', '--mute-audio', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-memory-test-profile'}`, '--window-size=1400,1000',
   `http://127.0.0.1:${BOARD}/kanban/index.html#settings/memory`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -183,6 +183,18 @@ try {
   await wait(600)
   check('a reload reads it back from context.md', await evalJS(`/Ana is away until Friday/.test(${$q('[data-mem=context]')}.textContent)`))
 
+  // The first Context save drops the old section and nothing else: with the
+  // section ahead of the first bucket, the blank line before that heading stays.
+  const keptBlank = await evalJS(`(() => {
+    const keep = state.doc, text = '# Title\\n\\nIntro.\\n\\n## Context\\n\\nAna is away.\\n\\n## 1. Tasks\\n\\n### To do\\n\\n- [ ] One\\n';
+    state.doc = parseDoc(text);
+    memRemoveContextSection();
+    const out = serializeDoc(state.doc);
+    state.doc = keep;
+    return out === '# Title\\n\\nIntro.\\n\\n## 1. Tasks\\n\\n### To do\\n\\n- [ ] One\\n' ? 'ok' : out;
+  })()`)
+  check('a Context save leaves the blank line before the first bucket', keptBlank === 'ok', JSON.stringify(keptBlank))
+
   // --- panels, no index ----------------------------------------------------
   await evalJS(`state.locked = true; renderMemoryView()`)
   await wait(800)
@@ -261,7 +273,42 @@ try {
   await evalJS(`state.locked = true; renderMemoryView()`)
   await wait(600)
   check('a locked tab has no Edit on Context', await evalJS(`!${$q('[data-mem=context] [data-mem-edit]')} && /read-only/.test(${$q('[data-mem=context]')}.textContent)`))
+  check('a locked tab has no Edit on Company, Team or any brief', await evalJS(`document.querySelectorAll('#memView [data-mem-edit]').length === 0`))
+  check('and each says the tab is read-only', await evalJS(`['about', 'people', 'buckets'].every(k => /read-only/.test(document.querySelector('[data-mem=' + k + ']').textContent))`))
+  await evalJS(`window.__puts = []; window.__put = putJSON; putJSON = (u, d) => { window.__puts.push(u); return window.__put(u, d) }`)
+  await evalJS(`memStartEdit('about'); memStartEdit('people'); memStartEdit('bucket:' + memData.buckets[0].heading)`)
+  check('a locked tab opens no form', await evalJS(`!document.querySelector('#memView textarea.memarea[data-mem-about]') && !document.querySelector('[data-mem-save]') && memEditing === null`))
+  await evalJS(`memEditing = 'about'; memSave('about'); memSave('people'); memSave('context')`)
+  await wait(400)
+  check('and sends no PUT', await evalJS(`window.__puts.length === 0`), await evalJS(`JSON.stringify(window.__puts)`))
+  await evalJS(`putJSON = window.__put; memEditing = null`)
   await evalJS(`state.locked = false`)
+
+  // --- an open form keeps what was typed through a redraw -------------------
+  await evalJS(`renderMemoryView()`)
+  await wait(600)
+  await click('[data-mem-edit=about]')
+  await evalJS(`(() => { const b = ${$q('[data-mem-about]')}; b.value = 'typed, not saved'; b.focus(); b.setSelectionRange(3, 5) })()`)
+  await evalJS(`renderMemoryView()`)
+  await wait(600)
+  check('a re-render keeps the Company form open with the typed text', await evalJS(`!!${$q('[data-mem-about]')} && ${$q('[data-mem-about]')}.value === 'typed, not saved'`))
+  check('and the cursor where it was', await evalJS(`document.activeElement === ${$q('[data-mem-about]')} && document.activeElement.selectionStart === 3 && document.activeElement.selectionEnd === 5`))
+  await evalJS(`memLoad()`)
+  await wait(600)
+  check('a late memory answer keeps it too', await evalJS(`${$q('[data-mem-about]')}.value === 'typed, not saved'`))
+  await click('[data-mem=about] [data-mem-cancel]')
+  await click('[data-mem-edit=people]')
+  await click('[data-mem-add]')
+  await evalJS(`document.querySelector('[data-mem-person=name]').value = 'Typed P.'`)
+  await evalJS(`renderMemoryView()`)
+  await wait(600)
+  check('a Team form keeps its typed row', await evalJS(`document.querySelector('[data-mem-person=name]') && document.querySelector('[data-mem-person=name]').value === 'Typed P.'`))
+  await click('[data-mem=people] [data-mem-cancel]')
+  await evalJS(`state.view = 'board'; renderView()`)
+  await wait(400)
+  await evalJS(`openSettingsPage('memory')`)
+  await wait(500)
+  check('leaving and coming back starts with no form open', await evalJS(`memEditing === null && !document.querySelector('[data-mem-save]')`))
 
   // --- the hash survives a view switch -------------------------------------
   await evalJS(`state.view = 'board'; syncHash(true); renderView()`)

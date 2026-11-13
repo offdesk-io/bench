@@ -1,6 +1,6 @@
 # Written report definitions
 
-The tracked half of what `agents/plan-agent/report.py` renders — the rules
+The tracked half of what `agents/bucket-agent/report.py` renders — the rules
 and the template, the same split `bucket-brief.template.md` beside it makes
 for bucket briefs: this file is what every list's definitions look like,
 `data/<dataset>/reports/_defs/` is what one particular list's actually say,
@@ -51,12 +51,11 @@ calls, not templated.
 ## Running it
 
 ```
-python3 agents/plan-agent/report.py --dry-run
-python3 agents/plan-agent/report.py --def design-system-monthly   one, by hand
-python3 agents/plan-agent/report.py                               every def due this week, for real
+python3 agents/bucket-agent/report.py --dry-run
+python3 agents/bucket-agent/report.py --def design-system-monthly   one, by hand
+python3 agents/bucket-agent/report.py                               every def due this week, for real
 ```
 
-Fires once a week — Sunday night, the same lock `plan.py`'s batch and
-`brief.py`'s briefing pass already share, since all three are `run.sh`'s to
-gate. A definition whose `window_days` has not completed a fresh multiple of
+Checked on every scheduled wake of the bucket agents' runner, under the same
+lock as its runs and `brief.py`'s briefing pass. A definition whose `window_days` has not completed a fresh multiple of
 itself since the last render is skipped; see `report.py`'s own `due()`.

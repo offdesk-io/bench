@@ -2,13 +2,13 @@
 """Where each agent run on a sub-task stands, for the card's status line.
 
 An agent never writes todo.md, so the board cannot learn from the list whether
-the Plan agent has started on a task, failed on it or finished it. The tick
+its agent has started on a task, failed on it or finished it. The tick
 queue says only "finished". This file says the rest, one record per sub-task,
 in `data/<dataset>/agent-runs.json` beside the plans:
 
     {"version": 1, "subs": {
       "aa0001": {"sub": "aa0001", "task": "ab12cd", "title": "Write the brief",
-                 "agent": "Plan agent", "state": "done", "at": "2026-09-27T02:05:11",
+                 "agent": "Personal family agent", "state": "done", "at": "2026-09-27T02:05:11",
                  "started": "2026-09-27T02:03:40", "label": "planned",
                  "summary": "...", "plan": "ab12cd-write-the-brief.md"}}}
 
@@ -24,7 +24,7 @@ in `data/<dataset>/agent-runs.json` beside the plans:
               agents fold it into the item's fingerprint, so a run the shared
               runner had set aside is tried again.
 
-The Implement agent also leaves `output`: what it produced, for the activity
+Work on an Implement sub-task also leaves `output`: what it produced, for the activity
 feed on the sub-task's panel.
 
     {"files": ["brief.md"], "project": "write-the-brief",
@@ -35,10 +35,10 @@ feed on the sub-task's panel.
 
 The agents write it; the board only reads it, except for two requests of the owner's
 through kanban/server.py: retry, and clear (taking the task back). Every write
-is under a lock, read-modify-write of the one record, so the Plan agent, the
-Implement agent and the board never overwrite each other's rows.
+is under a lock, read-modify-write of the one record, so the bucket agents,
+the `do` skill and the board never overwrite each other's rows.
 
-    python3 core/agent_runs.py output aa0003 --by "Implement agent" --file brief.md --project write-the-brief
+    python3 core/agent_runs.py output aa0003 --by "Personal family agent" --file brief.md --project write-the-brief
 """
 
 import argparse
@@ -127,7 +127,7 @@ def start(sub, task, title, agent, path=None, now=None):
 
 
 def finish(sub, label="", summary="", path=None, now=None, **extra):
-    """Landed. `extra` carries `plan` for the Plan agent and `output` for the Implement agent."""
+    """Landed. `extra` carries `plan` for a plan and `output` for the work."""
     def fn(rec):
         rec.update(state="done", at=_now(now), label=label, summary=summary)
         rec.pop("error", None)
@@ -192,7 +192,7 @@ def retry_stamp(sub, path=None):
 
 
 def set_output(sub, output, by="", path=None, now=None):
-    """What the Implement agent produced, merged into what is already there."""
+    """What the work on a sub-task produced, merged into what is already there."""
     def fn(rec):
         got = dict(rec.get("output") or {})
         for k, v in (output or {}).items():
@@ -229,7 +229,7 @@ def main(argv):
     ap = argparse.ArgumentParser(description="Record what an agent produced on a sub-task.")
     ap.add_argument("action", choices=["output", "show"])
     ap.add_argument("sub", nargs="?", default="", help="the six-character id on the sub-task's line")
-    ap.add_argument("--by", default="Implement agent")
+    ap.add_argument("--by", default="", help="the agent the sub-task is assigned to")
     ap.add_argument("--project", default="", help="the project folder the files are in")
     ap.add_argument("--file", action="append", default=[], help="a file written, relative to the project folder")
     ap.add_argument("--branch", default="", help="a git branch the work is on")

@@ -37,7 +37,7 @@ const check = (name, pass, detail = '') => {
 }
 
 const chrome = spawn(CHROME_BIN, [
-  '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
+  '--headless=new', '--mute-audio', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-overview-test-profile'}`, '--window-size=1400,1000',
   `http://127.0.0.1:${BOARD}/kanban/index.html`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -251,7 +251,7 @@ check('and it stays shut across a re-render', await evalJS(`(() => {
 // Cleaned up so this suite leaves no mark on a machine it runs on twice.
 await evalJS(`localStorage.removeItem('bench-overview-closed')`)
 
-/* ---- Quick wins' own sort control, and Delegate to Claude's ranked rows ---- */
+/* ---- Quick wins' own sort control ---- */
 
 check('Quick wins carries its own sort toggle, not the board\'s', await evalJS(`
   !!document.querySelector('.lists.split .tenon-column:nth-child(4) [data-quicksort]')

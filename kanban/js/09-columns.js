@@ -48,7 +48,7 @@ function cleanTierName(name){ return String(name).replace(/\s+/g, ' ').trim(); }
    other reader of the list, so renameTier() refuses them. A label is the way
    round that for the one thing a rename was usually wanted for: the `### To do`
    heading in todo.md stays as it is, and the board draws this instead. Nothing
-   outside the board sees it — the companion, the planning agent and every plan
+   outside the board sees it — the companion, the bucket agents and every plan
    still say "To do" — which is the cost of it being free of the file format.
 
    Every other column can be renamed for real, so it has no use for a label and
@@ -427,7 +427,7 @@ function cardModel(t, opts){
                  pct: Math.round(doneSubs / subs.length * 100) };
   }
 
-  /* Where an agent's run on this task stands, "Plan agent · waiting for you ·
+  /* Where an agent's run on this task stands, "Personal family agent · waiting for you ·
      02:05", worked out in 28-agent-runs.js from the handover's sub-tasks and
      the agents' own run records. Null for a task with no agent part open. */
   const run = typeof agentRunStatus === 'function' ? agentRunStatus(t) : null;

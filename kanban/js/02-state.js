@@ -75,11 +75,11 @@ const state = {
   // column-names.json alongside the document. See tierLabel() in 09-columns.js.
   columnNames: {},
   /* Task key (stableId, falling back to title) -> a generated briefing —
-     direction, what's done, what's still needed — written by the planning
-     agent's own brief.py pass and read by loadBriefings() in
+     direction, what's done, what's still needed — written by the bucket
+     agents' own brief.py pass and read by loadBriefings() in
      20-loading-saving.js. Used as-is, never re-validated against the task's
      current text here: the fingerprint check that decides whether a
-     briefing is stale is agents/plan-agent/brief.py's job, not the
+     briefing is stale is agents/bucket-agent/brief.py's job, not the
      board's, on the same reasoning core/todo.js is the one place the format
      itself gets parsed. Absent for a task never briefed yet, which falls
      back to its own raw notes exactly as it always did. */
@@ -124,8 +124,8 @@ const state = {
   /* "Mine": tasks whose `[to:: ]`, or a sub-task's, names whoever is signed
      in (forMe() in 21-datasets.js). In memory only, like agentFilter. */
   mineFilter: false,
-  /* Whether this list has an agent set up: a bucket with a planner of its own
-     on disk, or a brief with something the person wrote in it. null until
+  /* Whether this list has an agent set up: a bucket whose agent is ready, or
+     a brief with something the person wrote in it. null until
      /bucket-brief.json has answered, and read only through agentsSetUp()
      (27-agents.js), which also counts any task already delegated to an agent. */
   agentsSetup: null,
@@ -442,22 +442,16 @@ const AGENT_CARDS = [
     does: 'Keeps your list. Tell it in the chat what moved and it adds, moves, dates and ticks off tasks, and writes the message or agenda that goes with one.',
     cannot: 'Do the work on a task, or change one you did not mention.',
     needs: 'You to say what changed, in your own words.' },
-  { name: 'Plan agent',
-    does: 'Works out overnight what doing a task would take, and leaves a plan on the task’s card for you to read.',
-    cannot: 'Carry anything out. Nothing in a plan has been done yet.',
-    needs: 'A task delegated to it, and a set-up bucket so it knows how you work there. You approve the plan or send it back with a note.' },
-  { name: 'Implement agent',
-    does: 'Carries out a plan you approved: a write-up, a draft, a prompt, data, a deck or code.',
-    cannot: 'Change your list, send anything on your behalf, or start work you have not agreed. Figma work only runs with you there.',
-    needs: 'An approved plan, or a task that already says exactly how. You review what it made before the card moves on.' }
+  { name: 'Bucket agents',
+    does: 'One agent per bucket, as the bucket’s brief defines it. It plans a task, or does the work, inside that bucket’s own guidelines.',
+    cannot: 'Change your list, send anything on your behalf, merge or push. Figma work only runs with you there.',
+    needs: 'A brief with every section filled in. A plan-first bucket waits for you to approve the plan; you always review the work.' }
 ];
 
-/* Owners and specialists. The PA, the Plan agent and the Implement agent own
-   tasks: one of them is a task's `[to::]`, the way an assignee is. The
-   bucket planners (`data/<dataset>/buckets/<stream>/<dataset>-<stream>-agent.md`) are
-   specialists: one per bucket, brought in when a task in that bucket is
-   planned, or from another bucket when a task crosses two, to give a view or do
-   part of the work. They never own a task, so a task's history is the only
+/* Owners and specialists. The PA and the bucket agents own tasks: one of
+   them is a task's `[to::]`, the way an assignee is. A specialist is brought in
+   from another bucket when a task crosses two, to give a view or do part of
+   the work. It never owns a task, so a task's history is the only
    place they show, one line per call (core/history.py, read through
    /history.json). The shape is PACKAGES/work-streams/CONTRACT.md's "An item's
    history". */
@@ -471,7 +465,7 @@ function specialistName(slug){
   return name.charAt(0).toUpperCase() + name.slice(1) + ' agent';
 }
 
-/* One history event as a line: "Plan agent asked the Work people agent to do
+/* One history event as a line: "Work ds agent asked the Work people agent to do
    part of the work". '' for anything that is not a call, so a kind added later
    is left out rather than drawn wrong. */
 function historyLine(ev){

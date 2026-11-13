@@ -20,7 +20,7 @@ const check = (name, pass, detail = '') => {
 }
 
 const chrome = spawn(CHROME_BIN, [
-  '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
+  '--headless=new', '--mute-audio', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-board-test-profile-runs'}`, '--window-size=1500,1000',
   `http://127.0.0.1:${BOARD}/kanban/index.html`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -62,9 +62,9 @@ for (let i = 0; i < 120 && !(await evalJS(`document.readyState === 'complete' &&
 await new Promise(r => setTimeout(r, 400))
 check('the board loaded', await evalJS(`typeof agentRunStatus === 'function' && typeof renderBoard === 'function'`))
 
-/* Two tasks handed to the Plan agent, one to nobody. handOver() lays out the
+/* Two tasks handed to the People bucket's agent, one to nobody. handOver() lays out the
    sub-tasks, so the test reads their ids back rather than writing them. */
-await evalJS(`(() => {
+await evalJS(`(async () => {
   const real = window.fetch;
   window.__blocked = [];
   window.fetch = (u, o) => {
@@ -90,13 +90,25 @@ await evalJS(`(() => {
     '### To do', '',
     '- [ ] Alpha [impact:: high] [effort:: S]',
     '- [ ] Beta [impact:: low] [effort:: M]',
-    '- [ ] Gamma [impact:: med] [effort:: M] [to:: Plan agent]',
+    '- [ ] Gamma [impact:: med] [effort:: M] [to:: Demo people agent]',
+    '- [ ] Delta [impact:: low] [effort:: S]',
+    '- [ ] Echo [impact:: low] [effort:: S]',
+    '- [ ] Foxtrot [impact:: low] [effort:: S]',
     ''
   ].join('\\n'), 'demo.md', {});
   state.locked = false;
+  await bucketAgentLoad;
   const byTitle = n => allItems().find(x => !x.sub && x.title === n).task;
-  handOver(byTitle('Alpha'), 'Plan agent');
-  handOver(byTitle('Beta'), 'Plan agent');
+  bucketAgentData = { list: state.dataset || '', columns: {}, on: true, hours: [], buckets: [
+    { bucket: 'People', name: 'Demo plan agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] },
+    { bucket: 'People', name: 'Demo sched agent', mode: 'free-rein', start: 'scheduled', ready: true, missing: [] },
+    { bucket: 'People', name: 'Demo broken agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] },
+    { bucket: 'People', name: 'Demo people agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] }] };
+  handOver(byTitle('Alpha'), 'Demo people agent');
+  handOver(byTitle('Beta'), 'Demo people agent');
+  handOver(byTitle('Delta'), 'Demo plan agent');
+  handOver(byTitle('Echo'), 'Demo sched agent');
+  handOver(byTitle('Foxtrot'), 'Demo broken agent');
   window.__t = byTitle;
   window.__sub = (n, kind) => subSteps(byTitle(n)).find(s => s.slug === byTitle(n).stableId + '-' + kind);
   window.__line = n => { const el = document.querySelector('#board .tenon-card[data-id="' + byTitle(n).id + '"] .runline'); return el ? el.textContent : ''; };
@@ -109,7 +121,7 @@ await wait(200)
 /* ---- the status line ---- */
 
 check('a task handed over with no run yet reads queued',
-  await evalJS(`__line('Alpha')`) === 'Plan agent · queued for tonight', await evalJS(`__line('Alpha')`))
+  await evalJS(`__line('Alpha')`) === 'Demo people agent · queued, starts when assigned', await evalJS(`__line('Alpha')`))
 check('a task tagged to an agent with no handover has no line',
   await evalJS(`__line('Gamma')`) === '')
 
@@ -120,23 +132,44 @@ await evalJS(`(() => {
   const a = __sub('Alpha', 'plan').stableId, b = __sub('Beta', 'plan').stableId;
   const soon = new Date(Date.now() - 10 * 60000);
   window.__soon = new Date(soon.getTime() - soon.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
-  __set({ [a]: { sub: a, state: 'running', started: __soon, at: __soon, agent: 'Plan agent' },
-          [b]: { sub: b, state: 'done', at: local, label: 'planned', agent: 'Plan agent' } });
+  __set({ [a]: { sub: a, state: 'running', started: __soon, at: __soon, agent: 'Demo people agent' },
+          [b]: { sub: b, state: 'done', at: local, label: 'planned', agent: 'Demo people agent' } });
 })()`)
 await wait(200)
 check('a run in progress reads working, with when it started',
-  await evalJS(`__line('Alpha') === 'Plan agent · working · since ' + runWhen(__soon)`), await evalJS(`__line('Alpha')`))
+  await evalJS(`__line('Alpha') === 'Demo people agent · working · since ' + runWhen(__soon)`), await evalJS(`__line('Alpha')`))
 check('and is drawn in the running tone', /runline--running/.test(await evalJS(`__tone('Alpha')`)))
 
-/* The board applies the Plan agent's tick; its review is then the owner's. */
+/* The board applies the agent's Plan tick; its review is then the owner's. */
 await evalJS(`(() => {
   const t = __t('Beta'), s = __sub('Beta', 'plan');
   const f = readSub(t, s.line); f.done = true; writeSub(t, s.line, f); refreshView();
 })()`)
 await wait(200)
 check('a written plan reads waiting for you, with when it landed',
-  await evalJS(`__line('Beta')`) === 'Plan agent · waiting for you · 02:05', await evalJS(`__line('Beta')`))
+  await evalJS(`__line('Beta')`) === 'Demo people agent · waiting for you to review the plan · 02:05', await evalJS(`__line('Beta')`))
 check('in the tone that says it is his', /runline--you/.test(await evalJS(`__tone('Beta')`)))
+
+/* ---- the bucket agents' wording ---- */
+check('a plan-first bucket agent with no run yet reads queued, starts when assigned',
+  await evalJS(`__line('Delta')`) === 'Demo plan agent · queued, starts when assigned', await evalJS(`__line('Delta')`))
+check('a scheduled bucket agent outside the board hours reads outside this board\'s hours',
+  await evalJS(`__line('Echo')`) === "Demo sched agent · outside this board's hours", await evalJS(`__line('Echo')`))
+await evalJS(`bucketAgentData.hours = [new Date().getHours()]; refreshView()`)
+await wait(200)
+check('inside its hours the same bucket reads queued, starts in the board\'s hours',
+  await evalJS(`__line('Echo')`) === "Demo sched agent · queued, starts in this board's hours", await evalJS(`__line('Echo')`))
+await evalJS(`bucketAgentData.buckets[2].ready = false; bucketAgentData.buckets[2].missing = ['may_touch']; refreshView()`)
+await wait(200)
+check('a bucket agent whose brief is no longer ready reads not set up',
+  await evalJS(`__line('Foxtrot')`) === 'Demo broken agent · not set up', await evalJS(`__line('Foxtrot')`))
+await evalJS(`(() => {
+  const t = __t('Delta'), s = __sub('Delta', 'plan');
+  const f = readSub(t, s.line); f.done = true; writeSub(t, s.line, f); refreshView();
+})()`)
+await wait(200)
+check('a written plan waits for you to review the plan',
+  await evalJS(`__line('Delta')`) === 'Demo plan agent · waiting for you to review the plan', await evalJS(`__line('Delta')`))
 
 check('a card with no agent part has the same body as before',
   await evalJS(`!document.querySelector('#board .tenon-card[data-id="' + __t('Gamma').id + '"] .tenon-card__body')`))
@@ -146,13 +179,13 @@ check('a card with no agent part has the same body as before',
 await evalJS(`(() => {
   const a = __sub('Alpha', 'plan').stableId;
   const runs = Object.assign({}, window.__runs);
-  runs[a] = { sub: a, state: 'failed', at: __soon, agent: 'Plan agent', why: 'the CLI exited 1',
+  runs[a] = { sub: a, state: 'failed', at: __soon, agent: 'Demo people agent', why: 'the CLI exited 1',
               error: 'Traceback (most recent call last):\\nValueError: nope' };
   __set(runs);
 })()`)
 await wait(200)
 check('a failed run reads failed on the card',
-  await evalJS(`__line('Alpha') === 'Plan agent · failed · ' + runWhen(__soon)`), await evalJS(`__line('Alpha')`))
+  await evalJS(`__line('Alpha') === 'Demo people agent · failed · ' + runWhen(__soon)`), await evalJS(`__line('Alpha')`))
 check('in the error tone', /runline--failed/.test(await evalJS(`__tone('Alpha')`)))
 
 await evalJS(`openDrawer(__t('Alpha').id)`)
@@ -185,7 +218,7 @@ check('Retry asks the server to queue it again', await evalJS(`
   window.__blocked.some(b => b.startsWith('POST /agent-runs'))
 `), await evalJS(`window.__blocked.join(' | ')`))
 check('and the card then says when it goes again',
-  await evalJS(`__line('Alpha')`) === 'Plan agent · retrying tonight', await evalJS(`__line('Alpha')`))
+  await evalJS(`__line('Alpha')`) === 'Demo people agent · retrying shortly', await evalJS(`__line('Alpha')`))
 
 await evalJS(`(() => {
   const a = __sub('Alpha', 'plan').stableId;
@@ -211,7 +244,7 @@ check('and the run record is cleared', await evalJS(`
 await evalJS(`(() => {
   const b = __sub('Beta', 'plan').stableId;
   const runs = Object.assign({}, window.__runs);
-  runs[b] = { sub: b, state: 'done', at: __soon, label: 'planned', agent: 'Plan agent',
+  runs[b] = { sub: b, state: 'done', at: __soon, label: 'planned', agent: 'Demo people agent',
               summary: 'Three steps, one message.', plan: 'bd-beta.md' };
   __set(runs);
   const t = __t('Beta');
@@ -220,7 +253,7 @@ await evalJS(`(() => {
 })()`)
 await wait(300)
 const heads = await evalJS(`[...document.querySelectorAll('#sbody .actfeed .acthead')].map(e => e.textContent).join('|')`)
-check('a review\'s panel carries the feed: the brief, then the plan', heads === 'Brief|Plan agent · wrote the plan · ' + await evalJS(`runWhen(__soon)`), heads)
+check('a review\'s panel carries the feed: the brief, then the plan', heads === 'Brief|Demo people agent · wrote the plan · ' + await evalJS(`runWhen(__soon)`), heads)
 check('the brief is the task\'s own note', await evalJS(`
   /Hire for the role by March/.test(document.querySelector('#sbody .actfeed .actbody').textContent)
 `))
@@ -228,7 +261,7 @@ check('the plan entry can be read from there', await evalJS(`
   document.querySelector('#sbody .actfeed [data-readplan]').dataset.readplan === 'bd-beta.md'
 `))
 check('the reply goes to the agent that last touched it', await evalJS(`
-  document.querySelector('#act-send').textContent === 'Send to Plan agent'
+  document.querySelector('#act-send').textContent === 'Send to Demo people agent'
 `))
 
 await evalJS(`(() => {
@@ -250,7 +283,7 @@ await evalJS(`(() => {
   ['plan', 'plan-review'].forEach(k => { const s = __sub('Beta', k); const f = readSub(t, s.line); f.done = true; writeSub(t, s.line, f); });
   const i = __sub('Beta', 'implement').stableId;
   const runs = Object.assign({}, window.__runs);
-  runs[i] = { sub: i, state: 'done', at: __soon, label: 'done', agent: 'Implement agent', summary: 'Wrote the brief.',
+  runs[i] = { sub: i, state: 'done', at: __soon, label: 'done', agent: 'Demo people agent', summary: 'Wrote the brief.',
     output: { files: ['brief.md', 'note.draft.md'], project: 'beta', drafts: [{ name: 'note.draft.md', text: 'Hey Sam' }],
               figma: 'https://www.figma.com/design/ABC123/Beta-screens?node-id=1-2',
               branch: { name: 'implement/2026-09-27', commits: 2, repo: '/x/tenon', summary: 'Tokens renamed.' } } };
@@ -270,9 +303,9 @@ check('a branch shows its name and commit count', await evalJS(`
 check('a Figma link opens in the desktop app', await evalJS(`
   document.querySelector('#sbody .actfigma').getAttribute('href')
 `) === 'figma://file/ABC123/Beta-screens?node-id=1-2')
-check('the reply now goes to the Implement agent', await evalJS(`
-  document.querySelector('#act-send').textContent === 'Send to Implement agent'
-`))
+check('the reply on the work goes to the same bucket agent', await evalJS(`
+  document.querySelector('#act-send').textContent === 'Send to Demo people agent'
+`), await evalJS(`document.querySelector('#act-send')?.textContent + '/' + subSteps(__t('Beta')).map(s=>s.clean+':'+s.to+':'+s.done).join(',')`))
 await evalJS(`closeSubPanel()`)
 
 /* ---- nothing written ---- */

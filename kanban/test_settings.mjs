@@ -80,7 +80,7 @@ try {
   check('nothing was written by the refused PUTs', !existsSync(join(data, 'profile.md')) && !existsSync(join(data, 'settings.json')))
 
   chrome = spawn(CHROME_BIN, [
-    '--headless=new', `--remote-debugging-port=${CDP}`, '--no-first-run',
+    '--headless=new', '--mute-audio', `--remote-debugging-port=${CDP}`, '--no-first-run',
     `--user-data-dir=${process.env.CHROME_PROFILE ? process.env.CHROME_PROFILE + 'settings' : join(root, 'chrome')}`,
     '--window-size=1400,1000', `${base}/kanban/index.html`,
   ], { stdio: 'ignore' })
@@ -131,8 +131,7 @@ try {
   await wait(3000)
   check('onboarding shows with no profile', await shown())
   check('onboarding mentions scripts/install.sh', await evalJS(`settingsRoot().textContent.includes('scripts/install.sh')`))
-  check('default model starts on Sonnet', await evalJS(`settingsRoot().querySelector('[data-model=default]').value`) === 'sonnet')
-  check('brief model starts on Haiku', await evalJS(`settingsRoot().querySelector('[data-model=brief]').value`) === 'haiku')
+  check('onboarding has no agent options: they live on the Agents tab', await evalJS(`!settingsRoot().querySelector('[data-agent-options]') && !settingsRoot().querySelector('[data-model]') && !settingsRoot().querySelector('[data-budget]')`))
 
   // Required: no way out.
   check('onboarding offers no Projects folder', !(await exists('[data-projects]')))
@@ -156,29 +155,9 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await evalJS(`settingsRoot().querySelector('[data-name]').dispatchEvent(new Event('focusout', { bubbles: true }))`)
   check('a missing name shows inline text', await evalJS(`settingsRoot().querySelector('[data-err=name]').textContent`) === 'Add your name.')
 
-  // Agent options: shut by default, and the labels say what they resolve to.
-  check('Agent options starts collapsed', await evalJS(`settingsRoot().querySelector('[data-agent-options]').open`) === false)
-  check('Agent options is titled Agent options', await evalJS(`settingsRoot().querySelector('[data-agent-options] summary').textContent.trim()`) === 'Agent options')
-  check('Use default names Sonnet', await label('[data-model=plan]') === 'Use default (Sonnet)')
-  check('brief with no default names Haiku after Default is cleared', true)
-  await pick('[data-model=default]', 'opus')
-  check('labels follow the Default model', await label('[data-model=implement]') === 'Use default (Opus)' && await label('[data-model=chat]') === 'Use default (Opus)')
-  await pick('[data-model=default]', '')
-  check('with no default, brief falls back to Haiku', await label('[data-model=brief]') === 'Use default (Haiku)')
-  check('with no default, others name Claude Code\'s default', await label('[data-model=plan]') === 'Use default (Claude Code’s default)')
-  check('the Default select names what each tool falls back to', (await label('[data-model=default]')).includes('Claude Code’s default') && (await label('[data-model=default]')).includes('Haiku for briefs'))
-  await pick('[data-model=default]', 'sonnet')
-  check('each agent has a start choice defaulting to scheduled', await evalJS(`settingsRoot().querySelector('[data-start=plan]').value + settingsRoot().querySelector('[data-start=implement]').value`) === 'scheduledscheduled')
-  check('the start choices read as asked', await evalJS(`[...settingsRoot().querySelectorAll('[data-start=plan] option')].map(o => o.textContent).join('|')`) === 'Wait for its scheduled hours|Start straight away')
-  check('each agent shows its avatar beside its name', await evalJS(`[...settingsRoot().querySelectorAll('.agentopts__group h4')].filter(h => /Plan agent|Implement agent|Bucket planners/.test(h.textContent)).every(h => h.querySelector('.avatar svg[width="18"]'))`)
-    && await evalJS(`settingsRoot().querySelectorAll('.agentopts__group h4 .avatar').length`) === 3)
-  check('Plan agent avatar is the one the board draws for it', await evalJS(`(() => { const d = document.createElement('div'); d.innerHTML = agentAvatarHTML('Plan agent', 18); return d.querySelector('svg').innerHTML === settingsRoot().querySelector('.agentopts__group h4 svg').innerHTML })()`))
-  check('the Agents tab line is there', await evalJS(`settingsRoot().textContent.includes('Set each agent’s hours later in the board’s Agents tab.')`))
-  check('chat and brief sit under Other', await evalJS(`[...settingsRoot().querySelectorAll('.agentopts__group')].some(g => g.textContent.startsWith('Other') && g.querySelector('[data-model=chat]') && g.querySelector('[data-model=brief]'))`))
-  await evalJS(`settingsRoot().querySelector('[data-agent-options]').open = true`)
+  check('the Settings form has no Agent options, and no line about the Agents tab', await evalJS(`!settingsRoot().textContent.includes('Agent options') && !settingsRoot().textContent.includes('Set each agent')`))
 
-  await pick('[data-start=plan]', 'now')
-  await fill('Sam', 'PT', '', { default: 'sonnet', plan: 'opus', brief: 'haiku' })
+  await fill('Sam', 'PT', '', {})
   check('Save enables once Name and Country are set', !(await saveDisabled()))
   await press('Save')
   await wait(3500)
@@ -187,8 +166,7 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('profile.md has the Country', /^- Country: PT$/m.test(profile))
   check('profile.md has no Region for a country without any', !/^- Region:/m.test(profile))
   const saved = JSON.parse(readFileSync(join(data, 'settings.json'), 'utf8'))
-  check('settings.json has the models', saved.models.plan === 'opus' && saved.models.default === 'sonnet' && saved.models.brief === 'haiku' && saved.models.chat === null)
-  check('settings.json has when each agent starts', saved.agents.plan.start === 'now' && saved.agents.implement.start === 'scheduled', JSON.stringify(saved.agents))
+  check('settings.json has the welcome\'s starting models', saved.models.plan === null && saved.models.default === 'sonnet' && saved.models.brief === 'haiku' && saved.models.chat === null)
   check('the board knows the new owner without a restart', await evalJS(`OWNER_NAME`) === 'Sam')
   check('onboarding is gone after saving', !(await shown()))
   await reload()
@@ -229,19 +207,14 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('leaving brings the bucket tabs back', await evalJS(tabNames) !== 'memory,settings,agents,backups' && await evalJS(`!document.querySelector('#bucketBar').classList.contains('bucketbar--page')`), await evalJS(tabNames))
   await evalJS(`$('#settingsBtn').click()`)
   await wait(800)
-  check('Settings opens with Agent options collapsed', await evalJS(`settingsRoot().querySelector('[data-agent-options]').open`) === false)
   check('Settings shows the saved name', await evalJS(`settingsRoot().querySelector('[data-name]').value`) === 'Sam')
   check('Settings shows the saved country', await evalJS(`settingsRoot().querySelector('[data-country]').value`) === 'PT')
   check('the Region select is hidden for a country without regions', await evalJS(`settingsRoot().querySelector('[data-region-field]').hidden`) === true)
-  check('Settings shows the saved model', await evalJS(`settingsRoot().querySelector('[data-model=plan]').value`) === 'opus')
-  check('Settings shows the saved start', await evalJS(`settingsRoot().querySelector('[data-start=plan]').value`) === 'now')
-  check('the model list is the server\'s', await evalJS(`[...settingsRoot().querySelectorAll('[data-model=chat] option')].map(o => o.value).join()`) === ',opus,sonnet,haiku')
   await fillRest('', {})
   check('Settings needs a name too', await saveDisabled())
   await fillRest('Sam', {})
 
-  await fill('Alex', 'GB', 'GB-SCT', { plan: '', implement: 'haiku' })
-  await pick('[data-start=plan]', 'scheduled')
+  await fill('Alex', 'GB', 'GB-SCT', {})
   await press('Save')
   await wait(3500)
   const p2 = readFileSync(join(data, 'profile.md'), 'utf8')
@@ -249,7 +222,6 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('Settings round-trips the name', /^- Name: Alex$/m.test(p2))
   check('Settings round-trips the country', /^- Country: GB$/m.test(p2))
   check('Settings round-trips the region', /^- Region: GB-SCT$/m.test(p2))
-  check('Settings round-trips the start', s2.agents.plan.start === 'scheduled')
   await evalJS(`$('#settingsBtn').click()`)
   await wait(800)
   check('Settings reopens on the saved region', await evalJS(`settingsRoot().querySelector('[data-region]').value`) === 'GB-SCT'
@@ -385,7 +357,6 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('PUT with a region from another country is refused', r.status === 400)
   r = await fetch(`${base}/profile-basics.json`).then(x => x.json())
   check('profile-basics reports country and region', r.country === 'GB' && r.region === 'GB-SCT' && !('holidays' in r))
-  check('Bucket planners follow the Plan agent by default', await label('[data-model=planner]') === 'Same as the Plan agent (Use default)' ? false : (await label('[data-model=planner]')).startsWith('Same as the Plan agent ('))
   // A country with no holiday list is still saved, with a note.
   await pick('[data-country]', 'AQ')
   await wait(600)
@@ -394,66 +365,103 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await pick('[data-country]', 'GB')
   await wait(600)
   check('the note goes for a country with a list', await evalJS(`settingsRoot().querySelector('[data-nolist]').hidden`))
-  // The daily budget lives in the fences file, beside whatever else is in it.
+  // Agent options live on the Agents tab, not the general Settings form.
+  check('the general tab has no Agent options', await evalJS(`!document.querySelector('[data-agent-options]') && !settingsRoot().querySelector('[data-model]')`))
+  const openSettingsPageFresh = async () => { await evalJS(`openSettingsPage('settings')`); await wait(500); await openAgents() }
+  const openAgents = async () => { await evalJS(`openSettingsPage('agents')`); await wait(1500) }
+  const A = `document.querySelector('#agentOptions')`
+  const aSet = (sel, v, ev = 'input') => evalJS(`(() => { const b = ${A}.querySelector(${JSON.stringify(sel)}); b.value = ${JSON.stringify(v)}; b.dispatchEvent(new Event('${ev}', { bubbles: true })) })()`)
+  const aSave = () => evalJS(`${A}.querySelector('[data-agent-options-save]').click()`)
+  const aSaveDisabled = () => evalJS(`${A}.querySelector('[data-agent-options-save]').disabled`)
+  const aLabel = sel => evalJS(`${A}.querySelector(${JSON.stringify(sel)} + ' option[value=""]').textContent`)
   mkdirSync(join(data, 'agents'), { recursive: true })
   writeFileSync(join(data, 'agents', 'fences.json'), JSON.stringify({ other: 1 }))
-  await pick('[data-model=planner]', 'haiku')
-  await evalJS(`(() => { const b = settingsRoot().querySelector('[data-budget]'); b.value = '7.5'; b.dispatchEvent(new Event('input', { bubbles: true })) })()`)
-  await evalJS(`(() => { const b = settingsRoot().querySelector('[data-budget]'); b.value = 'lots'; b.dispatchEvent(new Event('input', { bubbles: true })) })()`)
-  check('a budget that is not a number blocks Save', await saveDisabled())
-  await evalJS(`(() => { const b = settingsRoot().querySelector('[data-budget]'); b.value = '7.5'; b.dispatchEvent(new Event('input', { bubbles: true })) })()`)
-  await press('Save')
-  await wait(3500)
+  await openAgents()
+  check('Agent options is on the Agents tab, always open, above the board switch and hours', await evalJS(`(() => { const o = ${A}.querySelector('[data-agent-options]'); const h = document.querySelector('#agentsRoot');
+    return !!o && o.tagName !== 'DETAILS' && !o.querySelector('summary') && !!h && !!(o.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING) })()`))
+  check('titled Agent options, with no "hours later" note', await evalJS(`${A}.querySelector('h2').textContent === 'Agent options' && !document.querySelector('#lists').textContent.includes('Set each agent’s hours later')`))
+  check('the model list is the server\'s', await evalJS(`[...${A}.querySelectorAll('[data-model=chat] option')].map(o => o.value).join()`) === ',opus,sonnet,haiku')
+  check('Use default names Sonnet', await aLabel('[data-model=plan]') === 'Use default (Sonnet)')
+  await aSet('[data-model=default]', 'opus', 'change')
+  check('labels follow the Default model', await aLabel('[data-model=implement]') === 'Use default (Opus)' && await aLabel('[data-model=chat]') === 'Use default (Opus)')
+  await aSet('[data-model=default]', '', 'change')
+  check('with no default, brief falls back to Haiku', await aLabel('[data-model=brief]') === 'Use default (Haiku)')
+  check('with no default, others name Claude Code\'s default', await aLabel('[data-model=plan]') === 'Use default (Claude Code’s default)')
+  check('the Default select names what each tool falls back to', (await aLabel('[data-model=default]')).includes('Claude Code’s default') && (await aLabel('[data-model=default]')).includes('Haiku for briefs'))
+  await aSet('[data-model=default]', 'sonnet', 'change')
+  check('no start choice: when a bucket agent starts is its brief\'s', await evalJS(`!${A}.querySelector('[data-start]')`))
+  check('one Bucket agents group, with its avatar, a model for plans and one for the work', await evalJS(`(() => {
+    const g = [...${A}.querySelectorAll('.agentopts__group')].filter(g => /^Bucket agents/.test(g.querySelector('h4')?.textContent || ''));
+    return g.length === 1 && !!g[0].querySelector('h4 .avatar svg[width="18"]')
+      && !!g[0].querySelector('[data-model=plan]') && !!g[0].querySelector('[data-model=implement]');
+  })()`))
+  check('and no group for the old agents or the planners', await evalJS(`!/Plan agent|Implement agent|Bucket planners/.test(${A}.textContent) && !${A}.querySelector('[data-model=planner]')`))
+  check('chat and brief sit under Other', await evalJS(`[...${A}.querySelectorAll('.agentopts__group')].some(g => g.textContent.startsWith('Other') && g.querySelector('[data-model=chat]') && g.querySelector('[data-model=brief]'))`))
+  // The daily budget lives in the fences file, beside whatever else is in it.
+  await aSet('[data-model=plan]', 'haiku', 'change')
+  await aSet('[data-budget]', 'lots')
+  check('a budget that is not a number blocks Save', await aSaveDisabled())
+  check('and shows its message', await evalJS(`${A}.querySelector('[data-err=budget]').textContent`) === 'Enter an amount in dollars, or leave it empty.')
+  await aSet('[data-budget]', '7.5')
+  await aSave()
+  await wait(2500)
   let fences = JSON.parse(readFileSync(join(data, 'agents', 'fences.json'), 'utf8'))
   check('the daily budget is written to fences.json, keeping other keys', fences.daily_budget === 7.5 && fences.other === 1, JSON.stringify(fences))
-  check('the planner model is saved', JSON.parse(readFileSync(join(data, 'settings.json'), 'utf8')).models.planner === 'haiku')
-  await evalJS(`$('#settingsBtn').click()`)
-  await wait(800)
-  check('Settings reopens on the saved budget', await evalJS(`settingsRoot().querySelector('[data-budget]').value`) === '7.5')
-  await evalJS(`(() => { const b = settingsRoot().querySelector('[data-budget]'); b.value = ''; b.dispatchEvent(new Event('input', { bubbles: true })) })()`)
-  await press('Save')
-  await wait(3500)
+  check('the model for plans is saved, and the others kept', JSON.parse(readFileSync(join(data, 'settings.json'), 'utf8')).models.plan === 'haiku' && JSON.parse(readFileSync(join(data, 'settings.json'), 'utf8')).models.default === 'sonnet')
+  await openSettingsPageFresh()
+  check('Agents reopens on the saved budget', await evalJS(`${A}.querySelector('[data-budget]').value`) === '7.5')
+  await aSet('[data-budget]', '')
+  await aSave()
+  await wait(2500)
   fences = JSON.parse(readFileSync(join(data, 'agents', 'fences.json'), 'utf8'))
   check('an empty budget removes the limit and keeps other keys', !('daily_budget' in fences) && fences.other === 1, JSON.stringify(fences))
   // A daily budget per agent, in the same file under agent_budgets, keyed by runner id.
-  const setAgentBudget = (k, v) => evalJS(`(() => { const b = settingsRoot().querySelector('[data-agent-budget=${k}]'); b.value = ${JSON.stringify(v)}; b.dispatchEvent(new Event('input', { bubbles: true })) })()`)
   writeFileSync(join(data, 'agents', 'fences.json'), JSON.stringify({ other: 1, agent_budgets: { 'someone-else': 9 } }))
-  await evalJS(`$('#settingsBtn').click()`)
-  await wait(800)
-  check('each agent has a budget field and the planners have none',
-    await evalJS(`[...settingsRoot().querySelectorAll('[data-agent-budget]')].map(i => i.dataset.agentBudget).join()`) === 'plan,implement')
-  check('the planners say they spend from the Plan agent’s budget',
-    (await evalJS(`settingsRoot().querySelector('[data-model=planner]').closest('.field').textContent`)).includes('spend from its daily budget'))
-  await setAgentBudget('plan', 'lots')
-  check('an agent budget that is not a number blocks Save', await saveDisabled())
-  await setAgentBudget('plan', '2')
-  await setAgentBudget('implement', '5.5')
-  await evalJS(`(() => { const b = settingsRoot().querySelector('[data-budget]'); b.value = '10'; b.dispatchEvent(new Event('input', { bubbles: true })) })()`)
-  await press('Save')
-  await wait(3500)
+  await openSettingsPageFresh()
+  check('the bucket agents have one budget field between them',
+    await evalJS(`[...${A}.querySelectorAll('[data-agent-budget]')].map(i => i.dataset.agentBudget).join()`) === 'bucket')
+  await aSet('[data-agent-budget=bucket]', 'lots')
+  check('an agent budget that is not a number blocks Save', await aSaveDisabled())
+  check('and shows its message', await evalJS(`${A}.querySelector('[data-err=budget-bucket]').textContent`) === 'Enter an amount in dollars, or leave it empty.')
+  await aSet('[data-agent-budget=bucket]', '5.5')
+  await aSet('[data-budget]', '10')
+  await aSave()
+  await wait(2500)
   fences = JSON.parse(readFileSync(join(data, 'agents', 'fences.json'), 'utf8'))
-  check('agent budgets are written beside the total, keeping other keys and agents',
-    fences.daily_budget === 10 && fences.other === 1 && fences.agent_budgets['plan-agent'] === 2
-    && fences.agent_budgets['implement-agent'] === 5.5 && fences.agent_budgets['someone-else'] === 9, JSON.stringify(fences))
-  await evalJS(`$('#settingsBtn').click()`)
-  await wait(800)
-  check('Settings reopens on the saved agent budgets',
-    await evalJS(`settingsRoot().querySelector('[data-agent-budget=plan]').value`) === '2'
-    && await evalJS(`settingsRoot().querySelector('[data-agent-budget=implement]').value`) === '5.5')
-  await setAgentBudget('plan', '')
-  await press('Save')
-  await wait(3500)
+  check('the bucket agents\' budget is written beside the total under their runner id, keeping other keys and agents',
+    fences.daily_budget === 10 && fences.other === 1 && fences.agent_budgets['bucket-agent'] === 5.5
+    && fences.agent_budgets['someone-else'] === 9 && !('plan-agent' in fences.agent_budgets), JSON.stringify(fences))
+  await openSettingsPageFresh()
+  check('Agents reopens on the saved agent budget',
+    await evalJS(`${A}.querySelector('[data-agent-budget=bucket]').value`) === '5.5')
+  await aSet('[data-agent-budget=bucket]', '')
+  await aSave()
+  await wait(2500)
   fences = JSON.parse(readFileSync(join(data, 'agents', 'fences.json'), 'utf8'))
   check('an empty agent budget removes only that agent',
-    !('plan-agent' in fences.agent_budgets) && fences.agent_budgets['implement-agent'] === 5.5 && fences.daily_budget === 10, JSON.stringify(fences))
-  r = await fetch(`${base}/settings.json`, { method: 'PUT', headers: { 'X-Board': '1' }, body: '{"agent_budgets":{"plan-agent":-1},"models":{"chat":"haiku"}}' })
+    !('bucket-agent' in fences.agent_budgets) && fences.agent_budgets['someone-else'] === 9 && fences.daily_budget === 10, JSON.stringify(fences))
+  // The Agents tab still says why when agents cannot run here.
+  await evalJS(`state.agentsReady = false; state.agentsMissing = 'claude'; renderView()`)
+  await wait(500)
+  check('agents off: the Agents tab shows its fallback text and no options', await evalJS(`document.querySelector('#lists').textContent.includes('Agents need Claude Code') && !document.querySelector('[data-agent-options]')`))
+  await evalJS(`state.agentsReady = true; openSettingsPage('settings')`)
+  await wait(800)
+  // Saving the general Settings form leaves the budgets and models alone.
+  await evalJS(`settingsRoot().querySelector('[data-chime]').click()`)
+  await press('Save')
+  await wait(3000)
+  fences = JSON.parse(readFileSync(join(data, 'agents', 'fences.json'), 'utf8'))
+  check('saving the general form keeps the budgets and models', fences.daily_budget === 10 && JSON.parse(readFileSync(join(data, 'settings.json'), 'utf8')).models.plan === 'haiku', JSON.stringify(fences))
+  r = await fetch(`${base}/settings.json`, { method: 'PUT', headers: { 'X-Board': '1' }, body: '{"agent_budgets":{"bucket-agent":-1},"models":{"chat":"haiku"}}' })
   check('PUT with a negative agent budget is refused', r.status === 400)
-  check('and writes nothing', !JSON.parse(readFileSync(join(data, 'agents', 'fences.json'), 'utf8')).agent_budgets['plan-agent']
+  r = await fetch(`${base}/settings.json`, { method: 'PUT', headers: { 'X-Board': '1' }, body: '{"agent_budgets":{"plan-agent":2}}' })
+  check('and one for a retired agent too', r.status === 400)
+  check('and writes nothing', !('bucket-agent' in JSON.parse(readFileSync(join(data, 'agents', 'fences.json'), 'utf8')).agent_budgets)
     && JSON.parse(readFileSync(join(data, 'settings.json'), 'utf8')).models.chat !== 'haiku')
   await evalJS(`$('#settingsBtn').click()`)
   await wait(800)
   await evalJS(`settingsRoot().close ? settingsRoot().close() : 0`)
-  check('Settings round-trips the models', s2.models.plan === null && s2.models.implement === 'haiku')
+  check('saving Settings leaves the models alone', s2.models.plan === null && s2.models.default === 'sonnet')
   r = await fetch(`${base}/settings.json`, { method: 'PUT', headers: { 'X-Board': '1' }, body: '{"agents":{"plan":{"start":"later"}}}' })
   check('PUT with an unknown start is refused', r.status === 400)
 
@@ -479,31 +487,6 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('a profile with a country offers no Keep current', !(await evalJS(`settingsRoot().querySelector('[data-country]').textContent.includes('Keep current')`)))
   await evalJS(`closeModal()`)
 
-  // "Start straight away" asks the routes the board already has, after the save.
-  await fetch(`${base}/settings.json`, { method: 'PUT', headers: { 'X-Board': '1' }, body: '{"agents":{"plan":{"start":"now"},"implement":{"start":"scheduled"}}}' })
-  const calls = await evalJS(`(async () => {
-    const real = window.postJSON, got = []
-    window.postJSON = async (u, d) => { got.push([u, d || null]); return {} }
-    queueAgentStart('plan'); queueAgentStart('implement')
-    await flushAgentStarts()
-    window.postJSON = real
-    return got
-  })()`)
-  check('Plan agent set to now starts the Plan agent run, and Implement on scheduled waits', calls.length === 1 && calls[0][0] === '/planning_agent/run', JSON.stringify(calls))
-  await fetch(`${base}/settings.json`, { method: 'PUT', headers: { 'X-Board': '1' }, body: '{"agents":{"plan":{"start":"scheduled"},"implement":{"start":"now"}}}' })
-  const calls2 = await evalJS(`(async () => {
-    const real = window.postJSON, got = []
-    window.postJSON = async (u, d) => { got.push([u, d || null]); return {} }
-    queueAgentStart('plan'); queueAgentStart('implement')
-    await flushAgentStarts()
-    window.postJSON = real
-    return got
-  })()`)
-  check('Implement agent set to now runs it on the current list', calls2.length === 1 && calls2[0][0] === '/agents-api/run'
-    && calls2[0][1].agent === 'implement-agent' && calls2[0][1].action === 'run' && calls2[0][1].target === '_test', JSON.stringify(calls2))
-  const drawer = readFileSync(join(HERE, 'js', '19-drawer.js'), 'utf8')
-  check('a hand-over and a plan approval both ask for a start', (drawer.match(/queueAgentStart\(/g) || []).length === 2)
-
   // Step 2: the first list, on a checkout with nothing in data/.
   const base2 = `http://127.0.0.1:${PORT2}`
   for (let i = 0; i < 60; i++) {
@@ -512,7 +495,7 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   }
   r = await fetch(`${base2}/datasets.json`).then(x => x.json())
   check('a data root with no lists answers without errors', Array.isArray(r.datasets) && r.datasets.length === 0)
-  for (const route of ['settings.json', 'profile-basics.json', 'owner.js', 'agent-runs.json', 'chat-viewed.json', 'planning-agent.json', 'agents-planners.json?buckets=Making']) {
+  for (const route of ['settings.json', 'profile-basics.json', 'owner.js', 'agent-runs.json', 'chat-viewed.json', 'bucket-agent.json']) {
     const x = await fetch(`${base2}/${route}`)
     check(`GET /${route} on an empty root is not an error`, x.status === 200, String(x.status))
   }

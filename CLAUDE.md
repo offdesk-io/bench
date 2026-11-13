@@ -54,55 +54,48 @@ scripts in `kanban/js/`. Keep it classic (a module would defer it past every
 symbol needed at first use) and keep it free of `window`, `document` and
 `state` (`test_todo.mjs` runs it in a bare `vm` context with none of them).
 
-## The planning agent
+## The bucket agents
 
-`agents/plan-agent/` runs overnight, sets one sub-agent per task with an open
-Plan sub-task assigned to it, and writes a plan for each into
-`data/<dataset>/plans/`. It proposes and never executes. A task reaches it by
-being handed over on the board (see below); `[to:: Plan agent]` on a task
-nobody handed over is not planned until the board hands it over, which the
-agent asks for after each run (`pick.unhanded()`). Read
-[agents/plan-agent/README.md](agents/plan-agent/README.md) before changing any
-of it, particularly the schedule, which is the whole of what keeps it out
-of the working day.
+Each bucket of each list has one agent, and one runner works all of them,
+`agents/bucket-agent/` ([README](agents/bucket-agent/README.md)). It replaced
+the Plan and Implement agents, which split a task by stage rather than by the
+work it belongs to, and whose folders are gone. Read the README before changing
+any of it.
 
-- **It never writes `todo.md`.** `plan.py` hashes the file before the batch and
-  checks it after every task; that guard should be fixed, not removed, if it
-  gets noisy. It asks for its Plan sub-task to be ticked through
-  `core/tick_queue.py`, and the board applies the tick only from the agent the
-  sub-task is assigned to.
-- **The scheduled hours are the only thing keeping it out of the morning.**
-  `schedule.py` holds the hours, with a preferred night range the dashboard
-  hatches but does not enforce; run `python3 agents/plan-agent/test_planning_agent.py` after touching either.
+A bucket's agent is defined in its brief,
+`data/<dataset>/buckets/<stream>/<stream>.md`, which `core/bucket_agents.py`
+reads and is the one judge of whether the agent is ready. Its frontmatter says
+how the agent works, `mode` (`plan-first` or `free-rein`), and when it starts,
+`start` (`on-assign` or `scheduled`), and its six required sections go into the
+agent's prompt as written. The tracked half is
+[agents/bucket-agent/bucket-brief.template.md](agents/bucket-agent/bucket-brief.template.md),
+and the one agent definition is `agents/bucket-agent/bucket-agent.md`, so
+nothing is symlinked into `.claude/agents/`. The agent's name is what a sub-task
+handed to it carries in `[to::]`, "[List] [bucket] agent", from `agent_name()`.
+`core/todo.js` and `core/todo.py` still read `Plan agent` and `Implement agent`
+as agents, so a line written before buckets had their own still parses until
+the PA moves it over with `bucket_handover_migration.py`.
 
-Each bucket's planner lives beside its brief, at
-`data/<dataset>/buckets/<stream>/<dataset>-<stream>-agent.md`, gitignored with
-the rest of `data/`. Claude Code only reads agent definitions from inside
-`.claude/agents/`, so each one is symlinked in there. A bucket with no planner
-falls back to the list's `general` one, then to none. The tracked
-`agents/plan-agent/example-bucket-agent.md` is the one to copy; the plan-agent
-README says how.
+It never writes `todo.md`. The runner hashes the file around every run and
+`plans.todo_moved()` tells the board's own save from anything else's, and that
+guard should be fixed rather than removed if it gets noisy. It asks for ticks
+through `core/tick_queue.py`, the board applies a tick only from the agent the
+sub-task is assigned to, no plan type is approved on arrival, and Review the work
+is always the owner's.
 
-## The implementing agent
+When it runs is the bucket's `start`. A scheduled bucket runs in its board's
+hours on the agents dashboard, through the hourly wake. An on-assign one is
+started within a minute of a handover by `core/bucket_wake.py`, which the board
+server starts beside the banners, never under `TODOS_DATA_ROOT` or with
+`BENCH_AGENTS=0`, and it counts against the daily spending caps like a scheduled
+pass. One daily budget covers every bucket's agent, keyed `bucket-agent` in the
+fences file. Run `python3 agents/bucket-agent/test_bucket_agent.py` and
+`python3 core/test_bucket_agents.py` after touching any of it.
 
-`implement-agent` (`agents/implement-agent/`, [README](agents/implement-agent/README.md))
-carries out a plan the owner has already agreed to.
-
-- **There is one of it**, not one per bucket. Per-bucket knowledge lives in
-  `data/<dataset>/buckets/<stream>/<stream>.md`, which the planners read too —
-  written once. That folder is gitignored (real people, real processes);
-  [agents/plan-agent/bucket-brief.template.md](agents/plan-agent/bucket-brief.template.md)
-  is the tracked half.
-- **It runs alone only on the plan types in `core/plan_types.py`**, through its
-  own runner (`agents/implement-agent/hooks.py`), off until hours are set. Figma
-  work, a task handed straight to it, and anything else only run from a session
-  the owner is in, through the `do` skill, where it can stop and ask.
-- **It does not write `todo.md`.** Where the work means the task itself should
-  change, it asks for the change in its report, precisely enough to apply, and
-  `pa` makes it.
-
-Work reaches it through a sub-task assigned to it, open, with what it waits on
-ticked — what the `do` skill finds.
+Work the runner cannot check before it starts, Figma above all, only runs with
+the owner in the room, through the `do` skill
+(`agents/bucket-agent/skills/do/`), which carries out a bucket agent's Implement
+sub-task in a session under that bucket's brief and can stop and ask.
 
 ## The board
 
@@ -112,9 +105,9 @@ finished, whoever does the work.
 - **A column says the state of the card**: Backlog, To do, Doing, Reviewing,
   Done. **Who does the work is `[to::]`, never the column.**
 - **An agent's part of a task is sub-tasks on the task's card.** Handing over
-  (`handOver()`, drawer's Delegate to) lays out four blocked-in-sequence
-  sub-tasks: Plan, Review the plan, Implement, Review the work (or the last two,
-  straight to Implement). A sub-task inherits due/impact/urgent/week from its
+  (`handOver()`, drawer's Delegate to) lays out blocked-in-sequence sub-tasks:
+  Plan, Review the plan, Implement, Review the work for a plan-first bucket, the
+  last two for a free-rein one. A sub-task inherits due/impact/urgent/week from its
   task, never the tick or assignee.
 - **Approving is ticking a review; sending back unticks what's before it** with
   a `feedback:` note, so the agent takes it up again. Only the Implement

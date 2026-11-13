@@ -4,17 +4,19 @@
 `PLAN-BRIEF.md` asks for under 300 shown words, and when it was the only check
 forty of the forty-one plans on disk broke it, median 403 and worst 1,588. An
 instruction the agent reads in its own system prompt and ignores that often is
-not going to start holding because it is written somewhere better. So this counts, and `plan.py` sends the plan back.
+not going to start holding because it is written somewhere better. So this counts,
+and the bucket agents' runner logs what it finds on every plan it writes and
+shows it on the run.
 
 Shown means what the board's plan modal renders: everything but the frontmatter,
 Context and History. Those three are written for the next night and for the
 implementing agent, and the owner never sees them, so they cost the owner nothing.
 
-    python3 agents/plan-agent/check_plan.py data/work/plans/*/*.md
-    python3 agents/plan-agent/check_plan.py --self-test
+    python3 agents/bucket-agent/check_plan.py data/work/plans/*/*.md
+    python3 agents/bucket-agent/check_plan.py --self-test
 
-This file owns its own section splitter rather than importing `plan.py`'s, so the
-dependency runs one way: `plan.py` imports this, and this imports nothing of the
+This file owns its own section splitter rather than importing `plans.py`'s, so the
+dependency runs one way: `plans.py` imports this, and this imports nothing of the
 runner's. It is a text splitter besides, where the runner's reads a path.
 """
 

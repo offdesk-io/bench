@@ -94,8 +94,8 @@ export interface OverviewViewProps {
 /* Tasks finished leads the row, then three reference columns, each on its own
    track with a 380px floor. The row fills the window at desktop width and
    scrolls sideways below the floor (and snaps one column per screen on a phone,
-   see board.css). Context moved to the Memory page and Delegate to Claude is no
-   longer drawn, so nothing else shares the row.
+   see board.css). Context moved to the Memory page, so nothing else shares the
+   row.
 
    Tasks finished is two reference columns wide, exactly: 380 twice plus the
    14px gap between them, so it lines up with the pairs beside it. It grows

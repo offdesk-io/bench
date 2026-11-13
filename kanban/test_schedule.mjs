@@ -34,7 +34,7 @@ const check = (name, pass, detail = '') => {
 }
 
 const chrome = spawn(CHROME_BIN, [
-  '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
+  '--headless=new', '--mute-audio', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-schedule-test-profile'}`, '--window-size=1500,1000',
   `http://127.0.0.1:${BOARD}/kanban/index.html`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
@@ -85,16 +85,16 @@ await evalJS(`(window.painted = () => new Promise(
 await evalJS(`(() => {
   state.locked = true;
   state.lockedLabel = 'schedule test';
-  const real = window.fetch;
+  const real = window.fetch.bind(window);
   window.__blocked = [];
   const now = Date.now();
   const iso = ms => new Date(ms).toISOString();
   const day = ms => new Date(ms).toISOString().slice(0, 10);
   window.__jobs = [
-    { id:'plan-agent', name:'Plan agent', armed:false, state:'not installed',
-      what:'Plans every task delegated to the Plan agent, one agent each.',
+    { id:'bucket-agent', name:'Bucket agents', armed:false, state:'not installed',
+      what:'Runs each bucket agent that is scheduled, in the board hours.',
       schedule:'12 wakes, 19:00–06:00', next:'', last:'',
-      recent:[], hint:'ln -s agents/plan-agent/x.plist ~/Library/LaunchAgents/' },
+      recent:[], hint:'ln -s agents/bucket-agent/x.plist ~/Library/LaunchAgents/' },
     { id:'banners', name:'Desktop banners', armed:true, state:'running',
       what:'A banner when a task or sub-task falls due, one the next working day if it is still open, and the lines agents queue.',
       schedule:'every minute while the board is running', next:'',
@@ -143,7 +143,7 @@ await evalJS(`(() => {
     if (u.startsWith('/usage.json')) return Promise.resolve(new Response(JSON.stringify(window.__usage), {status:200}));
     if (u.startsWith('/plans.json')) return Promise.resolve(new Response(JSON.stringify({plans: window.__plans}), {status:200}));
     if (u.startsWith('/queue.json')) return Promise.resolve(new Response(JSON.stringify(window.__queue), {status:200}));
-    if (u.startsWith('/planning-agent.json')) return Promise.resolve(new Response(JSON.stringify(window.__nightAgent), {status:200}));
+    if (u.startsWith('/bucket-agent.json')) return Promise.resolve(new Response(JSON.stringify(window.__nightAgent), {status:200}));
     return real(url, opts);
   };
   return 'locked and stubbed';
@@ -177,6 +177,7 @@ check('the clock card is its own column, stacked under Token Session', await eva
 `))
 const jobs = await evalJS(`document.querySelectorAll('#schedOut .schedjob').length`)
 check('one row per scheduled job', jobs === 3, `${jobs} rows`)
+check('the first row is the Bucket agents', await evalJS(`document.querySelector('#schedOut .schedjob').textContent.includes('Bucket agents')`))
 
 check('an unarmed job says so and gives the command', await evalJS(`
   document.querySelector('#schedOut .schedjob .schedstate').textContent === 'not installed' &&
@@ -192,7 +193,7 @@ check('the next run is written as a date, not an ISO string', await evalJS(`
 
 // The usage card itself carries no explanatory prose: the Status line
 // (elsewhere now) says what there is to spend and
-// agents/plan-agent/README.md holds the reasoning.
+// agents/bucket-agent/README.md holds the reasoning.
 check('the usage card explains itself with the chart, not a paragraph', await evalJS(`
   !document.querySelector('#usageOut .help')
 `))
