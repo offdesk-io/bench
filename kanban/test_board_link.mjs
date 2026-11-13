@@ -48,7 +48,7 @@ const saved = await fetch(`${BASE}/data/todo.md`, { method: 'PUT', headers: { 'C
 await post('/dataset/select', { name: '_test' })
 
 const chrome = spawn(CHROME_BIN, [
-  '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
+  '--headless=new', '--mute-audio', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-board-link-test-profile'}`, '--window-size=1400,1000',
   `${BASE}/kanban/index.html`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })
