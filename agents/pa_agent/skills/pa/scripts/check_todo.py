@@ -190,11 +190,6 @@ def load(path):
     return text.splitlines()
 
 
-# Delegate prompts are a starting point the owner complements, not a spec. Past this
-# the owner has to read the prompt before using it, which defeats the point.
-PROMPT_WORD_CEILING = 70
-
-
 def section_of(lines, idx):
     """Nearest preceding heading, so findings can be reported in context."""
     for i in range(idx, -1, -1):
@@ -999,50 +994,6 @@ def check_slugs(tasks, archived=frozenset()):
     return findings
 
 
-def check_prompt_coverage(tasks):
-    """Every live item with the Implement agent carries its own prompt, on the task.
-
-    Prompts used to live only in Delegate to Claude, which made them the one
-    thing in the file that could not be rebuilt from the buckets. They live on
-    the task now, so an Implement agent item without one breaks the rebuild.
-    """
-    findings = []
-    for entry in all_entries(tasks):
-        if entry["agent"] != todo.IMPLEMENT_AGENT or entry["checked"]:
-            continue
-        # A handover's Implement sub-task is briefed by the plan its review
-        # points at, or by the task itself when it went straight to the agent, so
-        # it needs no prompt of its own. Its slug is the id of its task and
-        # `-implement`.
-        if (entry["slug"] or "").endswith("-implement"):
-            continue
-        # Nor does the task those sub-tasks sit under.
-        if any((sub["slug"] or "").endswith("-implement") for sub in entry.get("subs", [])):
-            continue
-        if not entry["prompt"]:
-            findings.append(
-                Finding(
-                    entry["line"],
-                    "FIX",
-                    f"\"{entry['title'][:50]}\" is with the Implement agent but carries no Prompt: note. "
-                    f"Delegate to Claude is built from these, so it will rebuild without it.",
-                )
-            )
-            continue
-        words = len(entry["prompt"].split())
-        if words > PROMPT_WORD_CEILING:
-            findings.append(
-                Finding(
-                    entry["line"],
-                    "CHECK",
-                    f"prompt on \"{entry['title'][:40]}\" is {words} words. The owner asked for "
-                    f"short prompts they complement themself, so trim towards "
-                    f"{PROMPT_WORD_CEILING}.",
-                )
-            )
-    return findings
-
-
 def check_start_dates(lines):
     """`start:` is the earliest the work can begin. `due:` is the deadline.
 
@@ -1153,54 +1104,6 @@ def check_headline(lines):
     return findings
 
 
-def check_ranks(tasks):
-    """Ranks order Delegate to Claude, so they must be unique and complete."""
-    findings = []
-    entries = all_entries(tasks)
-    ranked = [e for e in entries if e["rank"] is not None]
-    # A step under a ticked task is finished with it, whatever its own box says.
-    finished = {e["line"] for t in tasks for e in [t] + t["subs"]
-                if e["checked"] or t["checked"]}
-
-    seen = {}
-    for entry in ranked:
-        if entry["rank"] in seen:
-            findings.append(
-                Finding(
-                    entry["line"],
-                    "FIX",
-                    f"rank:{entry['rank']} is already used on line {seen[entry['rank']]}. "
-                    f"Two items cannot share a position in the list.",
-                )
-            )
-        seen[entry["rank"]] = entry["line"]
-
-    for entry in ranked:
-        if not entry["agent"] and entry["line"] not in finished:
-            findings.append(
-                Finding(
-                    entry["line"],
-                    "FIX",
-                    f"\"{entry['title'][:50]}\" carries rank:{entry['rank']} but is not "
-                    f"delegated to an agent. Only an agent's work is ranked.",
-                )
-            )
-
-    if ranked:
-        numbers = sorted(seen)
-        missing = [n for n in range(1, max(numbers) + 1) if n not in seen]
-        if missing:
-            findings.append(
-                Finding(
-                    None,
-                    "CHECK",
-                    f"ranks skip {', '.join(str(n) for n in missing)}. Harmless, but the "
-                    f"numbering in Delegate will not match the tags.",
-                )
-            )
-    return findings
-
-
 def check_week_health(tasks, today):
     """The `week` tag is the whole of This week now, so it is checked on its own.
 
@@ -1298,8 +1201,6 @@ def main():
         ("Sub-step chronology", check_substep_chronology(tasks)),
         ("This week", check_week_health(tasks, today)),
         ("Slugs and dependencies", check_slugs(tasks, archived)),
-        ("Prompts on tasks", check_prompt_coverage(tasks)),
-        ("Delegate ranks", check_ranks(tasks)),
         ("The one thing", check_headline(lines)),
         ("Start dates", check_start_dates(lines)),
         ("Tag hygiene", check_tag_hygiene(lines, tasks)),

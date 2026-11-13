@@ -266,7 +266,7 @@ function timelineSection(){
   const lanes = [];
   byBucket.forEach((bucketRows, bucket) => {
     // Dragged rows carry a `tlrank` and sort by it; everything else falls
-    // back to board order, same split Delegate uses for its own `rank`.
+    // back to board order.
     const ranked = bucketRows.filter(r => r.tlrank != null).sort((a, b) => a.tlrank - b.tlrank);
     const unranked = bucketRows.filter(r => r.tlrank == null);
     lanes.push(timelineLaneModel(bucket, ranked.concat(unranked), scale));
@@ -807,8 +807,8 @@ function renderView(){
   // to the header rather than to any one view.
   updateArchiveChip();
   const defs = viewDefs();
-  // Quick wins is a column of Overview and Delegate to Claude is no longer
-  // drawn, so an old #quick or #delegate link lands on Overview.
+  // Quick wins is a column of Overview, so an old #quick or #delegate link
+  // lands on Overview.
   if (state.view === 'quick' || state.view === 'delegate') {
     state.view = 'overview';
   }
@@ -1290,11 +1290,8 @@ function addTask(tierName){
 }
 
 /* Taking work back off Claude has to take the prompt with it.
-   Delegate to Claude is generated from `[to:: Implement agent]`, so a task
-   taken back drops out of that list — but the prompt written for it would
-   stay behind on the task, still reading as an instruction to hand it over. The
-   next person to rebuild the section would have a prompt with nothing asking for
-   it. A sub-step delegated in its own right is left alone, because it did not
+   A prompt written for a task would otherwise stay behind on it, still
+   reading as an instruction to hand it over, with nothing asking for it. A sub-step delegated in its own right is left alone, because it did not
    inherit the tag that just changed. Returns what was removed, so the change
    can be reported rather than happening silently. */
 function stripDelegation(t){

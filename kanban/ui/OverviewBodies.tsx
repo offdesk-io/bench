@@ -1,6 +1,6 @@
 /* What is inside Overview's four reference columns and its Context column.
  *
- * Big rocks, This week, Quick wins and Delegate to Claude each build a list of
+ * Big rocks, This week and Quick wins each build a list of
  * blocks in 10-reference-sections.js and hand it over as data: a run of cards,
  * a group under a heading, a note about what was left out. This draws them. A
  * card is Tenon's `Card` with the board's `ref` class kept on it, since the
@@ -42,11 +42,10 @@ export interface RefModel {
   quickDismiss: string | null
 }
 
-export type EmptyKind = 'week' | 'rocks' | 'quick' | 'delegate'
+export type EmptyKind = 'week' | 'rocks' | 'quick'
 
 export type RefBlock =
   | { kind: 'cards', cards: RefModel[] }
-  | { kind: 'ranked', cards: RefModel[] }
   | { kind: 'group', label: string, cards: RefModel[] }
   | { kind: 'warn', text: string }
   | { kind: 'held', parts: { n: number, text: string }[] }
@@ -115,7 +114,6 @@ function Empty({ which }: { which: EmptyKind }) {
     case 'week': return <ColumnEmpty>Nothing is tagged <code>week</code> yet.</ColumnEmpty>
     case 'rocks': return <ColumnEmpty>No high impact, L effort tasks.</ColumnEmpty>
     case 'quick': return <ColumnEmpty>Nothing small enough to clear in a gap.</ColumnEmpty>
-    case 'delegate': return <ColumnEmpty>Nothing is delegated to the Implement agent.</ColumnEmpty>
   }
 }
 
@@ -126,17 +124,6 @@ export function RefSection({ blocks }: { blocks: RefBlock[] }) {
         switch (b.kind) {
           case 'cards':
             return <Fragment key={i}>{b.cards.map(c => <RefCard key={c.id + (c.sub ?? '')} m={c} />)}</Fragment>
-          case 'ranked':
-            return (
-              <div key={i} className="refrank">
-                {b.cards.map((c, n) => (
-                  <div key={c.id + (c.sub ?? '')} className="refrow">
-                    <span className="refnum">{n + 1}</span>
-                    <RefCard m={c} />
-                  </div>
-                ))}
-              </div>
-            )
           case 'group':
             return (
               <Fragment key={i}>

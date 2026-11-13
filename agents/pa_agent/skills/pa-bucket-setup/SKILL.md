@@ -40,7 +40,7 @@ Ask for the owner's own words. Where an answer is thin, ask one follow-up for th
 
 ## 3. Write the file
 
-Write each answer under its heading, in the owner's words. Keep any existing text the owner wants kept, and the template's guidance paragraph may stay above the answer. Set `mode` and `start` in the frontmatter. Remove the `<!-- NOT FILLED IN YET -->` line, and the blockquote under it, only once every required field is filled. Show the finished file to the owner before writing if any field was drafted from a loose answer.
+Write each answer under its heading, in the owner's words. Keep any existing text the owner wants kept, and the template's guidance paragraph may stay above the answer. Set `mode` and `start` in the frontmatter. Write `mode` in lowercase, `plan-first` or `free-rein`, and `start` as `on-assign` or `scheduled`. Remove the `<!-- NOT FILLED IN YET -->` line, and the blockquote under it, only once every required field is filled. Show the finished file to the owner before writing if any field was drafted from a loose answer.
 
 Write the file directly with the Write tool. It is not `todo.md`, which this skill never writes.
 

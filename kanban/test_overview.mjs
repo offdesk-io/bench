@@ -245,7 +245,7 @@ check('and it stays shut across a re-render', await evalJS(`(() => {
 // Cleaned up so this suite leaves no mark on a machine it runs on twice.
 await evalJS(`localStorage.removeItem('bench-overview-closed')`)
 
-/* ---- Quick wins' own sort control, and Delegate to Claude's ranked rows ---- */
+/* ---- Quick wins' own sort control ---- */
 
 check('Quick wins carries its own sort toggle, not the board\'s', await evalJS(`
   !!document.querySelector('.lists.split .tenon-column:nth-child(3) [data-quicksort]')

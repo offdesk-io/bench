@@ -29,7 +29,7 @@ let agentsRoot = null;
 
    Someone who only uses the PA to keep their list has no use for the agent
    half of the board, so until the list has an agent set up the board leaves
-   it out: no agents under Delegate to, no Delegate to Claude on Overview, and
+   it out: no agents under Delegate to, and
    this tab shows the cards and the way to set one up instead of the hour
    tracks. The agent filter chip already hides itself while nothing is
    delegated.
@@ -84,7 +84,7 @@ async function checkAgentsSetup(){
 
    The agents need the `claude` CLI and agents-engine. Without either, a run
    dies the moment it starts, so the board leaves out everything that would
-   start one: agents under Delegate to, Delegate to Claude on Overview, the
+   start one: agents under Delegate to, the
    agent options in Settings, and the Data menu's Spend and Run the bucket agents now.
    The Agents tab says what is missing instead. The rest of the board does not
    need them. */

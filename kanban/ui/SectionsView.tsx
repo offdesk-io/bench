@@ -91,8 +91,7 @@ export interface OverviewViewProps {
 /* Three reference columns, each on its own track with a 380px floor. The row
    fills the window evenly at desktop width and scrolls sideways below the floor
    (and snaps one column per screen on a phone, see board.css). Context moved to
-   the Memory page and Delegate to Claude is no longer drawn, so nothing else
-   shares the row. */
+   the Memory page, so nothing else shares the row. */
 const REF_TRACK = { css: 'minmax(380px,1fr)', min: 394 }
 
 export function OverviewView(props: OverviewViewProps) {

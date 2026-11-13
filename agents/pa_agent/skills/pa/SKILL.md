@@ -174,7 +174,7 @@ python3 "${BENCH_ROOT:-$HOME/Code/bench}"/agents/pa_agent/skills/pa/scripts/pa_w
 
 After the push, run the same script with `done` and the same path. Run `done` even when the edit failed or you stopped to ask, since the board holds its reload until the file goes or is ten minutes old. If you stop to ask mid-batch, run `done` first and `start` again when you resume. `pa-working.json` is a file on the Mac, so on the shared board there is nothing to tell and you skip both.
 
-**There are no sections to rebuild.** The file is four buckets and nothing else. This week, Quick wins, Big rocks, Dependency chain and Delegate to Claude are worked out by the board every time it renders. Never add them back as text: a section in the file is a copy, and a copy has to be maintained by hand every session or it starts describing a file that has moved on.
+**There are no sections to rebuild.** The file is four buckets and nothing else. This week, Quick wins, Big rocks and Dependency chain are worked out by the board every time it renders. Never add them back as text: a section in the file is a copy, and a copy has to be maintained by hand every session or it starts describing a file that has moved on.
 
 So the whole update is the tag:
 
@@ -379,7 +379,7 @@ template that tried to would be a second copy of them.
 
 - `data/.current`, which dataset is live right now, e.g. `personal`. Read this first; everything below is relative to `data/<that name>/`, not the bare `data/` root. The board's own dropdown is what changes it.
 - `data/<dataset>/todo.md` — the list. `data/` holds every dataset and everything derived from each, and is the whole of what git ignores. The four buckets. The standing facts about people and dates are in `context.md`, beside `people.md` and `about.md`, all three read and written through the memory lookup (`<memory_root>/bench/<dataset>/` when Bench's `memory_root` is set and holds the file, else `data/<dataset>/`), and written through the server's `PUT /context` route or the path the lookup gives, never into `todo.md`. Between them the only source of truth.
-- `kanban/index.html` plus `kanban/server.py`, launched by `board.command` at the root — the board. It reads and writes the current dataset's todo.md, and works out This week, Quick wins, Big rocks, Dependency chain and Delegate to Claude from the tags. Those five exist nowhere else.
+- `kanban/index.html` plus `kanban/server.py`, launched by `board.command` at the root — the board. It reads and writes the current dataset's todo.md, and works out This week, Quick wins, Big rocks and Dependency chain from the tags. Those four exist nowhere else.
 - `<name>/` in the list's projects folder when set, otherwise `data/<dataset>/projects/<name>/` — one folder per project, holding the background in a `CLAUDE.md` and the source documents beside it, for work carrying more context than a task line can hold. Private like everything in `data/`. The tasks stay in todo.md and point at the folder; the folder never holds a task list.
 - `agents/pa_agent/PA.md` — standing behaviour: who the owner is, where the list lives, the two tiers of prioritisation, the standing rules and the tone. Read every session, before the conventions.
 - `CONVENTIONS.md` — the file format: buckets, states, tags, date rules, suggested messages, meeting agendas, capacity ceiling. Read this every session.
