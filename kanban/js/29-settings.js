@@ -123,7 +123,7 @@ function boardSwitchHTML(attr, on, name, help){
     '<span class="help">' + esc(help) + '</span></label>';
 }
 
-function boardGroupHTML(draft, first){
+function boardGroupHTML(draft, first, extra){
   if (first || draft.signedIn || !draft.list) return '';
   const b = draft.board;
   return '<div class="agentopts__group" data-board-group><h4>This board</h4>' +
@@ -135,11 +135,14 @@ function boardGroupHTML(draft, first){
     '<span class="help fielderr" data-err="board-memory" hidden></span></label>' +
     boardSwitchHTML('data-board-banners', b.banners, 'Desktop banners', 'A banner when a task on this board is due. Off, it sends none.') +
     boardSwitchHTML('data-board-agents', b.agents, 'Agents', 'Lets this board’s bucket agents work. Off, they leave it alone.') +
+    (extra || '') +
     '</div>';
 }
 
-function settingsFormHTML(draft, choices, first){
-  return '<div class="setupform">' +
+/* The page lays the form out as three columns (You, Folders, This board); the
+   welcome and the modal keep one. `cols` is only passed by the page. */
+function settingsFormHTML(draft, choices, first, cols){
+  const you =
     '<label class="field"><span>Name</span><input type="text" data-name value="' + escAttr(draft.name) + '" placeholder="First name">' +
     '<span class="help">' + (draft.signedIn ? 'What the PA calls you.' : 'Who the review sub-tasks are assigned to.') + '</span>' +
     '<span class="help fielderr" data-err="name" hidden></span></label>' +
@@ -149,17 +152,27 @@ function settingsFormHTML(draft, choices, first){
     '<span class="help" data-nolist hidden>No public holiday list available for this country, so only weekends count as days off.</span>' +
     '<span class="help fielderr" data-err="country" hidden></span></label>' +
     '<label class="field" data-region-field' + (draft.regions.length ? '' : ' hidden') + '><span>Region</span>' +
-    '<select data-region>' + settingsRegionOptions(draft) + '</select></label>' +
-    (draft.signedIn ? (draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '') + '</div>' :
+    '<select data-region>' + settingsRegionOptions(draft) + '</select></label>';
+  if (draft.signedIn) {
+    const sharing = draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '';
+    return '<div class="setupform">' + you + sharing + '</div>';
+  }
+  const folders =
     (first ? '' : '<label class="field"><span>Memory folder</span><input type="text" data-memory value="' + escAttr(draft.memoryRoot) + '" placeholder="Not set">' +
       '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.</span></label>') +
     (first || !draft.list ? '' : '<label class="field"><span>Projects folder for ' + esc(draft.list) + '</span><input type="text" data-projects value="' + escAttr(draft.projectsRoot) + '" placeholder="Not set">' +
-      '<span class="help">A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + esc(draft.list) + '/projects/.</span></label>') +
-    boardGroupHTML(draft, first) +
+      '<span class="help">A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + esc(draft.list) + '/projects/.</span></label>');
+  const chime =
     '<label class="field"><span>Reply chime</span>' +
     '<button type="button" role="switch" class="tenon-switch' + (draft.chime ? ' tenon-switch--on' : '') + '" data-chime aria-checked="' + draft.chime + '"></button>' +
-    '<span class="help">A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.</span></label>' +
-    '</div>');
+    '<span class="help">A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.</span></label>';
+  if (!cols) return '<div class="setupform">' + you + folders + boardGroupHTML(draft, first) + chime + '</div>';
+  const board = boardGroupHTML(draft, first, chime);
+  return '<div class="setupform setupform--cols">' +
+    '<div class="settingscol"><h4>You</h4>' + you + '</div>' +
+    '<div class="settingscol"><h4>Folders</h4>' + folders + (board ? '' : chime) + '</div>' +
+    (board ? '<div class="settingscol">' + board + '</div>' : '') +
+    '</div>';
 }
 
 async function loadSettingsDraft(first){
@@ -691,7 +704,7 @@ async function drawSettingsTab(){
   const host = $('#settingsPage');
   const title = lists.querySelector('.tenon-column__title');
   if (title && draft.signedIn) title.textContent = 'Your profile';
-  host.innerHTML = settingsFormHTML(draft, choices, false) +
+  host.innerHTML = settingsFormHTML(draft, choices, false, true) +
     '<div class="settingspage__actions"><button type="button" class="btn primary" data-settings-save>Save</button></div>';
   settingsHostEl = host;
   trackSettingsForm(draft, false);

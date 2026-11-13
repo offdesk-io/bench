@@ -287,7 +287,10 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
     && settingsRoot().querySelector('[data-board-agents]').getAttribute('aria-checked') === 'true'`))
   check('the memory folder offers the three choices', await evalJS(`[...settingsRoot().querySelectorAll('[data-board-memory-mode] option')].map(o => o.textContent).join('|')`)
     === 'Same as main memory folder|None, keep everything in Bench|Its own folder')
-  check('each control has a line of help', await evalJS(`[...settingsRoot().querySelectorAll('[data-board-group] .field')].length === 3 && [...settingsRoot().querySelectorAll('[data-board-group] .field')].every(f => f.querySelector('.help').textContent.length > 10)`))
+  check('the page lays the form out as You, Folders and This board', await evalJS(`[...settingsRoot().querySelectorAll('.setupform--cols > .settingscol > h4, .setupform--cols > .settingscol > [data-board-group] > h4')].map(h => h.textContent).join() === 'You,Folders,This board'
+    && getComputedStyle(settingsRoot().querySelector('.setupform--cols')).gridTemplateColumns.split(' ').length === 3
+    && !!settingsRoot().querySelector('.settingscol [data-board-group] [data-chime]')`))
+  check('each control has a line of help', await evalJS(`[...settingsRoot().querySelectorAll('[data-board-group] .field')].length === 4 && [...settingsRoot().querySelectorAll('[data-board-group] .field')].every(f => f.querySelector('.help').textContent.length > 10)`))
   await evalJS(`settingsRoot().querySelector('[data-board-banners]').click()`)
   await press('Save')
   await wait(2500)

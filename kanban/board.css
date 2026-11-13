@@ -2574,6 +2574,14 @@
      Agent options is a <details> that starts shut, so the form opens on the two
      things that are required. */
   .setupform{display:flex; flex-direction:column; gap:14px}
+  /* Three columns side by side on the Settings page, one below 900px. */
+  .setupform--cols{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:24px; align-items:start}
+  .settingscol{display:flex; flex-direction:column; gap:14px; min-width:0}
+  .settingscol > h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:650; color:var(--tenon-text-default)}
+  .settingscol > .agentopts__group{padding-top:0; border-top:0}
+  @media (max-width:900px){
+    .setupform--cols{grid-template-columns:1fr}
+  }
   .fielderr{color:var(--tenon-text-error)}
   .agentopts{border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-default)}
   .agentopts > summary{cursor:pointer; list-style:none; padding:9px 11px; font-weight:600}
@@ -3242,7 +3250,9 @@ body.signed-in #runAgentBtn{display:none !important}
 .bucketbar--page #q{display:none !important}
 .settingspanel .settingspage{padding:0}
 .settingspage__actions{display:flex; gap:8px; margin-top:16px}
-.lists.pview.memview, .lists.pview.settingsview{max-width:860px}
+.lists.pview.memview{max-width:860px}
+.lists.pview.settingsview{max-width:1200px}
+.settingspage .setupform:not(.setupform--cols){max-width:520px}
 .agentsview #refCardsRoot{max-width:860px}
 
 /* Memory (31-memory.js): one panel per section. */
