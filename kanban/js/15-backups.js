@@ -40,13 +40,19 @@ function backupWeekOf(name){
    assign to #lists.innerHTML and would tear the DOM out from under a live
    root. See CLAUDE.md, "The React half, and why it is only a half". */
 let backupsRoot = null;
+/* The page around it is the Settings page's shared layout (settingsPageLayoutHTML,
+   29-settings.js) with no Save, since nothing here is edited. The root sits in a
+   node the layout holds and this view made, so the layout is drawn once and the
+   root is never replaced under React. */
 function backupsMountPoint(){
   const lists = $('#lists');
   if (!lists) return null;
-  let host = lists.querySelector('#backupsRoot');
+  let host = lists.querySelector('#backupsPage #backupsRoot');
   if (!host) {
     if (backupsRoot) BoardUI.unmount(backupsRoot);
-    lists.innerHTML = '<div id="backupsRoot"></div>';
+    lists.innerHTML = '<div class="lists pview settingsview" style="--pcols:1"><div id="backupsPage">' +
+      settingsPageLayoutHTML('Backups', [{ id: 'copies', title: 'Copies', description: 'Every copy of this list the board has kept.', wide: true,
+        html: '<div id="backupsRoot"></div>' }], { save: false }) + '</div></div>';
     host = lists.querySelector('#backupsRoot');
     backupsRoot = host;
   }
