@@ -305,12 +305,13 @@ function memReset(){ memResetDraft(); memDraw(true, true); }
 /* One request per section that changed, in the order of the page. A refusal
    stops the rest and names what was refused; what already went through is
    kept as saved. */
+/* True when it went through (or there was nothing to write). */
 async function memSaveAll(){
   memReadPage();
   memPageError = '';
   const ch = memChanges();
-  for (const k in ch.pabout) if (/[<>`]/.test(ch.pabout[k])) { memPageError = 'Leave out < > and backticks in ' + (k === 'addressing' ? 'How to address you' : 'the facts file') + '.'; memDraw(true); return; }
-  for (const k in ch.psections) if (/^##?(\s|$)/m.test(ch.psections[k])) { memPageError = 'A # or ## heading would split the profile. Use ### or none.'; memDraw(true); return; }
+  for (const k in ch.pabout) if (/[<>`]/.test(ch.pabout[k])) { memPageError = 'Leave out < > and backticks in ' + (k === 'addressing' ? 'How to address you' : 'the facts file') + '.'; memDraw(true); return false; }
+  for (const k in ch.psections) if (/^##?(\s|$)/m.test(ch.psections[k])) { memPageError = 'A # or ## heading would split the profile. Use ### or none.'; memDraw(true); return false; }
   const done = [];
   try {
     if (ch.about) { await putJSON('/about', { text: memDraft.about }); done.push('about'); }
@@ -326,11 +327,12 @@ async function memSaveAll(){
   } catch (err) {
     memPageError = String(err.message || err);
     memDraw(true);
-    return;
+    return false;
   }
-  if (!done.length) { showToast('Nothing to save.'); return; }
+  if (!done.length) { showToast('Nothing to save.'); return true; }
   await memLoad();
   showToast('Saved.', 'good');
+  return true;
 }
 
 async function memSaveBucket(which){

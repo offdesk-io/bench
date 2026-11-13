@@ -117,6 +117,7 @@ const SWITCH_GRACE_MS = 3000;
 function reloadPage(){ location.reload(); }
 
 async function switchDataset(name, hashAfter){
+  if (!(await settingsPageGate())) { loadDatasets(); return; }
   const from = state.dataset;
   state.switching = true;
   try {

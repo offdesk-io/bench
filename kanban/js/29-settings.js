@@ -442,15 +442,20 @@ function boardChanges(draft){
 }
 
 /* Checks the form and saves it, from the welcome's button or the page's. */
-async function runSettingsSave(draft, first, needsList){
-  if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return; }
+async function runSettingsSave(draft, first, needsList, opts){
+  if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return false; }
   try { await saveSettingsDraft(draft, first); }
-  catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
-  if (first && needsList) { openFirstList(); return; }
+  catch (err) { showToast('Could not save: ' + (err.message || err)); return false; }
+  if (first && needsList) { openFirstList(); return true; }
   /* Signed in, the name on the page is the sign-in's, so nothing to reload. */
-  if (draft.signedIn) { if (!settingsHostEl) closeModal(); showToast('Saved.', 'good'); return; }
-  /* The owner's name is read once, from /owner.js, as the page loads. */
+  if (draft.signedIn) { if (!settingsHostEl) closeModal(); showToast('Saved.', 'good'); return true; }
+  /* A save made on the way to somewhere else carries on to it instead of reloading. */
+  if (opts && opts.noReload) { showToast('Saved.', 'good'); return true; }
+  /* The owner's name is read once, from /owner.js, as the page loads. The
+     page is saved by now, so the browser has nothing to warn about. */
+  settingsDiscarded = true;
   location.reload();
+  return true;
 }
 
 /* first: the welcome. needsList: step 2 follows step 1 (no list on disk). The
@@ -679,11 +684,69 @@ function adoptSettingsRoute(h){
 }
 
 function openSettingsPage(tab){
-  if (tab) settingsTab = settingsTabName(tab);
-  state.view = 'settings';
-  syncHash(true);
-  renderView();
+  const go = () => {
+    if (tab) settingsTab = settingsTabName(tab);
+    state.view = 'settings';
+    syncHash(true);
+    renderView();
+  };
+  if (tab && state.view === 'settings' && settingsTabName(tab) !== settingsTab) settingsPageAsk(go);
+  else go();
 }
+
+/* ---- Unsaved changes ----
+
+   The Settings tab and the Memory tab hold typing until Save. Leaving either
+   for another tab, a board view or another list asks first, in the board's own
+   modal: Stay, Discard or Save. The browser's own warning covers closing or
+   reloading the tab. `settingsDiscarded` says the typing has been given up (or
+   saved on the way out), so nothing asks again before the page is drawn anew. */
+let settingsLiveDraft = null;
+let settingsSnapshot = '';
+let settingsDiscarded = false;
+
+function settingsDraftSnapshot(d){
+  return JSON.stringify([d.name, d.country, d.region, d.memoryRoot, d.projectsRoot, (d.sections || {}).setup,
+    d.chime, d.board && [d.board.mode, d.board.path, d.board.banners, d.board.agents], (d.about || {}).addressing]);
+}
+
+/* True when the page on screen holds changes that are not saved. */
+function settingsPageDirty(){
+  if (settingsDiscarded) return false;
+  if (settingsTab === 'settings') {
+    return !!(settingsLiveDraft && settingsHostEl && settingsHostEl.isConnected && settingsDraftSnapshot(settingsLiveDraft) !== settingsSnapshot);
+  }
+  if (settingsTab === 'memory') return typeof memIsDirty === 'function' && memIsDirty();
+  return false;
+}
+
+/* Saves the page on screen, true when it went through. */
+async function settingsPageSave(){
+  if (settingsTab === 'memory') return memSaveAll();
+  if (settingsTab === 'settings' && settingsLiveDraft) return runSettingsSave(settingsLiveDraft, false, false, { noReload: true });
+  return true;
+}
+
+/* Resolves true when the move may go on: nothing was unsaved, or the person
+   chose Discard, or chose Save and it worked. */
+function settingsPageGate(){
+  return new Promise(resolve => {
+    if (!settingsPageDirty()) { resolve(true); return; }
+    let settled = false;
+    const finish = ok => { if (settled) return; settled = true; if (ok) settingsDiscarded = true; resolve(ok); closeModal(); };
+    showModal('Unsaved changes', 'This page has changes that are not saved yet.', '', [
+      { label: 'Stay', run: () => finish(false) },
+      { label: 'Discard', danger: true, run: () => finish(true) },
+      { label: 'Save', primary: true, run: async () => { finish(await settingsPageSave()); } },
+    ], { keepOpen: true, onClose: () => { if (!settled) { settled = true; resolve(false); } } });
+  });
+}
+function settingsPageAsk(proceed){ settingsPageGate().then(ok => { if (ok) proceed(); }); }
+
+window.addEventListener('beforeunload', e => {
+  if (!settingsPageDirty()) return;
+  e.preventDefault(); e.returnValue = '';
+});
 
 /* The bucket bar, while the page is up: the five tabs where the bucket tabs
    were, and none of the bucket bar's other controls. */
@@ -699,7 +762,7 @@ function renderSettingsTabs(){
   BoardUI.mountFlushed(wrap, BoardUI.h(BoardUI.FilterTabs, {
     tabs: tabs.map(([key, label, title]) => ({ key, label, on: settingsTab === key, title })),
     label: 'Settings sections',
-    onToggle: key => { if (key !== settingsTab) { settingsTab = key; syncHash(true); renderSettingsPage(); } }
+    onToggle: key => { if (key !== settingsTab) settingsPageAsk(() => { settingsTab = key; syncHash(true); renderSettingsPage(); }); }
   }));
   renderPhoneChrome();
 }
@@ -717,6 +780,7 @@ function leaveSettingsPage(){
 }
 
 function renderSettingsPage(){
+  settingsDiscarded = false;
   renderSettingsTabs();
   if (settingsTab !== 'agents') leaveAgentsView();
   settingsHostEl = null;
@@ -753,6 +817,8 @@ async function drawSettingsTab(){
   const host = $('#settingsPage');
   host.innerHTML = settingsPageLayoutHTML(draft.signedIn ? 'Your profile' : 'Settings', settingsPageSections(draft));
   settingsHostEl = host;
+  settingsLiveDraft = draft;
+  settingsSnapshot = settingsDraftSnapshot(draft);
   trackSettingsForm(draft, false);
   host.querySelectorAll('[data-settings-save]').forEach(btn => { btn.onclick = () => runSettingsSave(draft, false, false); });
 }
