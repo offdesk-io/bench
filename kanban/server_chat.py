@@ -36,6 +36,17 @@ EXTRA_DENIES = ["WebFetch", "WebSearch",
                 "CronCreate", "CronDelete", "CronList", "ScheduleWakeup", "RemoteTrigger",
                 "ListAgents", "SendMessage", "Agent", "TaskStop", "Monitor", "PushNotification",
                 "EnterWorktree", "ExitWorktree", "Workflow"]
+# The only tools a run on the shared board has: the engine passes them as
+# --tools with --strict-mcp-config, so no MCP server starts either. A tool a
+# later CLI release adds is absent rather than waiting for a line in
+# EXTRA_DENIES, which stays as a backstop. The CLI expands a leading /pa
+# itself, without Skill.
+ASK_TOOLS = [
+    "Read",   # the board's todo.md, its plans and reports, the PA's instructions
+    "Glob",   # find a card's plan, report or project file by name
+    "Grep",   # find a card or a line across the board's files
+    "Skill",  # a follow-up turn or a card chat loading pa or another pa-* skill
+]
 KEEP_VERDICTS = 200
 # claude -p runs a prompt as a slash command only when it starts with one.
 COMMAND = re.compile(r"^(/[\w:-]+)(?=\s|$)\s*")

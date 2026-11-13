@@ -149,6 +149,30 @@ def pa_runs_until_init(srv, who, payload):
     return None
 
 
+def old_engine(root):
+    """A PACKAGES folder whose ai_chat_engine predates ask_tools: the same
+    files, with the argument taken out of Engine, and every other package
+    linked from the real folder."""
+    real = bench_root.packages()
+    out = os.path.join(root, "old-packages")
+    os.makedirs(out)
+    for name in os.listdir(real):
+        if name != "ai_chat_engine" and not name.startswith("."):
+            os.symlink(os.path.join(real, name), os.path.join(out, name))
+    engine_dir = os.path.join(out, "ai_chat_engine")
+    os.makedirs(engine_dir)
+    src = os.path.join(real, "ai_chat_engine")
+    for name in os.listdir(src):
+        if name.endswith(".py"):
+            shutil.copy(os.path.join(src, name), engine_dir)
+    path = os.path.join(engine_dir, "engine.py")
+    with open(path, encoding="utf-8") as fh:
+        text = fh.read()
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(text.replace(", ask_tools=None", ""))
+    return out
+
+
 def main():
     root = tempfile.mkdtemp(prefix="server-chat-")
     allow_checks(root)
@@ -213,6 +237,12 @@ def main():
             ok("  the engine's default denials are kept",
                all(t in denied for t in ("Bash", "Edit", "Write", "NotebookEdit", "Task")), denied)
             ok("  and the web is denied", "WebFetch" in denied and "WebSearch" in denied, denied)
+            tools = argv[argv.index("--tools") + 1].split(",") if "--tools" in argv else None
+            ok("  with only the tools a board chat needs", tools == server_chat.ASK_TOOLS, tools)
+            ok("  and no MCP server", "--strict-mcp-config" in argv and "--mcp-config" not in argv, argv)
+            ok("  which hold no way to run, write, schedule or message",
+               tools is not None and not {"Bash", "Edit", "Write", "WebFetch", "CronCreate",
+                                          "ScheduleWakeup", "SendMessage", "ToolSearch"} & set(tools), tools)
 
             # --- PA chats are private -------------------------------------------------
             code, body, _ = ask(JEROME, {"prompt": "/pa what now", "owner": "board-pa", "title": "Now", "words": "what now"})
@@ -395,6 +425,16 @@ def main():
             his = (as_json(srv.ask("GET", "/claude/sessions.json", TIAGO)[1]) or {}).get("chats", {})
             ok("forgetting on board-pa forgets from the asker's own key",
                code == 200 and not his.get("board-pa"), "%d %s" % (code, his))
+        finally:
+            srv.stop()
+
+        # --- an engine without ask_tools: no chat, rather than one with every tool -----
+        srv = Server(data, "header", env=dict(env, ANTHROPIC_API_KEY="sk-test-not-a-key",
+                                              BENCH_PACKAGES=old_engine(root)))
+        ok("signed-in server with an engine older than ask_tools starts", srv.wait())
+        try:
+            code, _, _ = srv.ask("GET", "/claude.json", JEROME)
+            ok("  and has no chat", code == 404, "got %d" % code)
         finally:
             srv.stop()
 
