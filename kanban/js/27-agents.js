@@ -85,7 +85,7 @@ async function checkAgentsSetup(){
    The agents need the `claude` CLI and agents-engine. Without either, a run
    dies the moment it starts, so the board leaves out everything that would
    start one: agents under Delegate to, the
-   agent options in Settings, and the Data menu's Spend and Run the bucket agents now.
+   Agent options on the Agents tab, and the Data menu's Spend and Run the bucket agents now.
    The Agents tab says what is missing instead. The rest of the board does not
    need them. */
 function agentsCanRun(){ return state.agentsReady !== false; }
@@ -142,19 +142,21 @@ function renderAgentsView(){
     /* Nothing to schedule yet, so the hour tracks wait until there is. */
     leaveAgentsView();
     lists.innerHTML = '<div class="agentsview">' + agentSetupIntroHTML() +
-      '<div id="agentsCards">' + agentCardsHTML() + '</div><div id="refCardsRoot"></div></div>';
+      '<div id="agentOptions"></div><div id="agentsCards">' + agentCardsHTML() + '</div><div id="refCardsRoot"></div></div>';
     wireAgentSetupButtons(lists);
+    drawAgentOptions(lists.querySelector('#agentOptions'));
     drawRefCards();
     return;
   }
   let host = lists.querySelector('#agentsRoot');
   if (!host) {
     leaveAgentsView();
-    lists.innerHTML = '<div class="agentsview"><div id="agentsRoot"></div>' +
+    lists.innerHTML = '<div class="agentsview"><div id="agentOptions"></div><div id="agentsRoot"></div>' +
       '<div id="agentsCards"></div><div id="agentsPlanners"></div><div id="refCardsRoot"></div></div>';
     host = lists.querySelector('#agentsRoot');
     agentsRoot = host;
   }
+  drawAgentOptions(lists.querySelector('#agentOptions'));
   drawRefCards();
   lists.querySelector('#agentsCards').innerHTML = agentCardsHTML() +
     '<p class="agentsetup-more"><button type="button" class="btn small" data-agent-setup>' +
@@ -338,7 +340,33 @@ function agentSetupDone(){
    sub-task carries in `[to::]`, how it works, when it starts, and what is
    missing where its brief is not ready. Read through bucketAgentsNow()
    (04-tier-two-the-one-thing.js), which a brief save reloads, so a badge
-   changes without reloading the list. Each row opens that bucket's brief. */
+   changes without reloading the list. Each is a card that opens to show the brief's fields, with a Brief button
+   that edits it. */
+/* The brief's fields in the order a card shows them, under the headings the
+   brief file carries. The first six are required; the last two show only when
+   written. The keys are core/bucket_agents.py's FIELDS. */
+const BUCKET_CARD_FIELDS = [
+  ['purpose', 'What this agent is for', true],
+  ['processes', 'The processes I run in this bucket', true],
+  ['guidelines', 'Guidelines it follows', true],
+  ['may_touch', 'What it may touch', true],
+  ['never_touch', 'What it must never touch', true],
+  ['good', 'What good looks like here', true],
+  ['already_does_it', 'What already does it', false],
+  ['involved', 'Who is involved', false],
+];
+/* Which cards are open, so a redraw (every refreshView) does not shut them. */
+const bucketCardsOpen = new Set();
+
+function bucketCardBodyHTML(a){
+  const sec = a.sections || {};
+  return BUCKET_CARD_FIELDS.filter(([k, , req]) => req || String(sec[k] || '').trim()).map(([k, heading]) => {
+    const text = String(sec[k] || '').trim();
+    return '<div class="bagent__field" data-field="' + k + '"><dt>' + esc(heading) + '</dt>' +
+      (text ? '<dd>' + esc(text) + '</dd>' : '<dd class="bagent__empty">Not filled in yet</dd>') + '</div>';
+  }).join('');
+}
+
 function bucketAgentRowHTML(a, i){
   const cols = bucketAgentsNow().columns;
   const col = Object.keys(cols).find(k => cols[k] === a.bucket) || a.bucket;
@@ -349,10 +377,12 @@ function bucketAgentRowHTML(a, i){
     ? esc(how) + ' · ' + esc(when)
     : 'not set up: ' + esc(bucketAgentMissingText(a) || 'its brief');
   return '<li data-bucket-agent="' + esc(a.name) + '" class="' + (a.ready ? 'ready' : 'notready') + '">' +
+    '<details class="bagent"' + (bucketCardsOpen.has(a.name) ? ' open' : '') + '><summary>' +
     '<span class="planner-bucket">' + plannerAvatarHTML(bucketColor(col, bi), 16).replace('class="avatar"', 'class="avatar" style="margin-right:6px"') +
       esc(a.name) + '</span>' +
     '<span class="planner-name">' + detail + '</span>' +
-    '<button type="button" class="btn small" data-bucket-brief="' + esc(col) + '">Brief</button></li>';
+    '<button type="button" class="btn small" data-bucket-brief="' + esc(col) + '">Brief</button></summary>' +
+    '<dl class="bagent__body">' + bucketCardBodyHTML(a) + '</dl></details></li>';
 }
 
 async function refreshBucketPlanners(){
@@ -367,7 +397,14 @@ async function refreshBucketPlanners(){
     '<h2>Bucket agents on ' + esc(state.dataset || 'this list') + '</h2><ul>' +
     rows.map(bucketAgentRowHTML).join('') + '</ul></section>';
   again.querySelectorAll('[data-bucket-brief]').forEach(btn => {
-    btn.onclick = () => openBucketBrief(btn.dataset.bucketBrief);
+    /* The button sits in the summary, so a click on it must not also toggle the card. */
+    btn.onclick = e => { e.preventDefault(); e.stopPropagation(); openBucketBrief(btn.dataset.bucketBrief); };
+  });
+  again.querySelectorAll('li[data-bucket-agent] details').forEach(d => {
+    d.addEventListener('toggle', () => {
+      const name = d.closest('li').dataset.bucketAgent;
+      if (d.open) bucketCardsOpen.add(name); else bucketCardsOpen.delete(name);
+    });
   });
 }
 

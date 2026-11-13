@@ -2577,6 +2577,9 @@
   .fielderr{color:var(--tenon-text-error)}
   .agentopts{border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-default)}
   .agentopts > summary{cursor:pointer; list-style:none; padding:9px 11px; font-weight:600}
+  .agentopts > h2{margin:0; padding:9px 11px 0; font-size:var(--tenon-typography-size-sm); font-weight:640; color:var(--tenon-text-subtle)}
+  .agentopts--open{max-width:1100px}
+  .agentopts--open .agentopts__body{max-width:520px}
   .agentopts > summary::-webkit-details-marker{display:none}
   .agentopts > summary::before{content:'\25B8  '; color:var(--tenon-text-faint)}
   .agentopts[open] > summary::before{content:'\25BE  '}
@@ -3124,10 +3127,16 @@
 .planners h2 { font-size: var(--tenon-typography-size-sm); font-weight: 640; color: var(--tenon-text-subtle); margin: 0 0 10px; }
 .planners ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
 .planners li {
-  display: flex; justify-content: space-between; gap: 12px;
   background: var(--tenon-background-raised); border: 1px solid var(--tenon-stroke-default);
   border-radius: var(--tenon-radius-md); padding: 8px 14px; font-size: var(--tenon-typography-size-sm);
 }
+.bagent > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
+.bagent > summary::-webkit-details-marker { display: none; }
+.bagent > summary .planner-name { margin-left: auto; }
+.bagent__body { margin: 10px 0 2px; display: flex; flex-direction: column; gap: 10px; }
+.bagent__field dt { font-weight: 600; color: var(--tenon-text-default); margin: 0 0 2px; }
+.bagent__field dd { margin: 0; white-space: pre-wrap; color: var(--tenon-text-default); }
+.bagent__field dd.bagent__empty { color: var(--tenon-text-subtle); }
 .planner-bucket { color: var(--tenon-text-default); font-weight: 560; }
 .planner-name { color: var(--tenon-text-subtle); }
 

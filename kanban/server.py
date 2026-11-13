@@ -3054,9 +3054,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._json(404, {"error": "there is no list called %r" % (ds,)})
             out = []
             for b in bucket_agents.all_buckets(ds, DATA_ROOT):
-                out.append({"bucket": b["bucket"], "name": bucket_agent_name(ds, b["bucket"]),
-                            "mode": b["mode"], "start": b["start"],
-                            "ready": b["ready"], "missing": b["missing"]})
+                out.append(bucket_agents.api_row(b))
             # Which bucket's agent each column of the board hands to: the
             # column's name -> its bucket (stream), the way its brief is found.
             columns = {}

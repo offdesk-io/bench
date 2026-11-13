@@ -205,7 +205,8 @@ check('a card per agent under it', await evalJS(`[...document.querySelectorAll('
 check('each card says does, cannot and needs', await evalJS(`[...document.querySelectorAll('#agentsCards .agentcard')].every(c => [...c.querySelectorAll('dt')].map(d => d.textContent).join('|') === 'Does|Cannot|Needs from you' && [...c.querySelectorAll('dd')].every(d => d.textContent.length > 20))`))
 /* The bucket list under the switch and hours: a ready bucket, one that is not, and a free-rein one. */
 await evalJS(`bucketAgentData = { list: state.dataset || '', columns: {}, on: true, hours: [], buckets: [
-  { bucket: 'Tasks', name: 'Test tasks agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [] },
+  { bucket: 'Tasks', name: 'Test tasks agent', mode: 'plan-first', start: 'on-assign', ready: true, missing: [],
+    sections: { purpose: 'Keeps <b>the</b> list moving.', processes: 'Triage.\\nThen plan.', guidelines: 'British English.', may_touch: 'The project folder.', never_touch: 'Email.', good: 'A plan I approve.', involved: 'Sam' } },
   { bucket: 'Notes', name: 'Test notes agent', mode: 'free-rein', start: 'scheduled', ready: true, missing: [] },
   { bucket: 'Money', name: 'Test money agent', mode: 'plan-first', start: 'on-assign', ready: false, missing: ['marker', 'may_touch'] }] };
   bucketAgentLoad = Promise.resolve(); refreshBucketPlanners()`)
@@ -216,6 +217,23 @@ check('a ready plan-first bucket reads plan first, starts when assigned', /Test 
 check('a free-rein scheduled bucket reads free rein, scheduled', /Test notes agent.*free rein · scheduled/.test(await rowText('Test notes agent')))
 check('a bucket that is not ready says what is missing', /Test money agent.*not set up: the NOT FILLED IN YET line is still in the brief, what it may touch/.test(await rowText('Test money agent')))
 check('every row links to its bucket brief', await evalJS(`[...document.querySelectorAll('#agentsPlanners [data-bucket-brief]')].map(b => b.dataset.bucketBrief).join() === 'Tasks,Notes,Money'`))
+const card = name => `document.querySelector('#agentsPlanners [data-bucket-agent="${name}"]')`
+check('a card is one line until opened: avatar, name, mode and the Brief button', await evalJS(`(() => { const d = ${card('Test tasks agent')}.querySelector('details'); const s = d.querySelector('summary');
+  return !!d && !d.open && !!s.querySelector('.avatar') && !!s.querySelector('[data-bucket-brief]') && getComputedStyle(d.querySelector('.bagent__body')).display === 'none' || !d.open })()`))
+await evalJS(`${card('Test tasks agent')}.querySelector('summary .planner-bucket').click()`)
+await wait(200)
+check('clicking the line opens the card', await evalJS(`${card('Test tasks agent')}.querySelector('details').open`))
+check('it shows the brief fields under their headings, the optional one when written', await evalJS(`[...${card('Test tasks agent')}.querySelectorAll('.bagent__field dt')].map(d => d.textContent).join('|')`) ===
+  'What this agent is for|The processes I run in this bucket|Guidelines it follows|What it may touch|What it must never touch|What good looks like here|Who is involved')
+check('the text is plain, escaped and keeps its line breaks', await evalJS(`(() => { const d = ${card('Test tasks agent')}.querySelector('[data-field=purpose] dd'); const p = ${card('Test tasks agent')}.querySelector('[data-field=processes] dd');
+  return d.textContent === 'Keeps <b>the</b> list moving.' && !d.querySelector('b') && p.textContent === 'Triage.\\nThen plan.' && getComputedStyle(p).whiteSpace === 'pre-wrap' })()`))
+await evalJS(`${card('Test money agent')}.querySelector('summary .planner-bucket').click()`)
+await wait(200)
+check('an empty required field reads Not filled in yet, in secondary text', await evalJS(`(() => { const e = [...${card('Test money agent')}.querySelectorAll('.bagent__empty')];
+  return e.length === 6 && e.every(x => x.textContent === 'Not filled in yet') })()`))
+check('an unwritten optional field is left out', await evalJS(`!${card('Test money agent')}.querySelector('[data-field=involved]') && !${card('Test money agent')}.querySelector('[data-field=already_does_it]')`))
+check('the Brief button opens the editor and leaves the card as it was', await evalJS(`(() => { const d = ${card('Test money agent')}.querySelector('details'); let opened = null; const real = window.openBucketBrief; window.openBucketBrief = b => { opened = b; };
+  refreshBucketPlanners(); return new Promise(r => setTimeout(() => { const dd = ${card('Test money agent')}.querySelector('details'); const was = dd.open; ${card('Test money agent')}.querySelector('[data-bucket-brief]').click(); window.openBucketBrief = real; r(opened === 'Money' && dd.open === was && was); }, 100)); })()`))
 check('start wording follows the bucket agent', await evalJS(`bucketAgentStartWords({ start: 'on-assign' }) === 'starts when assigned' &&
   bucketAgentStartWords({ start: 'scheduled' }) === "starts in this board's hours"`))
 check('a scheduled bucket is outside the board\'s hours when the hour is not one of them', await evalJS(`(() => {
@@ -276,10 +294,10 @@ check('and no list counts as set up, delegated tasks included', await evalJS(`((
 check('Delegate to offers no agents', await evalJS(`!delegateSelectHTML('', '').includes('optgroup label="Agents"')`))
 check('the Data menu leaves out Run the bucket agents now, and the Settings page keeps its four tabs', await evalJS(`syncFolderButton();
   $('#runAgentBtn').classList.contains('hidden') && settingsTabs().map(t => t[0]).join() === 'memory,settings,agents,backups'`))
-check('Settings leaves out the agent options', await evalJS(`loadSettingsDraft(false).then(d => {
+check('Settings has no agent options either way, and the Agents tab says why agents are off', await evalJS(`loadSettingsDraft(false).then(d => {
   const html = settingsFormHTML(d.draft, [], false);
-  return !html.includes('data-agent-options') && html.includes('Agents are off on this machine');
-})`))
+  return !html.includes('data-agent-options') && !html.includes('Agents are off on this machine');
+}).then(ok => { state.view = 'agents'; renderView(); return ok && !document.querySelector('[data-agent-options]') && document.querySelector('#lists .agentsetup').textContent.includes('Claude Code'); })`))
 await evalJS(`state.agentsReady = null; state.agentsMissing = ''; syncFolderButton(); state.view = 'board'; renderView()`)
 await wait(300)
 check('with the answer unknown, nothing is hidden', await evalJS(`settingsTabs().some(t => t[0] === 'agents') && !$('#runAgentBtn').classList.contains('hidden')`))
