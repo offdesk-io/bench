@@ -449,7 +449,8 @@ def _read_text(path):
 
 def bucket_headings(name=None):
     """[(heading, name)] for each numbered bucket in the board's todo.md, in
-    file order, "1. Tasks" and "Tasks". Reads the file and changes nothing."""
+    file order, as ("1. Tasks", "Tasks"). A `## ` heading with no number is not
+    a bucket and is left out. Reads the file and changes nothing."""
     if todo is None:
         return []
     text, _ = _read_text(todo_path(name))
