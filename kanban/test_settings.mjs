@@ -80,7 +80,7 @@ try {
   check('nothing was written by the refused PUTs', !existsSync(join(data, 'profile.md')) && !existsSync(join(data, 'settings.json')))
 
   chrome = spawn(CHROME_BIN, [
-    '--headless=new', `--remote-debugging-port=${CDP}`, '--no-first-run',
+    '--headless=new', '--mute-audio', `--remote-debugging-port=${CDP}`, '--no-first-run',
     `--user-data-dir=${process.env.CHROME_PROFILE ? process.env.CHROME_PROFILE + 'settings' : join(root, 'chrome')}`,
     '--window-size=1400,1000', `${base}/kanban/index.html`,
   ], { stdio: 'ignore' })
