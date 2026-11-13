@@ -56,7 +56,7 @@ const FIXTURE = [
 async function run (label, width, height) {
   const port = (Number(process.env.CDP_PORT) || 9480) + (width < 700 ? 0 : 1)
   const chrome = spawn(CHROME_BIN, [
-    '--headless=new', `--remote-debugging-port=${port}`, '--no-first-run',
+    '--headless=new', '--mute-audio', `--remote-debugging-port=${port}`, '--no-first-run',
     `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-phone-test-'}${width}`, `--window-size=${width},${height}`,
     `http://127.0.0.1:${BOARD}/kanban/index.html`
   ], { stdio: ['ignore', 'pipe', 'pipe'] })

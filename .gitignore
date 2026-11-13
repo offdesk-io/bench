@@ -34,6 +34,8 @@ companion/bundle-id.local
 
 # Locks
 *.lock
+# ...but not the packages Bench is pinned to
+!/packages.lock
 
 # Board build
 node_modules/

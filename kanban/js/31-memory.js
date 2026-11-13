@@ -67,8 +67,13 @@ function memRemoveContextSection(){
   const span = memContextSpan();
   if (!span) return;
   let end = span.end;
-  while (span.at > 0 && span.arr[span.at - 1].trim() === '' && end >= span.arr.length) span.at--;
+  /* Before the first bucket the section's own trailing blank is the one that
+     separates what is left from the bucket heading, so it stays. In the array
+     after the last bucket nothing follows it, so the blanks before it go too. */
+  const before = span.arr === state.doc.pre;
+  if (!before) while (span.at > 0 && span.arr[span.at - 1].trim() === '' && end >= span.arr.length) span.at--;
   span.arr.splice(span.at, end - span.at);
+  if (before && span.arr.length && span.arr[span.arr.length - 1].trim() !== '') span.arr.push('');
   markDirty();
 }
 
@@ -188,18 +193,20 @@ function memReadPage(){
 }
 /* True when the fields on screen differ from what was loaded. */
 function memIsDirty(){
-  if (!memDraft || !document.querySelector('#memView')) return false;
+  if (state.locked || !memDraft || !document.querySelector('#memView')) return false;
   memReadPage();
   return memSnapshot(memDraft) !== memBase;
 }
 
 /* ---- Sections ---- */
 
+/* A locked tab (the example list, a backup preview) shows every field and saves none. */
+const memRO = () => state.locked ? ' readonly' : '';
 function memFieldHTML(label, control, help){
   return '<label class="field"><span>' + esc(label) + '</span>' + control + (help ? '<span class="help">' + esc(help) + '</span>' : '') + '</label>';
 }
 function memAreaHTML(attr, value, label, placeholder, rows){
-  return '<textarea class="memarea" rows="' + (rows || 4) + '" ' + attr + ' aria-label="' + escAttr(label) + '" placeholder="' + escAttr(placeholder || '') + '" spellcheck="true">' + esc(value) + '</textarea>';
+  return '<textarea class="memarea" rows="' + (rows || 4) + '" ' + attr + memRO() + ' aria-label="' + escAttr(label) + '" placeholder="' + escAttr(placeholder || '') + '" spellcheck="true">' + esc(value) + '</textarea>';
 }
 
 function memAboutYouHTML(){
@@ -209,7 +216,7 @@ function memAboutYouHTML(){
     memAreaHTML('data-mem-profile-section="' + k + '"', d.psections[k], name, hint(k)),
     SETTINGS_SECTIONS.find(x => x[0] === k)[2]);
   const abt = k => { const f = SETTINGS_ABOUT.find(x => x[0] === k); return memFieldHTML(f[1],
-    '<input type="text" data-mem-profile-about="' + k + '" value="' + escAttr(d.pabout[k]) + '" placeholder="Not set">', f[2]); };
+    '<input type="text" data-mem-profile-about="' + k + '"' + memRO() + ' value="' + escAttr(d.pabout[k]) + '" placeholder="Not set">', f[2]); };
   const html = ('facts_file' in d.pabout ? abt('facts_file') : '') +
     ('habits' in d.psections ? sec('habits', 'Working habits') : '') +
     ('writing' in d.psections ? sec('writing', 'Writing rules') : '') +
@@ -231,21 +238,21 @@ function memCompanyTeamHTML(){
     '<div class="memrow" data-mem-row="' + i + '">' +
       MEM_PEOPLE_COLS.map(c =>
         '<label class="field"><span>' + esc(c.label) + '</span>' +
-        '<input type="text" data-mem-person="' + c.key + '" value="' + escAttr(p[c.key] || '') + '" aria-label="' + esc(c.label + ', person ' + (i + 1)) + '"></label>'
+        '<input type="text" data-mem-person="' + c.key + '"' + memRO() + ' value="' + escAttr(p[c.key] || '') + '" aria-label="' + esc(c.label + ', person ' + (i + 1)) + '"></label>'
       ).join('') +
-      '<button type="button" class="btn small ghost danger" data-mem-remove="' + i + '" aria-label="Remove ' + esc(p.name || 'this person') + '">Remove</button>' +
+      (state.locked ? '' : '<button type="button" class="btn small ghost danger" data-mem-remove="' + i + '" aria-label="Remove ' + esc(p.name || 'this person') + '">Remove</button>') +
     '</div>').join('');
   return { id: 'company', title: 'Company and team', wide: true, html:
     memDesc('about') + memFieldHTML('Company description', memAreaHTML('data-mem-about', memDraft.about, 'Company description', 'Say here what the company does.', 6)) +
     '<h3 class="memsubhead">Team</h3>' + memDesc('people') +
     (memDraft.people.length ? '' : memEmpty('No team yet. Add the people you work with.')) +
     '<div class="memrows" data-mem-people-rows>' + rows + '</div>' +
-    '<div class="memactions"><button type="button" class="btn small outline" data-mem-add>Add a person</button></div>' };
+    (state.locked ? '' : '<div class="memactions"><button type="button" class="btn small outline" data-mem-add>Add a person</button></div>') };
 }
 
 function memContextHTML(){
   return { id: 'context', title: 'Other context', html: memDesc('context') +
-    memAreaHTML('data-mem-context' + (state.locked ? ' readonly' : ''), memDraft.context, 'Context', 'No context yet. Note who is away and what is live this week.', 6) +
+    memAreaHTML('data-mem-context', memDraft.context, 'Context', 'No context yet. Note who is away and what is live this week.', 6) +
     (state.locked ? '<p class="help">This tab is read-only.</p>' : '') };
 }
 
@@ -266,7 +273,7 @@ function memBucketsHTML(){
       } else if (!b.exists) body = memEmpty('No brief yet.');
       else if (!b.filled) body = memEmpty('The brief is still the empty template.');
       else body = memRender(b.text, true);
-      const edit = memEditing === which ? '' :
+      const edit = memEditing === which || state.locked ? '' :
         '<button type="button" class="btn small outline" data-mem-edit="' + esc(which) + '"' +
         (memEditing ? ' disabled title="Save or cancel the open edit first"' : '') + '>Edit</button>';
       return '<article class="membucket" id="' + esc(memUniqueId('mem-bucket-' + memSlug(b.heading))) + '" data-mem-bucket="' + esc(b.heading) + '">' +
@@ -275,26 +282,51 @@ function memBucketsHTML(){
     }).join('') };
 }
 
-/* Drawn from memDraft. A redraw while fields hold unsaved typing is skipped
-   unless `force` says the page's own structure changed (a row added, a bucket
-   opened), which reads the typing into the draft first. */
+/* The brief form that is open, copied into memBucketParts. */
+function memReadBucket(){
+  const box = document.querySelector('#memView [data-mem-brief-summary]');
+  if (!memEditing || !memBucketParts || !box) return;
+  memBucketParts.summary = box.value;
+  document.querySelectorAll('#memView [data-brief-section]').forEach(t => {
+    memBucketParts.sections[BRIEF_SECTIONS[+t.dataset.briefSection]] = t.value;
+  });
+}
+/* Every field of the page, in order. A redraw builds the same fields again, so
+   a field's place in this list names it afterwards. */
+const memFields = () => [...document.querySelectorAll('#memView textarea, #memView input')];
+
+/* Drawn from memDraft. A redraw while fields hold unsaved typing, or a bucket
+   brief is open, is skipped unless `force` says the page's own structure
+   changed (a row added, a bucket opened) or fresh text arrived. A forced redraw
+   reads the typing into the drafts first and puts the cursor back. A locked
+   tab never has a form open. */
 function memDraw(force, fresh){
   const lists = $('#lists');
   if (!lists) return;
+  if (state.locked && memEditing) { memEditing = null; memBucketParts = null; memFormError = ''; }
   if (memError) {
     lists.innerHTML = '<div class="lists pview memview settingsview" style="--pcols:1"><p class="memerr" role="alert">' + esc(memError) + '</p></div>';
     return;
   }
   if (!memData) { lists.innerHTML = '<div class="lists pview memview settingsview" style="--pcols:1"><p class="memempty">Reading what Bench keeps…</p></div>'; return; }
-  if (!force && memIsDirty()) return;
+  if (!force && (memIsDirty() || (memEditing && document.querySelector('#memView [data-mem-brief-summary]')))) return;
+  memReadBucket();
   if (force && !fresh) memReadPage();
   if (!memDraft) memResetDraft();
+  const at = memFields().indexOf(document.activeElement);
+  const sel = at < 0 ? null : { start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd };
   memIds = new Set();
   lists.innerHTML = '<div class="lists pview memview settingsview" id="memView" style="--pcols:1">' +
     (memPageError ? '<p class="memerr" role="alert">' + esc(memPageError) + '</p>' : '') +
-    settingsPageLayoutHTML('Memory', [memAboutYouHTML(), memRecorderHTML(), memCompanyTeamHTML(), memContextHTML(), memBucketsHTML()], { saveAttr: 'data-mem-save-all' }) +
+    (state.locked ? '<p class="help memlocked">This tab is read-only.</p>' : '') +
+    settingsPageLayoutHTML('Memory', [memAboutYouHTML(), memRecorderHTML(), memCompanyTeamHTML(), memContextHTML(), memBucketsHTML()], { saveAttr: 'data-mem-save-all', save: !state.locked }) +
   '</div>';
   lists.querySelector('#memView').onclick = memClick;
+  const el = at < 0 ? null : memFields()[at];
+  if (el) {
+    el.focus();
+    try { el.setSelectionRange(sel.start, sel.end); } catch (e) { /* not a text field */ }
+  }
 }
 
 /* Test hook and reload path: take the draft from memData and draw it. */
@@ -307,6 +339,7 @@ function memReset(){ memResetDraft(); memDraw(true, true); }
    kept as saved. */
 /* True when it went through (or there was nothing to write). */
 async function memSaveAll(){
+  if (state.locked) return false;
   memReadPage();
   memPageError = '';
   const ch = memChanges();
@@ -330,12 +363,13 @@ async function memSaveAll(){
     return false;
   }
   if (!done.length) { showToast('Nothing to save.'); return true; }
-  await memLoad();
+  await memLoad(true);
   showToast('Saved.', 'good');
   return true;
 }
 
 async function memSaveBucket(which){
+  if (state.locked) return;
   memFormError = '';
   try {
     const heading = which.slice(7);
@@ -361,6 +395,7 @@ async function memSaveBucket(which){
 }
 
 function memStartEdit(which){
+  if (state.locked) return;
   memFormError = '';
   memEditing = which;
   const b = memData.buckets.find(x => x.heading === which.slice(7));
@@ -384,20 +419,28 @@ function memClick(e){
   }
 }
 
-async function memLoad(){
+/* Reads what Bench keeps again. Unsaved typing, and a bucket brief that is
+   open, survive it (a watch-tick reload or a late answer) unless `fresh` says
+   the page was just saved and starts from what was read. */
+async function memLoad(fresh){
+  let typing = false;
   try {
     memData = await getJSON('/memory.json');
     memError = '';
-    memResetDraft();
+    typing = !fresh && !!document.querySelector('#memView') && (memIsDirty() || !!memEditing);
+    if (!typing) memResetDraft();
   } catch (err) {
     memError = 'Could not read what Bench keeps. The board helper may need restarting. ' + (err.message || err);
   }
-  if (memOnScreen()) memDraw(true, true);
+  if (memOnScreen()) memDraw(true, !typing);
 }
 
+/* Drawn again for the same page (a reload of todo.md, a refresh of the view)
+   keeps the typing and an open bucket brief. Arriving from anywhere else, where
+   #memView is not on screen, starts clean. */
 function renderMemoryView(){
-  memEditing = null; memFormError = ''; memPageError = ''; memBucketParts = null;
-  if (memData) memResetDraft();
-  memDraw(true, true);
+  const same = !!document.querySelector('#memView');
+  if (!same) { memEditing = null; memBucketParts = null; memFormError = ''; memPageError = ''; if (memData) memResetDraft(); }
+  memDraw(true, !same);
   memLoad();
 }

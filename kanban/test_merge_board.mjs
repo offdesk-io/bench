@@ -52,7 +52,7 @@ const until = async (fn, ms = 8000) => {
 }
 
 const chrome = spawn(CHROME_BIN, [
-  '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
+  '--headless=new', '--mute-audio', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-merge-test-profile'}`, '--window-size=1400,1000',
   `${BASE}/kanban/index.html`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })

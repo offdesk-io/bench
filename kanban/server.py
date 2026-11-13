@@ -449,7 +449,8 @@ def _read_text(path):
 
 def bucket_headings(name=None):
     """[(heading, name)] for each numbered bucket in the board's todo.md, in
-    file order, "1. Tasks" and "Tasks". Reads the file and changes nothing."""
+    file order, as ("1. Tasks", "Tasks"). A `## ` heading with no number is not
+    a bucket and is left out. Reads the file and changes nothing."""
     if todo is None:
         return []
     text, _ = _read_text(todo_path(name))
@@ -2411,7 +2412,7 @@ _shared_chat_lock = threading.Lock()
 
 def shared_chat_for(name):
     """The signed-in board's chat (kanban/server_chat.py), or None without
-    ANTHROPIC_API_KEY or with an engine older than ask_allows. Each run
+    ANTHROPIC_API_KEY or with an engine older than ask_tools. Each run
     starts in the board's own folder, so dontAsk refuses every other board,
     data/users/ and anything added to data/ later; it may read the PA's
     instructions and the board's outside project folders, and nothing else
@@ -2438,6 +2439,7 @@ def _build_shared_chat(name):
                         config_path=os.path.join(board_dir, "claude.json"),
                         sessions_path=os.path.join(sessions_dir, name + ".json"),
                         ask_denies=list(ASK_DENIES) + server_chat.EXTRA_DENIES,
+                        ask_tools=server_chat.ASK_TOOLS,
                         ask_allows=server_chat.read_allows(ROOT, DATA_ROOT, board_dir,
                                                            project_homes(name)))
     except TypeError:

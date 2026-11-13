@@ -36,7 +36,7 @@ const check = (name, pass, detail = '') => {
 }
 
 const chrome = spawn(CHROME_BIN, [
-  '--headless=new', `--remote-debugging-port=${PORT}`, '--no-first-run',
+  '--headless=new', '--mute-audio', `--remote-debugging-port=${PORT}`, '--no-first-run',
   `--user-data-dir=${process.env.CHROME_PROFILE || '/tmp/todo-backups-test-profile'}`, '--window-size=1400,1000',
   `http://127.0.0.1:${BOARD}/kanban/index.html`
 ], { stdio: ['ignore', 'pipe', 'pipe'] })

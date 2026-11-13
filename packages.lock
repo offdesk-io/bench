@@ -1,0 +1,8 @@
+# The shared packages this Bench is tested and deployed with, one a line: its
+# folder in PACKAGES, the full commit, and the URL to clone it from. CI clones
+# each at its commit, and a deploy checks each out at it on the server
+# (scripts/deploy-on-server.sh). To move a package, change its commit here in
+# a PR, so the tests run against it before the server does.
+agents-engine 4258848f123d15330445fb0f3450cb014ba67bc1 https://github.com/tiagopedras/agents-engine.git
+ai_chat_engine 588f1963a4e384bf6b95cf00ed4614b2b0016eb7 https://github.com/tiagopedras/ai-chat-engine.git
+work-streams e35a2a2d3c19de7d4432878b9c60aa23f5bf06c8 https://github.com/tiagopedras/work-streams.git

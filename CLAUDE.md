@@ -168,6 +168,11 @@ rollback), and refuses a commit that is not on `origin/main`. The secrets sit
 in the `production` environment, which only `main` can use. `main` is
 protected, so only an approved PR with passing tests gets in.
 
+The shared packages (`ai_chat_engine`, `agents-engine`, `work-streams`) are
+pinned in `packages.lock`, one full commit each. CI tests against those
+commits and a deploy checks them out on the server, so moving a package is a
+PR that changes its line there.
+
 By hand, from the Mac, as before: `scripts/deploy-server.sh main` (dry run),
 then `--apply`. Both routes share one lock on the server. After changing
 `deploy-on-server.sh` or `deploy-forced-command.sh`, run

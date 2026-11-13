@@ -62,7 +62,7 @@ try {
   check('the page without a sign-in is a 401', (await fetch(`${base}/kanban/index.html`)).status === 401)
 
   chrome = spawn(CHROME_BIN, [
-    '--headless=new', `--remote-debugging-port=${CDP}`, '--no-first-run',
+    '--headless=new', '--mute-audio', `--remote-debugging-port=${CDP}`, '--no-first-run',
     `--user-data-dir=${process.env.CHROME_PROFILE ? process.env.CHROME_PROFILE + 'signedin' : join(root, 'chrome')}`,
     '--window-size=1400,1000', 'about:blank',
   ], { stdio: 'ignore' })
