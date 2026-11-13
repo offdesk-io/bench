@@ -85,7 +85,7 @@ async function checkAgentsSetup(){
    The agents need the `claude` CLI and agents-engine. Without either, a run
    dies the moment it starts, so the board leaves out everything that would
    start one: agents under Delegate to, the
-   agent options in Settings, and the Data menu's Spend and Run the bucket agents now.
+   Agent options on the Agents tab, and the Data menu's Spend and Run the bucket agents now.
    The Agents tab says what is missing instead. The rest of the board does not
    need them. */
 function agentsCanRun(){ return state.agentsReady !== false; }
@@ -142,19 +142,21 @@ function renderAgentsView(){
     /* Nothing to schedule yet, so the hour tracks wait until there is. */
     leaveAgentsView();
     lists.innerHTML = '<div class="agentsview">' + agentSetupIntroHTML() +
-      '<div id="agentsCards">' + agentCardsHTML() + '</div><div id="refCardsRoot"></div></div>';
+      '<div id="agentOptions"></div><div id="agentsCards">' + agentCardsHTML() + '</div><div id="refCardsRoot"></div></div>';
     wireAgentSetupButtons(lists);
+    drawAgentOptions(lists.querySelector('#agentOptions'));
     drawRefCards();
     return;
   }
   let host = lists.querySelector('#agentsRoot');
   if (!host) {
     leaveAgentsView();
-    lists.innerHTML = '<div class="agentsview"><div id="agentsRoot"></div>' +
+    lists.innerHTML = '<div class="agentsview"><div id="agentOptions"></div><div id="agentsRoot"></div>' +
       '<div id="agentsCards"></div><div id="agentsPlanners"></div><div id="refCardsRoot"></div></div>';
     host = lists.querySelector('#agentsRoot');
     agentsRoot = host;
   }
+  drawAgentOptions(lists.querySelector('#agentOptions'));
   drawRefCards();
   lists.querySelector('#agentsCards').innerHTML = agentCardsHTML() +
     '<p class="agentsetup-more"><button type="button" class="btn small" data-agent-setup>' +
