@@ -108,7 +108,6 @@ check('the tab is locked', await evalJS(`state.locked === true`))
    agent: the tab shows its three columns, with no way to set one up, and the
    rest of the board leaves the agents out. */
 await wait(800)
-check('a list with no agent counts as not set up', await evalJS(`state.agentsSetup === false && agentsSetUp() === false`))
 check('Agents is a tab of the Settings page, not of the top bar', await evalJS(`!viewDefs().some(d => d.id === 'agents') && settingsTabs().some(t => t[0] === 'agents')`))
 await evalJS(`openSettingsPage('agents')`)
 await wait(400)
@@ -126,20 +125,9 @@ check('but keeps one a task already names', await evalJS(`delegateSelectHTML('De
 await evalJS(`state.view = 'overview'; renderView()`)
 await wait(400)
 check('Overview leaves out Delegate to Claude', await evalJS(`!document.querySelector('#lists').textContent.includes('Delegate to Claude')`))
-check('a delegated task counts as set up', await evalJS(`(() => {
-  const t = state.doc.buckets[0].tiers.find(ti => ti.tasks.length).tasks[0];
-  t.to = 'Demo tasks agent'; const on = agentsSetUp(); t.to = ''; return on && !agentsSetUp();
-})()`))
-check('a brief carrying only the template counts as unwritten', await evalJS(`(() => {
-  const tpl = '# <Bucket name>\\n\\n<One line>\\n\\n## The processes I run in this bucket\\n\\nOne per heading.\\n';
-  const scaffolded = tpl.replace('<Bucket name>', 'Tasks').replace('<One line>', 'Things I do');
-  const written = scaffolded.replace('One per heading.', 'Weekly invoices, sent every Friday.');
-  const b = text => ({ exists: true, filled: true, text, template: tpl });
-  return !briefWritten(b(scaffolded)) && briefWritten(b(written));
-})()`))
 
 /* ---- once one is ---- */
-await evalJS(`state.agentsSetup = true; state.view = 'agents'; renderView()`)
+await evalJS(`state.view = 'agents'; renderView()`)
 await wait(1200)
 check('it mounts the shared component', await evalJS(`!!document.querySelector('#lists #agentsRoot .agents-ui.agents-root.embedded')`))
 check('titled Agents', await evalJS(`document.querySelector('#agentsRoot h1')?.textContent === 'Agents'`))
@@ -233,10 +221,6 @@ await wait(300)
 check('with no Claude Code, the tab says so instead of offering setup', await evalJS(`
   document.querySelector('#lists .agentsetup').textContent.includes('Claude Code') &&
   !document.querySelector('#lists [data-agent-setup]') && !document.querySelector('#lists .agents-ui')`))
-check('and no list counts as set up, delegated tasks included', await evalJS(`(() => {
-  const t = state.doc.buckets[0].tiers.find(ti => ti.tasks.length).tasks[0];
-  t.to = 'Demo tasks agent'; const on = agentsSetUp(); t.to = ''; return on === false;
-})()`))
 check('Delegate to offers no agents', await evalJS(`!delegateSelectHTML('', '').includes('optgroup label="Agents"')`))
 check('the Data menu leaves out Run the bucket agents now, and the Settings page keeps its four tabs', await evalJS(`syncFolderButton();
   $('#runAgentBtn').classList.contains('hidden') && settingsTabs().map(t => t[0]).join() === 'memory,settings,agents,backups'`))

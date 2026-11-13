@@ -25,61 +25,6 @@
 
 let agentsRoot = null;
 
-/* ---- Is there an agent on this list yet? ----
-
-   Someone who only uses the PA to keep their list has no use for the agent
-   half of the board, so until the list has an agent set up the board leaves
-   it out: no agents under Delegate to, and
-   this tab shows the cards and the way to set one up instead of the hour
-   tracks. The agent filter chip already hides itself while nothing is
-   delegated.
-
-   A list counts as set up when any of these holds:
-     - a bucket's agent is ready to take a task (`ready` in
-       /bucket-brief.json, core/bucket_agents.py's judgement);
-     - a bucket's brief has a section the person wrote, rather than the
-       template's own prose — a new list's wizard scaffolds every brief with a
-       one-line summary and no marker, so `filled` alone would count every
-       new list as set up;
-     - a task, or one of its sub-tasks, is already delegated to an agent.
-   Until the briefs have answered, or where there is no server to ask (the
-   demo build), it counts as set up, so nothing is hidden on a guess. */
-function agentsSetUp(){
-  if (!agentsCanRun()) return false;
-  if (state.agentsSetup !== false) return true;
-  return listHasAgentWork();
-}
-
-function listHasAgentWork(){
-  if (!state.doc) return false;
-  return state.doc.buckets.some(b => b.tiers.some(ti => ti.tasks.some(t => delegatedToAgent(t))));
-}
-
-/* A brief with at least one section that is neither empty nor the template's
-   own text for it. */
-function briefWritten(brief){
-  if (!brief || !brief.exists || !brief.filled) return false;
-  const mine = parseBriefText(brief.text).sections;
-  const tpl = parseBriefText(brief.template || '').sections;
-  return BRIEF_SECTIONS.some(n => {
-    const v = (mine[n] || '').trim();
-    return !!v && v !== (tpl[n] || '').trim();
-  });
-}
-
-let agentsSetupAsk = 0;
-async function checkAgentsSetup(){
-  if (!state.doc) return;
-  const ask = ++agentsSetupAsk;
-  const answers = await Promise.all(state.doc.buckets.map(b =>
-    getJSON('/bucket-brief.json?bucket=' + encodeURIComponent(b.name)).catch(() => null)));
-  if (ask !== agentsSetupAsk) return;
-  const got = answers.filter(Boolean);
-  const was = agentsSetUp();
-  state.agentsSetup = got.length ? got.some(a => a.ready || briefWritten(a)) : null;
-  if (agentsSetUp() !== was && state.doc) refreshView();
-}
-
 /* ---- Can an agent run on this machine? ----
 
    The agents need the `claude` CLI and agents-engine. Without either, a run

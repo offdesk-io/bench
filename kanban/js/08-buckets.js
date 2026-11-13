@@ -611,7 +611,6 @@ async function openBucketBrief(bucketName, back){
         try {
           const text = serializeBriefText(briefParts, keepBriefMarker(briefWasEmpty, briefParts));
           const res = await putJSON('/bucket-brief', { bucket: bucketName, text });
-          checkAgentsSetup();
           reloadBucketAgentsPanel();
           showToast(res.filled ? 'Brief saved.'
             : 'Brief saved — still carrying the empty marker, so no agent reads it yet.',

@@ -124,11 +124,6 @@ const state = {
   /* "Mine": tasks whose `[to:: ]`, or a sub-task's, names whoever is signed
      in (forMe() in 21-datasets.js). In memory only, like agentFilter. */
   mineFilter: false,
-  /* Whether this list has an agent set up: a bucket whose agent is ready, or
-     a brief with something the person wrote in it. null until
-     /bucket-brief.json has answered, and read only through agentsSetUp()
-     (27-agents.js), which also counts any task already delegated to an agent. */
-  agentsSetup: null,
   /* Whether an agent can run on this machine at all: the `claude` CLI and
      agents-engine both there (/agents-status.json, loadAgentsStatus() in
      27-agents.js). null until it answers, and where there is no server to ask,

@@ -331,7 +331,6 @@ async function memSave(which){
       const wasEmpty = !b.exists || !b.filled;
       const text = serializeBriefText(memBucketParts, keepBriefMarker(wasEmpty, memBucketParts));
       await putJSON('/bucket-brief', { bucket: heading, text });
-      checkAgentsSetup();
       reloadBucketAgentsPanel();
     }
   } catch (err) {
