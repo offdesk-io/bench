@@ -3263,7 +3263,6 @@ body.signed-in #runAgentBtn{display:none !important}
 .agentsview #refCardsRoot{max-width:860px}
 
 /* Memory (31-memory.js): one panel per section. */
-.memsubhead{margin:8px 0 0; font-size:var(--tenon-typography-size-sm); font-weight:650; color:var(--tenon-text-default)}
 .memhead{display:flex; align-items:center; justify-content:space-between; gap:12px}
 .memhead h4, .memtext h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:600; color:var(--tenon-text-subtle)}
 .membucket{display:flex; flex-direction:column; gap:8px; padding:12px 0; border-top:1px solid var(--tenon-stroke-default)}
@@ -3272,13 +3271,11 @@ body.signed-in #runAgentBtn{display:none !important}
 .memempty{margin:0; padding:14px 16px; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-faint); border:1px dashed var(--tenon-stroke-default); border-radius:var(--tenon-radius-md)}
 .memerr{margin:0; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-error)}
 .memactions{display:flex; align-items:center; flex-wrap:wrap; gap:8px}
-.memarea{
-  width:100%; box-sizing:border-box; min-height:160px; padding:8px 10px; resize:vertical;
-  font:inherit; font-size:var(--tenon-typography-size-sm); line-height:1.6;
-  color:var(--tenon-text-default); background:var(--tenon-background-raised);
-  border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-md);
-}
-.memarea:focus{outline:2px solid var(--tenon-stroke-focus); outline-offset:1px}
+.tenon-field[hidden]{display:none}
+/* Tenon's Field fills its column; on the Settings and Memory pages every Field
+   shares one width, the Team rows aside. */
+.spage__fields .tenon-field{max-width:640px}
+.memrow .tenon-field{max-width:none}
 .memrows{display:flex; flex-direction:column; gap:12px}
 .memrow{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)) auto; gap:8px; align-items:end}
 @media (max-width:640px){

@@ -108,8 +108,7 @@ function settingsCountryOptions(draft, first){
 function settingsAboutField(draft, key){
   const f = SETTINGS_ABOUT.find(a => a[0] === key);
   if (!f || !(key in draft.about)) return '';
-  return '<label class="field"><span>' + esc(f[1]) + '</span><input type="text" data-about="' + key + '" value="' + escAttr(draft.about[key]) + '" placeholder="Not set">' +
-    '<span class="help">' + esc(f[2]) + '</span><span class="help fielderr" data-err="about-' + key + '" hidden></span></label>';
+  return tenonFieldHTML({ label: f[1], attrs: 'data-about="' + key + '"', value: draft.about[key], placeholder: 'Not set', hint: f[2], err: 'data-err="about-' + key + '"' });
 }
 
 /* "This board": the open list's own memory folder, banners and agents, kept
@@ -118,21 +117,19 @@ function settingsAboutField(draft, key){
 const BOARD_MEMORY_MODES = [['inherit', 'Same as main memory folder'], ['none', 'None, keep everything in Bench'], ['own', 'Its own folder']];
 
 function boardSwitchHTML(attr, on, name, help){
-  return '<label class="field"><span>' + esc(name) + '</span>' +
-    '<button type="button" role="switch" class="tenon-switch' + (on ? ' tenon-switch--on' : '') + '" ' + attr + ' aria-checked="' + on + '"></button>' +
-    '<span class="help">' + esc(help) + '</span></label>';
+  return tenonFieldHTML({ label: name, kind: 'switch', attrs: attr, on, hint: help });
 }
 
-/* The board's own memory folder field, shared by the pop-up's This board group
-   and the page's Folders section. */
+/* The board's own memory folder: the choice, and the path it asks for when it
+   is "Its own folder". Shared by the pop-up's This board group and the page's
+   Folders section. */
 function boardMemoryFieldHTML(draft, label){
   const b = draft.board;
-  return '<label class="field"><span>' + esc(label || 'Memory folder') + '</span><select data-board-memory-mode>' +
-    BOARD_MEMORY_MODES.map(([v, l]) => '<option value="' + v + '"' + (b.mode === v ? ' selected' : '') + '>' + esc(l) + '</option>').join('') +
-    '</select>' +
-    '<input type="text" data-board-memory value="' + escAttr(b.path) + '" placeholder="/absolute/path/to/folder"' + (b.mode === 'own' ? '' : ' hidden') + '>' +
-    '<span class="help">Where facts about you and this list’s people are kept. Same as main uses the memory folder above, None keeps everything in data/' + esc(draft.list) + '/.</span>' +
-    '<span class="help fielderr" data-err="board-memory" hidden></span></label>';
+  return tenonFieldHTML({ label: label || 'Memory folder', kind: 'select', attrs: 'data-board-memory-mode',
+    options: BOARD_MEMORY_MODES.map(([v, l]) => '<option value="' + v + '"' + (b.mode === v ? ' selected' : '') + '>' + esc(l) + '</option>').join(''),
+    hint: 'Where facts about you and this list’s people are kept. Same as main uses the memory folder above, None keeps everything in data/' + draft.list + '/.' }) +
+    tenonFieldHTML({ label: 'Folder path', attrs: 'data-board-memory' + (b.mode === 'own' ? '' : ' hidden'), value: b.path, placeholder: '/absolute/path/to/folder',
+      wrap: 'data-board-memory-field' + (b.mode === 'own' ? '' : ' hidden'), err: 'data-err="board-memory"' });
 }
 
 function boardGroupHTML(draft, first){
@@ -146,34 +143,32 @@ function boardGroupHTML(draft, first){
 }
 
 function settingsNameFields(draft){
-  return '<label class="field"><span>Name</span><input type="text" data-name value="' + escAttr(draft.name) + '" placeholder="First name">' +
-    '<span class="help">' + (draft.signedIn ? 'What the PA calls you.' : 'Who the review sub-tasks are assigned to.') + '</span>' +
-    '<span class="help fielderr" data-err="name" hidden></span></label>';
+  return tenonFieldHTML({ label: 'Name', attrs: 'data-name', value: draft.name, placeholder: 'First name',
+    hint: draft.signedIn ? 'What the PA calls you.' : 'Who the review sub-tasks are assigned to.', err: 'data-err="name"' });
 }
 
 function settingsPlaceFields(draft, first){
-  return '<label class="field"><span>Country</span><select data-country>' + settingsCountryOptions(draft, first) + '</select>' +
-    '<span class="help">Its public holidays count as days off.</span>' +
-    '<span class="help" data-nolist hidden>No public holiday list available for this country, so only weekends count as days off.</span>' +
-    '<span class="help fielderr" data-err="country" hidden></span></label>' +
-    '<label class="field" data-region-field' + (draft.regions.length ? '' : ' hidden') + '><span>Region</span>' +
-    '<select data-region>' + settingsRegionOptions(draft) + '</select></label>';
+  return tenonFieldHTML({ label: 'Country', kind: 'select', attrs: 'data-country', options: settingsCountryOptions(draft, first),
+    hint: 'Its public holidays count as days off.',
+    notes: tenonFieldNote('data-nolist', 'No public holiday list available for this country, so only weekends count as days off.'),
+    err: 'data-err="country"' }) +
+    tenonFieldHTML({ label: 'Region', kind: 'select', attrs: 'data-region', options: settingsRegionOptions(draft),
+      wrap: 'data-region-field' + (draft.regions.length ? '' : ' hidden') });
 }
 
 function settingsMemoryFolderField(draft){
-  return '<label class="field"><span>Memory folder</span><input type="text" data-memory value="' + escAttr(draft.memoryRoot) + '" placeholder="Not set">' +
-    '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.</span></label>';
+  return tenonFieldHTML({ label: 'Memory folder', attrs: 'data-memory', value: draft.memoryRoot, placeholder: 'Not set',
+    hint: 'A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.' });
 }
 
 function settingsProjectsField(draft){
-  return '<label class="field"><span>Projects folder for ' + esc(draft.list) + '</span><input type="text" data-projects value="' + escAttr(draft.projectsRoot) + '" placeholder="Not set">' +
-    '<span class="help">A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + esc(draft.list) + '/projects/.</span></label>';
+  return tenonFieldHTML({ label: 'Projects folder for ' + draft.list, attrs: 'data-projects', value: draft.projectsRoot, placeholder: 'Not set',
+    hint: 'A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + draft.list + '/projects/.' });
 }
 
 function settingsChimeField(draft, help){
-  return '<label class="field"><span>Reply chime</span>' +
-    '<button type="button" role="switch" class="tenon-switch' + (draft.chime ? ' tenon-switch--on' : '') + '" data-chime aria-checked="' + draft.chime + '"></button>' +
-    '<span class="help">' + esc(help || 'A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.') + '</span></label>';
+  return tenonFieldHTML({ label: 'Reply chime', kind: 'switch', attrs: 'data-chime', on: draft.chime,
+    hint: help || 'A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.' });
 }
 
 function settingsFormHTML(draft, choices, first){
@@ -210,6 +205,67 @@ function settingsPageLayoutHTML(title, sections, opts){
     '</div>';
 }
 
+/* ---- Tenon's Field, drawn as a string ----
+
+   Settings and Memory are HTML strings, so Field.tsx's markup is written out
+   here once (tenon/src/components/Field): a .tenon-field block holding the
+   label tied to its control by for/id, the control, the hint under it, and an
+   error line that shows in place when there is one. Nothing on those pages
+   styles a field itself; every labelled text box, number, dropdown and textarea
+   comes through this. o: label, kind ('input' | 'textarea' | 'select' |
+   'switch'), attrs (data-* and the like, as a string), value, type,
+   placeholder, rows, options (a select's <option>s, as HTML), hint, hintAttrs,
+   notes (extra lines under the hint, as HTML), err (the data attribute naming
+   the error line, e.g. 'data-err="name"'), required, readonly, on (a switch),
+   wrap (attributes on the block, e.g. 'data-region-field hidden'). */
+let tenonFieldSeq = 0;
+const TENON_CHEVRON = '<svg class="tenon-select__chevron" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function tenonFieldHTML(o){
+  const id = 'tf-' + (++tenonFieldSeq), hintId = id + '-note', errId = id + '-err';
+  const kind = o.kind || 'input';
+  const hasHint = o.hint !== undefined && o.hint !== null && o.hint !== '';
+  const common = ' id="' + id + '"' + (hasHint ? ' aria-describedby="' + hintId + '"' : '') + (o.required ? ' required' : '') +
+    (o.readonly ? ' readonly' : '') + (o.attrs ? ' ' + o.attrs : '');
+  let control;
+  if (kind === 'select') {
+    control = '<span class="tenon-field__select"><select class="tenon-field__control"' + common + '>' + (o.options || '') + '</select>' + TENON_CHEVRON + '</span>';
+  } else if (kind === 'textarea') {
+    control = '<textarea class="tenon-field__control" rows="' + (o.rows || 5) + '"' + common + ' placeholder="' + escAttr(o.placeholder || '') + '" spellcheck="true">' + esc(o.value || '') + '</textarea>';
+  } else if (kind === 'switch') {
+    control = '<button type="button" role="switch" class="tenon-switch' + (o.on ? ' tenon-switch--on' : '') + '" aria-checked="' + !!o.on + '"' + common + '></button>';
+  } else {
+    control = '<input class="tenon-field__control" type="' + (o.type || 'text') + '"' + common + ' value="' + escAttr(o.value || '') + '"' + (o.placeholder ? ' placeholder="' + escAttr(o.placeholder) + '"' : '') + '>';
+  }
+  return '<div class="tenon-field"' + (o.wrap ? ' ' + o.wrap : '') + '>' +
+    '<label class="tenon-field__label" for="' + id + '">' + esc(o.label) +
+      (o.required ? '<span class="tenon-field__required" aria-hidden="true">*</span>' : '') + '</label>' +
+    control +
+    (hasHint ? '<span id="' + hintId + '" class="tenon-field__note"' + (o.hintAttrs ? ' ' + o.hintAttrs : '') + '>' + esc(o.hint) + '</span>' : '') +
+    (o.notes || '') +
+    (o.err ? '<span id="' + errId + '" class="tenon-field__note tenon-field__note--error" ' + o.err + ' hidden></span>' : '') +
+    '</div>';
+}
+/* A line under a field that shows only when it applies, as Field's own note. */
+function tenonFieldNote(attrs, text){
+  return '<span class="tenon-field__note" ' + attrs + ' hidden>' + esc(text) + '</span>';
+}
+/* Shows or clears the error line of a field drawn by tenonFieldHTML, as Field
+   does for an error: the block goes invalid, the control says so, and the
+   error describes the control as well as the hint. A line outside such a field
+   is only shown or hidden. */
+function tenonFieldError(el, msg){
+  el.textContent = msg || '';
+  el.hidden = !msg;
+  const field = el.closest('.tenon-field');
+  const control = field && field.querySelector('.tenon-field__control');
+  if (!field || !control) return;
+  field.classList.toggle('tenon-field--invalid', !!msg);
+  if (msg) control.setAttribute('aria-invalid', 'true'); else control.removeAttribute('aria-invalid');
+  const ids = (control.getAttribute('aria-describedby') || '').split(/\s+/).filter(x => x && x !== el.id);
+  if (msg) ids.push(el.id);
+  if (ids.length) control.setAttribute('aria-describedby', ids.join(' ')); else control.removeAttribute('aria-describedby');
+}
+
 /* The Settings tab's sections. Signed in, the profile is the visitor's own and
    the server's settings are not theirs, so only You is offered, with How to
    address you, which has no other home for them. */
@@ -223,9 +279,8 @@ function settingsPageSections(draft){
   if ('setup' in draft.sections) {
     const [, name, help] = SETTINGS_SECTIONS.find(x => x[0] === 'setup');
     sections.push({ id: 'setup', title: name,
-      html: '<label class="field">' +
-        '<textarea class="memarea" rows="5" aria-label="' + escAttr(name) + '" data-setup placeholder="' + escAttr(draft.hints.setup || '') + '" spellcheck="true">' + esc(draft.sections.setup) + '</textarea>' +
-        '<span class="help">' + esc(help) + '</span><span class="help fielderr" data-err="setup" hidden></span></label>' });
+      html: tenonFieldHTML({ label: name, kind: 'textarea', attrs: 'data-setup', value: draft.sections.setup,
+        placeholder: draft.hints.setup || '', hint: help, err: 'data-err="setup"' }) });
   }
   sections.push({ id: 'notifications', title: 'Notifications',
     html: (draft.list ? boardSwitchHTML('data-board-banners', draft.board.banners, 'Desktop banners', 'A banner when a task on this board is due, on this board only. Off, it sends none.') : '') +
@@ -297,9 +352,7 @@ function paintSetupErrors(draft, first, attempted){
   const err = settingsErrors(draft, first);
   root.querySelectorAll('[data-err]').forEach(el => {
     const k = el.dataset.err;
-    const show = !!err[k] && (draft.touched[k] || attempted);
-    el.textContent = show ? err[k] : '';
-    el.hidden = !show;
+    tenonFieldError(el, !!err[k] && (draft.touched[k] || attempted) ? err[k] : '');
   });
   root.querySelectorAll('button[data-i="0"], [data-settings-save]').forEach(save => { save.disabled = Object.keys(err).length > 0; });
 }
@@ -348,6 +401,7 @@ function trackSettingsForm(draft, first){
       draft.board.mode = bm.value;
       const bp = root.querySelector('[data-board-memory]');
       bp.hidden = bm.value !== 'own';
+      bp.closest('.tenon-field').hidden = bp.hidden;
       draft.board.path = bp.value;
       if (e && e.target === bp) draft.touched['board-memory'] = true;
     }

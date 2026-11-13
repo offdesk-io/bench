@@ -96,9 +96,19 @@ try {
   check('every bucket has a block', await evalJS(`document.querySelectorAll('.membucket').length === memData.buckets.length && memData.buckets.length > 0`))
   check('Other context holds the list\'s own section as text', await evalJS(`document.querySelector('[data-mem-context]').value.length > 20`))
   check('About you holds the facts file, working habits, writing rules and how to address you, in that order', await evalJS(
-    `[...document.querySelectorAll('[data-section=profile] .field > span:first-child')].map(x => x.textContent).join() === 'Facts file,Working habits,Writing rules,How to address you'`))
+    `[...document.querySelectorAll('[data-section=profile] .tenon-field > .tenon-field__label')].map(x => x.textContent).join() === 'Facts file,Working habits,Writing rules,How to address you'`))
   check('Meeting recorder holds its profile section, and Setup is not on this page', await evalJS(
     `!!document.querySelector('[data-section=recorder] [data-mem-profile-section=recorder]') && !document.querySelector('[data-mem-profile-section=setup]')`))
+  check('every field is Tenon\'s Field: label tied by for and id, help under the control and describing it, no Bench field styling', await evalJS(`(() => {
+    const fields = [...document.querySelectorAll('#memView .tenon-field')];
+    return fields.length >= 5 && fields.every(f => {
+      const l = f.querySelector('label.tenon-field__label'), c = f.querySelector('.tenon-field__control');
+      const n = f.querySelector('.tenon-field__note');
+      if (!l || !c || !l.htmlFor || l.htmlFor !== c.id || document.querySelectorAll('[id="' + c.id + '"]').length !== 1) return false;
+      if (!n || !(c.getAttribute('aria-describedby') || '').split(' ').includes(n.id)) return !n && !c.hasAttribute('aria-describedby') && !!c.closest('.memrow');
+      return !!(c.compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }) && !document.querySelector('#memView .field, #memView .memarea, #memView .memsubhead, #memView label:not(.tenon-field__label)') })()`))
+  check('all the textareas share one width', await evalJS(`(() => { const w = [...document.querySelectorAll('#memView textarea')].map(t => Math.round(t.getBoundingClientRect().width)); return w.length >= 5 && new Set(w).size === 1 })()`), await evalJS(`[...document.querySelectorAll('#memView textarea')].map(t => Math.round(t.getBoundingClientRect().width)).join()`))
   await watchPuts()
 
   // --- Nothing changed: Save sends nothing ----------------------------------
@@ -284,7 +294,7 @@ try {
   await wait(600)
 
   // each section says what it is for, filled or empty
-  const descs = `[...document.querySelectorAll('#memView .spage__section')].map(s => s.dataset.section + '=' + [...s.querySelectorAll(':scope > .spage__fields > .memdesc')].map(d => d.textContent).join('+')).join('|')`
+  const descs = `[...document.querySelectorAll('#memView .spage__section')].map(s => s.dataset.section + '=' + [...s.querySelectorAll('[data-mem-desc]')].map(d => d.textContent).join('+')).join('|')`
   const wantDescs = {
     profile: 'Facts about you that agents work from: how you work, write and want things done.',
     recorder: '',

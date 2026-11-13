@@ -121,7 +121,7 @@ const MEM_DESC = {
   context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone.",
   profile: 'Facts about you that agents work from: how you work, write and want things done.'
 };
-function memDesc(id){ return MEM_DESC[id] ? '<p class="memdesc">' + esc(MEM_DESC[id]) + '</p>' : ''; }
+function memDesc(id){ return MEM_DESC[id] ? '<p class="memdesc" data-mem-desc="' + id + '">' + esc(MEM_DESC[id]) + '</p>' : ''; }
 let memIds = new Set();   // ids issued during this render, so two headings that slug alike stay apart
 function memUniqueId(base){
   let id = base, n = 1;
@@ -200,35 +200,31 @@ function memIsDirty(){
 
 /* ---- Sections ---- */
 
-/* A locked tab (the example list, a backup preview) shows every field and saves none. */
-const memRO = () => state.locked ? ' readonly' : '';
-function memFieldHTML(label, control, help){
-  return '<label class="field"><span>' + esc(label) + '</span>' + control + (help ? '<span class="help">' + esc(help) + '</span>' : '') + '</label>';
-}
-function memAreaHTML(attr, value, label, placeholder, rows){
-  return '<textarea class="memarea" rows="' + (rows || 4) + '" ' + attr + memRO() + ' aria-label="' + escAttr(label) + '" placeholder="' + escAttr(placeholder || '') + '" spellcheck="true">' + esc(value) + '</textarea>';
-}
+/* Every labelled control on the page is Tenon's Field, through tenonFieldHTML()
+   (29-settings.js), the same as on the Settings tab. A locked tab (the example
+   list, a backup preview) shows each one readonly and saves none. */
+const memField = o => tenonFieldHTML(Object.assign({ readonly: state.locked }, o));
+/* The text under a section's fields, or under its one field as that field's hint. */
+const memDescText = id => MEM_DESC[id] || '';
 
 function memAboutYouHTML(){
   const p = memData.profile || {}, d = memDraft;
-  const hint = k => (p.hints || {})[k] || '';
-  const sec = (k, name) => SETTINGS_SECTIONS.find(x => x[0] === k) && memFieldHTML(name,
-    memAreaHTML('data-mem-profile-section="' + k + '"', d.psections[k], name, hint(k)),
-    SETTINGS_SECTIONS.find(x => x[0] === k)[2]);
-  const abt = k => { const f = SETTINGS_ABOUT.find(x => x[0] === k); return memFieldHTML(f[1],
-    '<input type="text" data-mem-profile-about="' + k + '"' + memRO() + ' value="' + escAttr(d.pabout[k]) + '" placeholder="Not set">', f[2]); };
+  const sec = (k, name) => memField({ label: name, kind: 'textarea', attrs: 'data-mem-profile-section="' + k + '"', value: d.psections[k],
+    placeholder: (p.hints || {})[k] || '', hint: SETTINGS_SECTIONS.find(x => x[0] === k)[2] });
+  const abt = k => { const f = SETTINGS_ABOUT.find(x => x[0] === k); return memField({ label: f[1], attrs: 'data-mem-profile-about="' + k + '"',
+    value: d.pabout[k], placeholder: 'Not set', hint: f[2] }); };
   const html = ('facts_file' in d.pabout ? abt('facts_file') : '') +
     ('habits' in d.psections ? sec('habits', 'Working habits') : '') +
     ('writing' in d.psections ? sec('writing', 'Writing rules') : '') +
     ('addressing' in d.pabout ? abt('addressing') : '');
-  return { id: 'profile', title: 'About you', html: memDesc('profile') + (html || memEmpty('No profile yet. Set your name in Settings.')) };
+  return { id: 'profile', title: 'About you', html: (html || memEmpty('No profile yet. Set your name in Settings.')) + memDesc('profile') };
 }
 
 function memRecorderHTML(){
   const p = memData.profile || {}, d = memDraft;
   const f = SETTINGS_SECTIONS.find(x => x[0] === 'recorder');
   const html = 'recorder' in d.psections
-    ? memFieldHTML(f[1], memAreaHTML('data-mem-profile-section="recorder"', d.psections.recorder, f[1], (p.hints || {}).recorder), f[2])
+    ? memField({ label: f[1], kind: 'textarea', attrs: 'data-mem-profile-section="recorder"', value: d.psections.recorder, placeholder: (p.hints || {}).recorder || '', hint: f[2] })
     : memEmpty('No profile yet. Set your name in Settings.');
   return { id: 'recorder', title: 'Meeting recorder', html };
 }
@@ -236,24 +232,22 @@ function memRecorderHTML(){
 function memCompanyTeamHTML(){
   const rows = memDraft.people.map((p, i) =>
     '<div class="memrow" data-mem-row="' + i + '">' +
-      MEM_PEOPLE_COLS.map(c =>
-        '<label class="field"><span>' + esc(c.label) + '</span>' +
-        '<input type="text" data-mem-person="' + c.key + '"' + memRO() + ' value="' + escAttr(p[c.key] || '') + '" aria-label="' + esc(c.label + ', person ' + (i + 1)) + '"></label>'
-      ).join('') +
+      MEM_PEOPLE_COLS.map(c => memField({ label: c.label, attrs: 'data-mem-person="' + c.key + '"', value: p[c.key] || '' })).join('') +
       (state.locked ? '' : '<button type="button" class="btn small ghost danger" data-mem-remove="' + i + '" aria-label="Remove ' + esc(p.name || 'this person') + '">Remove</button>') +
     '</div>').join('');
   return { id: 'company', title: 'Company and team', wide: true, html:
-    memDesc('about') + memFieldHTML('Company description', memAreaHTML('data-mem-about', memDraft.about, 'Company description', 'Say here what the company does.', 6)) +
-    '<h3 class="memsubhead">Team</h3>' + memDesc('people') +
+    memField({ label: 'Company description', kind: 'textarea', attrs: 'data-mem-about', value: memDraft.about, placeholder: 'Say here what the company does.',
+      hint: memDescText('about'), hintAttrs: 'data-mem-desc="about"' }) +
     (memDraft.people.length ? '' : memEmpty('No team yet. Add the people you work with.')) +
     '<div class="memrows" data-mem-people-rows>' + rows + '</div>' +
+    memDesc('people') +
     (state.locked ? '' : '<div class="memactions"><button type="button" class="btn small outline" data-mem-add>Add a person</button></div>') };
 }
 
 function memContextHTML(){
-  return { id: 'context', title: 'Other context', html: memDesc('context') +
-    memAreaHTML('data-mem-context', memDraft.context, 'Context', 'No context yet. Note who is away and what is live this week.', 6) +
-    (state.locked ? '<p class="help">This tab is read-only.</p>' : '') };
+  return { id: 'context', title: 'Other context', html:
+    memField({ label: 'Context', kind: 'textarea', attrs: 'data-mem-context', value: memDraft.context, placeholder: 'No context yet. Note who is away and what is live this week.',
+      hint: memDescText('context'), hintAttrs: 'data-mem-desc="context"' }) };
 }
 
 function memBucketsHTML(){
@@ -263,12 +257,8 @@ function memBucketsHTML(){
       const which = 'bucket:' + b.heading;
       let body;
       if (memEditing === which) {
-        body = '<label class="field"><span>One line: what kind of work lands here</span>' +
-          '<input type="text" data-mem-brief-summary value="' + esc(memBucketParts.summary) + '" aria-label="What kind of work lands in this bucket"></label>' +
-          BRIEF_SECTIONS.map((name, i) =>
-            '<label class="field briefsection"><span>' + esc(name) + '</span>' +
-            '<textarea data-brief-section="' + i + '" spellcheck="false" aria-label="' + esc(name) + '">' +
-            esc(memBucketParts.sections[name] || '') + '</textarea></label>').join('') +
+        body = tenonFieldHTML({ label: 'One line: what kind of work lands here', attrs: 'data-mem-brief-summary', value: memBucketParts.summary }) +
+          BRIEF_SECTIONS.map((name, i) => tenonFieldHTML({ label: name, kind: 'textarea', attrs: 'data-brief-section="' + i + '"', value: memBucketParts.sections[name] || '' })).join('') +
           memFormButtons(which);
       } else if (!b.exists) body = memEmpty('No brief yet.');
       else if (!b.filled) body = memEmpty('The brief is still the empty template.');

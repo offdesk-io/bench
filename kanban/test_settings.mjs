@@ -230,7 +230,7 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   const projects = join(root, 'PROJECTS')
   mkdirSync(projects)
   check('Settings offers a Projects folder for the open list, empty by default', await evalJS(`settingsRoot().querySelector('[data-projects]').value`) === ''
-    && (await evalJS(`settingsRoot().querySelector('[data-projects]').closest('label').textContent`)).includes('Projects folder for '))
+    && (await evalJS(`settingsRoot().querySelector('[data-projects]').closest('.tenon-field').querySelector('label').textContent`)).includes('Projects folder for '))
   await evalJS(`(() => { const i = settingsRoot().querySelector('[data-projects]'); i.value = ${JSON.stringify(projects)}; i.dispatchEvent(new Event('input', { bubbles: true })) })()`)
   await press('Save')
   await wait(2500)
@@ -289,11 +289,11 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('the page is titled Settings, with sections You, Folders, Setup and Notifications', await evalJS(
     `settingsRoot().querySelector('h1.spage__title').textContent === 'Settings' && [...settingsRoot().querySelectorAll('.spage__label')].map(h => h.textContent).join() === 'You,Folders,Setup,Notifications'`))
   check('You holds Name, Country and Region only', await evalJS(
-    `[...settingsRoot().querySelectorAll('[data-section=you] .field > span:first-child')].map(x => x.textContent).join() === 'Name,Country,Region'`))
+    `[...settingsRoot().querySelectorAll('[data-section=you] .tenon-field:not([hidden]) > .tenon-field__label')].map(x => x.textContent).join() === 'Name,Country,Region'`))
   check('Folders holds the main memory folder, the projects folder and the board\'s memory folder', await evalJS(
-    `[...settingsRoot().querySelectorAll('[data-section=folders] .field > span:first-child')].map(x => x.textContent).join().replace(/Projects folder for [^,]*/, 'Projects') === 'Memory folder,Projects,This board’s memory folder' && !!settingsRoot().querySelector('[data-section=folders] [data-board-memory-mode]')`))
+    `[...settingsRoot().querySelectorAll('[data-section=folders] .tenon-field:not([hidden]) > .tenon-field__label')].map(x => x.textContent).join().replace(/Projects folder for [^,]*/, 'Projects') === 'Memory folder,Projects,This board’s memory folder' && !!settingsRoot().querySelector('[data-section=folders] [data-board-memory-mode]')`))
   check('Notifications holds Desktop banners and Reply chime', await evalJS(
-    `[...settingsRoot().querySelectorAll('[data-section=notifications] .field > span:first-child')].map(x => x.textContent).join() === 'Desktop banners,Reply chime'`))
+    `[...settingsRoot().querySelectorAll('[data-section=notifications] .tenon-field:not([hidden]) > .tenon-field__label')].map(x => x.textContent).join() === 'Desktop banners,Reply chime'`))
   check('there are two Saves, one under the title and one closing the content', await evalJS(
     `settingsRoot().querySelectorAll('[data-settings-save]').length === 2 && !!settingsRoot().querySelector('.spage__head [data-settings-save]') && !!settingsRoot().querySelector('.spage__foot [data-settings-save]')`))
   check('the content is at most 1200px wide, sections are 1:3, and the second Save sits at the content\'s right edge', await evalJS(`(() => {
@@ -356,8 +356,22 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await reopen()
   check('the memory folder offers the three choices', await evalJS(`[...settingsRoot().querySelectorAll('[data-board-memory-mode] option')].map(o => o.textContent).join('|')`)
     === 'Same as main memory folder|None, keep everything in Bench|Its own folder')
-  check('each control has a line of help', await evalJS(`(() => { const f = [...settingsRoot().querySelectorAll('.spage__fields .field:not([data-region-field])')]; return f.length >= 7 && f.every(x => x.querySelector('.help') && x.querySelector('.help').textContent.length > 10) })()`))
-  check('Notifications says banners are this board only and the chime is every board', await evalJS(`(() => { const h = [...settingsRoot().querySelectorAll('[data-section=notifications] .help')].map(x => x.textContent).join(' '); return /this board only/.test(h) && /every board/.test(h) })()`))
+  check('each field has a line of help', await evalJS(`(() => { const f = [...settingsRoot().querySelectorAll('.spage__fields .tenon-field:not([data-region-field]):not([data-board-memory-field])')]; return f.length >= 7 && f.every(x => x.querySelector('.tenon-field__note') && x.querySelector('.tenon-field__note').textContent.length > 10) })()`))
+  check('every field is Tenon\'s Field: its label is tied to the control by for and id, and the help sits under the control and describes it', await evalJS(`(() => {
+    const fields = [...settingsRoot().querySelectorAll('.spage__fields .tenon-field')];
+    return fields.length >= 8 && fields.every(f => {
+      const l = f.querySelector('label.tenon-field__label'), c = f.querySelector('.tenon-field__control, [role=switch]');
+      const n = f.querySelector('.tenon-field__note:not([hidden]):not(.tenon-field__note--error)');
+      if (!l || !c || !l.htmlFor || l.htmlFor !== c.id || document.querySelectorAll('[id="' + c.id + '"]').length !== 1) return false;
+      if (n && !(c.getAttribute('aria-describedby') || '').split(' ').includes(n.id)) return false;
+      return !n || !!((c.closest('.tenon-field__select') || c).compareDocumentPosition(n) & Node.DOCUMENT_POSITION_FOLLOWING);
+    }) && !settingsRoot().querySelector('.spage__fields .field, .spage__fields .memarea') })()`))
+  check('a missing name marks its field invalid, with the error as well as the help describing it', await (async () => {
+    await evalJS(`(() => { const n = settingsRoot().querySelector('[data-name]'); const keep = n.value; n.value = ''; n.dispatchEvent(new Event('input', { bubbles: true })); n.dispatchEvent(new Event('focusout', { bubbles: true })); window.__keepName = keep })()`)
+    const r = await evalJS(`(() => { const n = settingsRoot().querySelector('[data-name]'), f = n.closest('.tenon-field'), e = f.querySelector('[data-err=name]'); return n.getAttribute('aria-invalid') === 'true' && f.classList.contains('tenon-field--invalid') && !e.hidden && n.getAttribute('aria-describedby').split(' ').includes(e.id) })()`)
+    await evalJS(`(() => { const n = settingsRoot().querySelector('[data-name]'); n.value = window.__keepName; n.dispatchEvent(new Event('input', { bubbles: true })) })()`)
+    return r && await evalJS(`!settingsRoot().querySelector('[data-name]').hasAttribute('aria-invalid')`) })())
+  check('Notifications says banners are this board only and the chime is every board', await evalJS(`(() => { const h = [...settingsRoot().querySelectorAll('[data-section=notifications] .tenon-field__note')].map(x => x.textContent).join(' '); return /this board only/.test(h) && /every board/.test(h) })()`))
   await evalJS(`settingsRoot().querySelector('[data-board-banners]').click()`)
   await press('Save')
   await wait(2500)
