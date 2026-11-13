@@ -123,56 +123,113 @@ function boardSwitchHTML(attr, on, name, help){
     '<span class="help">' + esc(help) + '</span></label>';
 }
 
-function boardGroupHTML(draft, first, extra){
-  if (first || draft.signedIn || !draft.list) return '';
+/* The board's own memory folder field, shared by the pop-up's This board group
+   and the page's Folders section. */
+function boardMemoryFieldHTML(draft, label){
   const b = draft.board;
-  return '<div class="agentopts__group" data-board-group><h4>This board</h4>' +
-    '<label class="field"><span>Memory folder</span><select data-board-memory-mode>' +
+  return '<label class="field"><span>' + esc(label || 'Memory folder') + '</span><select data-board-memory-mode>' +
     BOARD_MEMORY_MODES.map(([v, l]) => '<option value="' + v + '"' + (b.mode === v ? ' selected' : '') + '>' + esc(l) + '</option>').join('') +
     '</select>' +
     '<input type="text" data-board-memory value="' + escAttr(b.path) + '" placeholder="/absolute/path/to/folder"' + (b.mode === 'own' ? '' : ' hidden') + '>' +
     '<span class="help">Where facts about you and this list’s people are kept. Same as main uses the memory folder above, None keeps everything in data/' + esc(draft.list) + '/.</span>' +
-    '<span class="help fielderr" data-err="board-memory" hidden></span></label>' +
+    '<span class="help fielderr" data-err="board-memory" hidden></span></label>';
+}
+
+function boardGroupHTML(draft, first){
+  if (first || draft.signedIn || !draft.list) return '';
+  const b = draft.board;
+  return '<div class="agentopts__group" data-board-group><h4>This board</h4>' +
+    boardMemoryFieldHTML(draft) +
     boardSwitchHTML('data-board-banners', b.banners, 'Desktop banners', 'A banner when a task on this board is due. Off, it sends none.') +
     boardSwitchHTML('data-board-agents', b.agents, 'Agents', 'Lets this board’s bucket agents work. Off, they leave it alone.') +
-    (extra || '') +
     '</div>';
 }
 
-/* The page lays the form out as three columns (You, Folders, This board); the
-   welcome and the modal keep one. `cols` is only passed by the page. */
-function settingsFormHTML(draft, choices, first, cols){
-  const you =
-    '<label class="field"><span>Name</span><input type="text" data-name value="' + escAttr(draft.name) + '" placeholder="First name">' +
+function settingsNameFields(draft){
+  return '<label class="field"><span>Name</span><input type="text" data-name value="' + escAttr(draft.name) + '" placeholder="First name">' +
     '<span class="help">' + (draft.signedIn ? 'What the PA calls you.' : 'Who the review sub-tasks are assigned to.') + '</span>' +
-    '<span class="help fielderr" data-err="name" hidden></span></label>' +
-    (first ? '' : settingsAboutField(draft, 'addressing')) +
-    '<label class="field"><span>Country</span><select data-country>' + settingsCountryOptions(draft, first) + '</select>' +
+    '<span class="help fielderr" data-err="name" hidden></span></label>';
+}
+
+function settingsPlaceFields(draft, first){
+  return '<label class="field"><span>Country</span><select data-country>' + settingsCountryOptions(draft, first) + '</select>' +
     '<span class="help">Its public holidays count as days off.</span>' +
     '<span class="help" data-nolist hidden>No public holiday list available for this country, so only weekends count as days off.</span>' +
     '<span class="help fielderr" data-err="country" hidden></span></label>' +
     '<label class="field" data-region-field' + (draft.regions.length ? '' : ' hidden') + '><span>Region</span>' +
     '<select data-region>' + settingsRegionOptions(draft) + '</select></label>';
+}
+
+function settingsMemoryFolderField(draft){
+  return '<label class="field"><span>Memory folder</span><input type="text" data-memory value="' + escAttr(draft.memoryRoot) + '" placeholder="Not set">' +
+    '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.</span></label>';
+}
+
+function settingsProjectsField(draft){
+  return '<label class="field"><span>Projects folder for ' + esc(draft.list) + '</span><input type="text" data-projects value="' + escAttr(draft.projectsRoot) + '" placeholder="Not set">' +
+    '<span class="help">A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + esc(draft.list) + '/projects/.</span></label>';
+}
+
+function settingsChimeField(draft, help){
+  return '<label class="field"><span>Reply chime</span>' +
+    '<button type="button" role="switch" class="tenon-switch' + (draft.chime ? ' tenon-switch--on' : '') + '" data-chime aria-checked="' + draft.chime + '"></button>' +
+    '<span class="help">' + esc(help || 'A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.') + '</span></label>';
+}
+
+function settingsFormHTML(draft, choices, first){
+  const you = settingsNameFields(draft) + (first ? '' : settingsAboutField(draft, 'addressing')) + settingsPlaceFields(draft, first);
   if (draft.signedIn) {
     const sharing = draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '';
     return '<div class="setupform">' + you + sharing + '</div>';
   }
-  const folders =
-    (first ? '' : '<label class="field"><span>Memory folder</span><input type="text" data-memory value="' + escAttr(draft.memoryRoot) + '" placeholder="Not set">' +
-      '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.</span></label>') +
-    (first || !draft.list ? '' : '<label class="field"><span>Projects folder for ' + esc(draft.list) + '</span><input type="text" data-projects value="' + escAttr(draft.projectsRoot) + '" placeholder="Not set">' +
-      '<span class="help">A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + esc(draft.list) + '/projects/.</span></label>');
-  const chime =
-    '<label class="field"><span>Reply chime</span>' +
-    '<button type="button" role="switch" class="tenon-switch' + (draft.chime ? ' tenon-switch--on' : '') + '" data-chime aria-checked="' + draft.chime + '"></button>' +
-    '<span class="help">A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.</span></label>';
-  if (!cols) return '<div class="setupform">' + you + folders + boardGroupHTML(draft, first) + chime + '</div>';
-  const board = boardGroupHTML(draft, first, chime);
-  return '<div class="setupform setupform--cols">' +
-    '<div class="settingscol"><h4>You</h4>' + you + '</div>' +
-    '<div class="settingscol"><h4>Folders</h4>' + folders + (board ? '' : chime) + '</div>' +
-    (board ? '<div class="settingscol">' + board + '</div>' : '') +
+  return '<div class="setupform">' + you +
+    (first ? '' : settingsMemoryFolderField(draft)) +
+    (first || !draft.list ? '' : settingsProjectsField(draft)) +
+    boardGroupHTML(draft, first) + settingsChimeField(draft) + '</div>';
+}
+
+/* ---- The page layout every tab of the Settings page shares ----
+
+   A title row with a Save on its right and a divider under it, then one row per
+   section: its title on the left, its fields on the right, 3:9. A second Save
+   closes the content. `sections` is [{ id, title, html }]. `opts.save` false
+   leaves both Saves out (Backups); `opts.saveAttr` is the data attribute the
+   caller wires its handler to. Under 900px each section stacks, title first. */
+function settingsPageLayoutHTML(title, sections, opts){
+  opts = opts || {};
+  const save = opts.save === false ? '' :
+    '<button type="button" class="btn primary" ' + (opts.saveAttr || 'data-settings-save') + '>Save</button>';
+  return '<div class="spage">' +
+    '<div class="spage__head"><h1 class="spage__title">' + esc(title) + '</h1>' + save + '</div>' +
+    sections.map(sec =>
+      '<section class="spage__section" data-section="' + escAttr(sec.id || sec.title) + '">' +
+        '<h2 class="spage__label">' + esc(sec.title) + '</h2>' +
+        '<div class="spage__fields">' + sec.html + '</div></section>').join('') +
+    (save ? '<div class="spage__foot">' + save + '</div>' : '') +
     '</div>';
+}
+
+/* The Settings tab's sections. Signed in, the profile is the visitor's own and
+   the server's settings are not theirs, so only You is offered, with How to
+   address you, which has no other home for them. */
+function settingsPageSections(draft){
+  const sections = [{ id: 'you', title: 'You',
+    html: settingsNameFields(draft) + (draft.signedIn ? settingsAboutField(draft, 'addressing') : '') + settingsPlaceFields(draft, false) +
+      (draft.signedIn && draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '') }];
+  if (draft.signedIn) return sections;
+  sections.push({ id: 'folders', title: 'Folders',
+    html: settingsMemoryFolderField(draft) + (draft.list ? settingsProjectsField(draft) + boardMemoryFieldHTML(draft, 'This board’s memory folder') : '') });
+  if ('setup' in draft.sections) {
+    const [, name, help] = SETTINGS_SECTIONS.find(x => x[0] === 'setup');
+    sections.push({ id: 'setup', title: name,
+      html: '<label class="field">' +
+        '<textarea class="memarea" rows="5" aria-label="' + escAttr(name) + '" data-setup placeholder="' + escAttr(draft.hints.setup || '') + '" spellcheck="true">' + esc(draft.sections.setup) + '</textarea>' +
+        '<span class="help">' + esc(help) + '</span><span class="help fielderr" data-err="setup" hidden></span></label>' });
+  }
+  sections.push({ id: 'notifications', title: 'Notifications',
+    html: (draft.list ? boardSwitchHTML('data-board-banners', draft.board.banners, 'Desktop banners', 'A banner when a task on this board is due, on this board only. Off, it sends none.') : '') +
+      settingsChimeField(draft, 'A short sound when a reply finishes in any chat, on every board: two rising notes for done, one low note for an error or a stop.') });
+  return sections;
 }
 
 async function loadSettingsDraft(first){
@@ -205,7 +262,7 @@ async function loadSettingsDraft(first){
     board, boardWas: Object.assign({}, board),
     name: prof.name || '', country, region, legacy, memoryRoot, list, projectsRoot, signedIn,
     about: Object.assign({}, prof.about), sections: Object.assign({}, prof.sections), hints: prof.hints || {},
-    was: { country, region, memoryRoot, projectsRoot },
+    was: { country, region, memoryRoot, projectsRoot, setup: (prof.sections || {}).setup || '' },
     touched: {},
     countries: places.countries || [], regions: legacy.length ? [] : ((places.regions || {})[prof.country] || []),
     chime: set.chime !== false,
@@ -217,6 +274,7 @@ function settingsErrors(draft, first){
   if (!draft.name.trim()) err.name = 'Add your name.';
   if (first && !draft.country) err.country = 'Choose a country.';
   if (/[<>`]/.test(draft.about.addressing || '')) err['about-addressing'] = 'Leave out < > and backticks.';
+  if (/^##?(\s|$)/m.test(draft.sections.setup || '')) err.setup = 'A # or ## heading would split the profile. Use ### or none.';
   if (!draft.signedIn && draft.board && draft.board.mode === 'own' && !draft.board.path.trim()) err['board-memory'] = 'Enter the folder’s full path.';
   return err;
 }
@@ -242,8 +300,7 @@ function paintSetupErrors(draft, first, attempted){
     el.textContent = show ? err[k] : '';
     el.hidden = !show;
   });
-  const save = root.querySelector('button[data-i="0"], [data-settings-save]');
-  if (save) save.disabled = Object.keys(err).length > 0;
+  root.querySelectorAll('button[data-i="0"], [data-settings-save]').forEach(save => { save.disabled = Object.keys(err).length > 0; });
 }
 
 /* A country Nager.Date has no public holidays for is still saved; the note says
@@ -297,6 +354,8 @@ function trackSettingsForm(draft, first){
     if (bb) draft.board.banners = bb.getAttribute('aria-checked') === 'true';
     const ba = root.querySelector('[data-board-agents]');
     if (ba) draft.board.agents = ba.getAttribute('aria-checked') === 'true';
+    const su = root.querySelector('[data-setup]');
+    if (su) { draft.sections.setup = su.value; if (e && e.target === su) draft.touched.setup = true; }
     const pr = root.querySelector('[data-projects]');
     if (pr) draft.projectsRoot = pr.value;
     if (e && e.target && e.target.matches('[data-name]')) draft.touched.name = true;
@@ -346,7 +405,9 @@ async function saveSettingsDraft(draft, first){
   const basics = { name: draft.name };
   /* Every field and box the server sent, so the welcome, which shows none,
      sends none. */
-  if (!first && 'addressing' in draft.about) basics.about = { addressing: draft.about.addressing };
+  const root = settingsRoot();
+  if (!first && 'addressing' in draft.about && root && root.querySelector('[data-about="addressing"]')) basics.about = { addressing: draft.about.addressing };
+  if (!first && !draft.signedIn && 'setup' in draft.sections && draft.sections.setup !== draft.was.setup) basics.sections = { setup: draft.sections.setup };
   /* Holidays are sent only when the owner changed them: saving a name alone must not
      rewrite a profile that still has the old Holidays: line. */
   if (draft.country && (draft.country !== draft.was.country || draft.region !== draft.was.region)) {
@@ -576,13 +637,13 @@ async function openSharing(){
 
 /* ---- The Settings page ------------------------------------------------------
    Data > Settings opens one page in the board's own area, with four tabs drawn
-   in the bucket bar while it is up: Memory (31-memory.js), Settings (this form),
+   in the bucket bar while it is up: Settings (this form), Memory (31-memory.js),
    Agents (27-agents.js, with Spend and Schedules, the two cards of 14-schedule.js,
    as panels under it), Backups (15-backups.js).
    The URL is #settings/<tab>; an old #memory, #agents or #backups link opens its tab. */
 const SETTINGS_TABS = [
+  ['settings', 'Settings', 'you, your folders, setup and notifications'],
   ['memory', 'Memory', 'what Bench keeps about this board and you'],
-  ['settings', 'Settings', 'your profile, models, folders and agent options'],
   ['agents', 'Agents', 'when each agent runs, what it does, what it has spent and what runs on a clock'],
   ['backups', 'Backups', 'every copy of this list the board has kept'],
 ];
@@ -602,17 +663,6 @@ function settingsTabs(){
    so a link or a call that names either lands there. */
 function settingsTabName(tab){
   return tab === 'spend' || tab === 'schedules' ? 'agents' : tab;
-}
-
-/* One panel in Tenon's column markup, the one the Overview and Backups draw:
-   a title, an optional line under it, an optional action at the head's end. */
-function settingsPanelHTML(id, title, desc, bodyHTML, actionHTML){
-  return '<section class="tenon-column settingspanel" data-panel="' + escAttr(id) + '">' +
-    '<div class="tenon-column__head"><div class="tenon-column__head-row">' +
-      '<div class="tenon-column__head-start"><h3 class="tenon-column__title">' + esc(title) + '</h3></div>' +
-      '<div class="tenon-column__head-end">' + (actionHTML || '') + '</div></div>' +
-      (desc ? '<p class="tenon-column__desc">' + esc(desc) + '</p>' : '') + '</div>' +
-    '<div class="tenon-column__body">' + bodyHTML + '</div></section>';
 }
 
 /* A hash or a stray state.view that names the page, or one of the views that
@@ -685,30 +735,25 @@ function refreshSettingsPage(){
   else if (settingsTab === 'backups') renderBackupsView();
 }
 
-/* The Settings tab: the form of the pop-up, drawn in the page. */
+/* The Settings tab, drawn in the shared page layout. */
 async function drawSettingsTab(){
   const lists = $('#lists');
-  const panel = body => '<div class="lists pview settingsview" style="--pcols:1">' +
-    settingsPanelHTML('settings', 'Settings', '', '<div class="settingspage" id="settingsPage">' + body + '</div>') + '</div>';
-  lists.innerHTML = panel('<p class="memempty">Reading settings…</p>');
+  const shell = body => '<div class="lists pview settingsview" style="--pcols:1"><div class="settingspage" id="settingsPage">' + body + '</div></div>';
+  lists.innerHTML = shell('<p class="memempty">Reading settings…</p>');
   let loaded;
   try { loaded = await loadSettingsDraft(false); }
   catch (err) {
     if (state.view === 'settings' && settingsTab === 'settings')
-      lists.innerHTML = panel('<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>');
+      lists.innerHTML = shell('<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>');
     return;
   }
   if (state.view !== 'settings' || settingsTab !== 'settings') return;
-  const { draft, set } = loaded;
-  const choices = (set.choices && set.choices.models) || [];
+  const { draft } = loaded;
   const host = $('#settingsPage');
-  const title = lists.querySelector('.tenon-column__title');
-  if (title && draft.signedIn) title.textContent = 'Your profile';
-  host.innerHTML = settingsFormHTML(draft, choices, false, true) +
-    '<div class="settingspage__actions"><button type="button" class="btn primary" data-settings-save>Save</button></div>';
+  host.innerHTML = settingsPageLayoutHTML(draft.signedIn ? 'Your profile' : 'Settings', settingsPageSections(draft));
   settingsHostEl = host;
   trackSettingsForm(draft, false);
-  host.querySelector('[data-settings-save]').onclick = () => runSettingsSave(draft, false, false);
+  host.querySelectorAll('[data-settings-save]').forEach(btn => { btn.onclick = () => runSettingsSave(draft, false, false); });
 }
 
 /* ---- Agent options, at the top of the Agents tab ----
@@ -725,6 +770,7 @@ function agentOptionsHTML(draft, choices){
   const other = SETTINGS_OTHER.map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('');
   return '<section class="agentopts agentopts--open" data-agent-options aria-label="Agent options"><h2>Agent options</h2>' +
     '<div class="agentopts__body">' +
+    (draft.list ? boardSwitchHTML('data-board-agents', draft.agentsOn, 'Agents', 'Lets this board’s bucket agents work. Off, they leave it alone.') : '') +
     settingsModelField('default', 'Default model', 'Used by any model below that is left on Use default.', draft, choices) +
     agents +
     '<div class="agentopts__group"><h4>Other</h4>' + other + '</div>' +
@@ -761,6 +807,14 @@ function trackAgentOptions(draft, host){
   };
   host.addEventListener('input', sync);
   host.addEventListener('change', sync);
+  host.addEventListener('click', e => {
+    const sw = e.target.closest('[data-board-agents]');
+    if (!sw) return;
+    const on = sw.getAttribute('aria-checked') !== 'true';
+    sw.setAttribute('aria-checked', String(on));
+    sw.classList.toggle('tenon-switch--on', on);
+    draft.agentsOn = on;
+  });
   paintAgentOptionErrors(draft, host);
 }
 
@@ -772,6 +826,11 @@ async function saveAgentOptions(draft, host){
   try {
     await sendJSON('PUT', '/settings.json', { models: draft.models,
       daily_budget: dollars(draft.budget), agent_budgets: agentBudgets });
+    /* Its own request, as in the Settings page, so one refusal does not stop the other. */
+    if (draft.list && draft.agentsOn !== draft.agentsWas) {
+      await sendJSON('PUT', '/settings.json', { boards: { [draft.list]: { agents: draft.agentsOn } } });
+      draft.agentsWas = draft.agentsOn;
+    }
   } catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
   showToast('Saved.', 'good');
 }
@@ -792,7 +851,9 @@ async function drawAgentOptions(host){
   const dollars = v => v == null ? '' : String(v);
   const agentBudgets = {};
   for (const k in SETTINGS_BUDGET_IDS) agentBudgets[k] = dollars((set.agent_budgets || {})[SETTINGS_BUDGET_IDS[k]]);
-  const draft = { models, budget: dollars(set.daily_budget), agentBudgets, touched: {} };
+  const list = state.dataset || '';
+  const agentsOn = ((set.boards || {})[list] || {}).agents !== false;
+  const draft = { models, budget: dollars(set.daily_budget), agentBudgets, touched: {}, list, agentsOn, agentsWas: agentsOn };
   host.innerHTML = agentOptionsHTML(draft, (set.choices && set.choices.models) || []);
   trackAgentOptions(draft, host);
   host.querySelector('[data-agent-options-save]').onclick = () => saveAgentOptions(draft, host);

@@ -223,7 +223,7 @@ check('with no Claude Code, the tab says so instead of offering setup', await ev
   !document.querySelector('#lists [data-agent-setup]') && !document.querySelector('#lists .agents-ui')`))
 check('Delegate to offers no agents', await evalJS(`!delegateSelectHTML('', '').includes('optgroup label="Agents"')`))
 check('the Data menu leaves out Run the bucket agents now, and the Settings page keeps its four tabs', await evalJS(`syncFolderButton();
-  $('#runAgentBtn').classList.contains('hidden') && settingsTabs().map(t => t[0]).join() === 'memory,settings,agents,backups'`))
+  $('#runAgentBtn').classList.contains('hidden') && settingsTabs().map(t => t[0]).join() === 'settings,memory,agents,backups'`))
 check('Settings has no agent options either way, and the Agents tab says why agents are off', await evalJS(`loadSettingsDraft(false).then(d => {
   const html = settingsFormHTML(d.draft, [], false);
   return !html.includes('data-agent-options') && !html.includes('Agents are off on this machine');

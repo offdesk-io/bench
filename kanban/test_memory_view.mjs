@@ -96,8 +96,8 @@ try {
 
   // --- The profile edits here and saves through PUT /profile-basics.json -------
   await click('[data-mem-edit=profile]')
-  check('Edit opens the facts file and the four sections', await evalJS(
-    `!!document.querySelector('[data-mem-profile-about=facts_file]') && ['setup', 'writing', 'recorder', 'habits'].every(k => !!document.querySelector('[data-mem-profile-section=' + k + ']'))`))
+  check('Edit opens the facts file and the sections but Setup, which lives in Settings', await evalJS(
+    `!!document.querySelector('[data-mem-profile-about=facts_file]') && ['writing', 'recorder', 'habits'].every(k => !!document.querySelector('[data-mem-profile-section=' + k + ']')) && !document.querySelector('[data-mem-profile-section=setup]')`))
   await evalJS(`${$q('[data-mem-profile-section=writing]')}.value = '## Writing\\n- Spelling: British English'`)
   await click('[data-mem-save=profile]')
   check('a ## heading blocks the save with a message', await evalJS(`!!${$q('[data-mem=profile] .memerr')} && memEditing === 'profile'`))
@@ -207,7 +207,7 @@ try {
   check('profile sections with nothing in them show an empty line', await evalJS(`(() => {
     const hs = [...document.querySelectorAll('#memView [data-mem=profile] h4[data-mem-sub]')];
     const empty = h => h.nextElementSibling && h.nextElementSibling.classList.contains('memempty');
-    return hs.length === 4 && hs.map(h => empty(h)).join() === 'true,false,true,true'
+    return hs.length === 3 && hs.map(h => empty(h)).join() === 'false,true,true'
   })()`))
   await evalJS(`state.locked = false; memEditing = 'about'; memDraw()`)
   check('an open edit form still opens', await evalJS(`!!document.querySelector('#memView [data-mem=about] textarea')`))

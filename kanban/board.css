@@ -2574,17 +2574,14 @@
      Agent options is a <details> that starts shut, so the form opens on the two
      things that are required. */
   .setupform{display:flex; flex-direction:column; gap:14px}
-  /* Three columns side by side, shared by the Settings page and the Agents tab,
-     one column below 900px. */
-  .setupform--cols, .agentscols{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:24px; align-items:start}
-  .settingscol, .agentscol{display:flex; flex-direction:column; gap:14px; min-width:0}
-  .settingscol > h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:650; color:var(--tenon-text-default)}
-  .settingscol > .agentopts__group{padding-top:0; border-top:0}
+  /* The Agents tab's three columns, one below 900px. */
+  .agentscols{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:24px; align-items:start}
+  .agentscol{display:flex; flex-direction:column; gap:14px; min-width:0}
   .agentscols .agentcards, .agentscols .planners, .agentscols .agentopts--open{max-width:none}
   .agentscols .agentopts--open .agentopts__body{max-width:none}
   .agentscols .agentcards-grid{grid-template-columns:1fr}
   @media (max-width:900px){
-    .setupform--cols, .agentscols{grid-template-columns:1fr}
+    .agentscols{grid-template-columns:1fr}
   }
   .fielderr{color:var(--tenon-text-error)}
   .agentopts{border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-default)}
@@ -3250,8 +3247,21 @@ body.signed-in #runAgentBtn{display:none !important}
 .settingspanel .settingspage{padding:0}
 .settingspage__actions{display:flex; gap:8px; margin-top:16px}
 .lists.pview.memview{max-width:860px}
-.lists.pview.settingsview{max-width:1200px}
-.settingspage .setupform:not(.setupform--cols){max-width:520px}
+.lists.pview.settingsview{max-width:none}
+/* The page layout every Settings tab shares (settingsPageLayoutHTML() in
+   29-settings.js): a title row with Save, a divider, then sections as rows of
+   title and fields in 3:9. 1200px wide and left-aligned with the tabs. */
+.spage{max-width:1200px}
+.spage__head{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:8px 0 16px; border-bottom:1px solid var(--tenon-stroke-default)}
+.spage__title{margin:0; font-size:var(--tenon-typography-size-2xl); font-weight:650; color:var(--tenon-text-default)}
+.spage__section{display:grid; grid-template-columns:1fr 3fr; gap:var(--tenon-dimension-300); padding-top:var(--tenon-dimension-600)}
+.spage__label{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:650; text-transform:uppercase; letter-spacing:.06em; color:var(--tenon-text-subtle)}
+.spage__fields{display:flex; flex-direction:column; gap:14px; min-width:0; max-width:640px}
+.spage__foot{display:flex; justify-content:flex-end; padding-top:var(--tenon-dimension-600)}
+@media (max-width:900px){
+  .spage__section{grid-template-columns:1fr; gap:var(--tenon-dimension-150); padding-top:var(--tenon-dimension-400)}
+  .spage__foot{padding-top:var(--tenon-dimension-400)}
+}
 .agentsview #refCardsRoot{max-width:860px}
 
 /* Memory (31-memory.js): one panel per section. */

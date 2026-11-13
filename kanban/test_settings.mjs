@@ -178,7 +178,7 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   // Settings is a page now: five tabs where the bucket tabs were, and the buckets come back.
   const tabNames = `[...document.querySelectorAll('#bucketFilters .tenon-toggle-group__option')].map(b => b.dataset.value).join()`
   check('Settings is a page on the Settings tab, not a pop-up', await evalJS(`state.view === 'settings' && settingsTab === 'settings' && !modalEl && !!document.querySelector('#settingsPage')`))
-  check('the four tabs replace the bucket tabs', await evalJS(tabNames) === 'memory,settings,agents,backups', await evalJS(tabNames))
+  check('the four tabs replace the bucket tabs', await evalJS(tabNames) === 'settings,memory,agents,backups', await evalJS(tabNames))
   check('and the Settings tab is the one pressed', await evalJS(`document.querySelector('#bucketFilters [data-value=settings]').getAttribute('aria-pressed') === 'true'`))
   check('the hash names the page and its tab', await evalJS(`location.hash.startsWith('#settings/settings')`))
   check('the Data menu has no Backups or Spend and schedules', await evalJS(`!$('#backupsBtn') && !$('#refCardsBtn') && !!$('#settingsBtn') && !!$('#runAgentBtn')`))
@@ -201,10 +201,10 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   check('the Settings page leaves out the delegated-to-an-agent button', await evalJS(`getComputedStyle(document.querySelector('#bucketBar')).display !== 'none' && ![...document.querySelectorAll('#bucketBar button, #bucketBar [role=button]')].some(b => b.offsetParent !== null && /delegated to an agent/.test(b.textContent))`))
   await evalJS(`openSettingsPage('settings')`)
   await wait(800)
-  check('and the panel is left-aligned', await evalJS(`(() => { const p = document.querySelector('#lists .tenon-column'); const l = document.querySelector('#lists').getBoundingClientRect(); return !!p && Math.abs(p.getBoundingClientRect().left - l.left) < 2 })()`))
+  check('and the panel is left-aligned', await evalJS(`(() => { const p = document.querySelector('#lists .spage'); const l = document.querySelector('#lists').getBoundingClientRect(); return !!p && Math.abs(p.getBoundingClientRect().left - l.left) < 2 })()`))
   await evalJS(`document.querySelector('#viewToggle [data-view=board]').click()`)
   await wait(800)
-  check('leaving brings the bucket tabs back', await evalJS(tabNames) !== 'memory,settings,agents,backups' && await evalJS(`!document.querySelector('#bucketBar').classList.contains('bucketbar--page')`), await evalJS(tabNames))
+  check('leaving brings the bucket tabs back', await evalJS(tabNames) !== 'settings,memory,agents,backups' && await evalJS(`!document.querySelector('#bucketBar').classList.contains('bucketbar--page')`), await evalJS(tabNames))
   await evalJS(`$('#settingsBtn').click()`)
   await wait(800)
   check('Settings shows the saved name', await evalJS(`settingsRoot().querySelector('[data-name]').value`) === 'Sam')
@@ -239,23 +239,44 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await wait(800)
   check('and reopens showing it', await evalJS(`settingsRoot().querySelector('[data-projects]').value`) === projects)
 
-  // The profile's facts file and sections moved to the Memory page; Settings keeps the address.
-  check('Settings offers How to address you but no profile sections or facts file', await evalJS(
-    `!!settingsRoot().querySelector('[data-about="addressing"]') && !settingsRoot().querySelector('[data-about="facts_file"]')` +
-    ` && !settingsRoot().querySelector('[data-section]') && !settingsRoot().querySelector('[data-profile-sections]')`))
+  // The page's sections, the Setup box and where How to address you went.
+  check('Settings has no How to address you, facts file or other profile sections', await evalJS(
+    `!settingsRoot().querySelector('[data-about]') && settingsRoot().querySelectorAll('textarea').length === 1 && !settingsRoot().querySelector('[data-profile-sections]')`))
+  check('the page is titled Settings, with sections You, Folders, Setup and Notifications', await evalJS(
+    `settingsRoot().querySelector('h1.spage__title').textContent === 'Settings' && [...settingsRoot().querySelectorAll('.spage__label')].map(h => h.textContent).join() === 'You,Folders,Setup,Notifications'`))
+  check('You holds Name, Country and Region only', await evalJS(
+    `[...settingsRoot().querySelectorAll('[data-section=you] .field > span:first-child')].map(x => x.textContent).join() === 'Name,Country,Region'`))
+  check('Folders holds the main memory folder, the projects folder and the board\'s memory folder', await evalJS(
+    `[...settingsRoot().querySelectorAll('[data-section=folders] .field > span:first-child')].map(x => x.textContent).join().replace(/Projects folder for [^,]*/, 'Projects') === 'Memory folder,Projects,This board’s memory folder' && !!settingsRoot().querySelector('[data-section=folders] [data-board-memory-mode]')`))
+  check('Notifications holds Desktop banners and Reply chime', await evalJS(
+    `[...settingsRoot().querySelectorAll('[data-section=notifications] .field > span:first-child')].map(x => x.textContent).join() === 'Desktop banners,Reply chime'`))
+  check('there are two Saves, one under the title and one closing the content', await evalJS(
+    `settingsRoot().querySelectorAll('[data-settings-save]').length === 2 && !!settingsRoot().querySelector('.spage__head [data-settings-save]') && !!settingsRoot().querySelector('.spage__foot [data-settings-save]')`))
+  check('the content is at most 1200px wide, sections are 1:3, and the second Save sits at the content\'s right edge', await evalJS(`(() => {
+    const sp = settingsRoot().querySelector('.spage').getBoundingClientRect();
+    const cols = getComputedStyle(settingsRoot().querySelector('.spage__section')).gridTemplateColumns.split(' ').map(parseFloat);
+    const foot = settingsRoot().querySelector('.spage__foot [data-settings-save]').getBoundingClientRect();
+    return sp.width <= 1200.5 && Math.abs(cols[1] / cols[0] - 3) < 0.05 && Math.abs(foot.right - sp.right) < 2 })()`))
+  await send('Emulation.setDeviceMetricsOverride', { width: 800, height: 900, deviceScaleFactor: 1, mobile: false })
+  await wait(300)
+  check('below 900px a section stacks, title above its fields', await evalJS(`(() => {
+    const sec = settingsRoot().querySelector('.spage__section');
+    return getComputedStyle(sec).gridTemplateColumns.split(' ').length === 1 &&
+      sec.querySelector('.spage__label').getBoundingClientRect().bottom <= sec.querySelector('.spage__fields').getBoundingClientRect().top + 1 })()`))
+  await send('Emulation.clearDeviceMetricsOverride')
   const setField = (sel, v) => evalJS(`(() => { const el = settingsRoot().querySelector(${JSON.stringify(sel)}); el.value = ${JSON.stringify(v)}; el.dispatchEvent(new Event('input', { bubbles: true })) })()`)
-  await setField('[data-about="addressing"]', 'Hey <Alex>')
-  check('< > in a field blocks Save', await saveDisabled())
-  await setField('[data-about="addressing"]', 'Hey Alex')
+  await setField('[data-setup]', '## Setup\n- Repo: /tmp/x')
+  check('a # or ## heading in Setup blocks Save', await saveDisabled())
+  await setField('[data-setup]', '- Repo: /tmp/x\n- Also reads: /tmp/y')
   await press('Save')
   await wait(3000)
   const p4 = readFileSync(join(data, 'profile.md'), 'utf8')
-  check('Settings writes the About field', /^- How to address them: Hey Alex$/m.test(p4), p4)
+  check('Settings writes the Setup section through the profile route', /- Repo: \/tmp\/x\n- Also reads: \/tmp\/y/.test(p4), p4)
   check('and the rest of the profile stays', /^- Name: Alex$/m.test(p4) && /^- Country: GB$/m.test(p4))
   check('nobody signed in, nothing goes to data/users', !existsSync(join(data, 'users')))
   await evalJS(`$('#settingsBtn').click()`)
   await wait(800)
-  check('and it reads back as written', await evalJS(`settingsRoot().querySelector('[data-about="addressing"]').value === 'Hey Alex'`))
+  check('and Setup reads back as written', await evalJS(`settingsRoot().querySelector('[data-setup]').value.includes('Also reads: /tmp/y')`))
 
   // The reply chime is a switch: a click turns it off, and Save writes it.
   check('the reply chime starts on, as a switch', await evalJS(`(() => { const s = settingsRoot().querySelector('[data-chime]');
@@ -280,25 +301,28 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   const profileBefore = readFileSync(join(data, 'profile.md'), 'utf8')
   const boardSet = () => (JSON.parse(readFileSync(join(data, 'settings.json'), 'utf8')).boards || {})[listName]
   const reopen = async () => { await evalJS(`$('#settingsBtn').click()`); await wait(800) }
-  check('Settings has a This board group', await evalJS(`!!settingsRoot().querySelector('[data-board-group]') && settingsRoot().querySelector('[data-board-group] h4').textContent === 'This board'`))
+  const openAgentsTab = async () => { await evalJS(`openSettingsPage('agents')`); await wait(1500) }
+  const agentSwitch = () => evalJS(`document.querySelector('#agentOptions [data-board-agents]').getAttribute('aria-checked')`)
   check('it starts on the main memory folder, banners and agents on', await evalJS(`settingsRoot().querySelector('[data-board-memory-mode]').value === 'inherit'
     && settingsRoot().querySelector('[data-board-memory]').hidden
     && settingsRoot().querySelector('[data-board-banners]').getAttribute('aria-checked') === 'true'
-    && settingsRoot().querySelector('[data-board-agents]').getAttribute('aria-checked') === 'true'`))
+    && !settingsRoot().querySelector('[data-board-agents]')`))
+  await openAgentsTab()
+  check('the Agents switch is on the Agents tab, on', await agentSwitch() === 'true')
+  await reopen()
   check('the memory folder offers the three choices', await evalJS(`[...settingsRoot().querySelectorAll('[data-board-memory-mode] option')].map(o => o.textContent).join('|')`)
     === 'Same as main memory folder|None, keep everything in Bench|Its own folder')
-  check('the page lays the form out as You, Folders and This board', await evalJS(`[...settingsRoot().querySelectorAll('.setupform--cols > .settingscol > h4, .setupform--cols > .settingscol > [data-board-group] > h4')].map(h => h.textContent).join() === 'You,Folders,This board'
-    && getComputedStyle(settingsRoot().querySelector('.setupform--cols')).gridTemplateColumns.split(' ').length === 3
-    && !!settingsRoot().querySelector('.settingscol [data-board-group] [data-chime]')`))
-  check('each control has a line of help', await evalJS(`[...settingsRoot().querySelectorAll('[data-board-group] .field')].length === 4 && [...settingsRoot().querySelectorAll('[data-board-group] .field')].every(f => f.querySelector('.help').textContent.length > 10)`))
+  check('each control has a line of help', await evalJS(`(() => { const f = [...settingsRoot().querySelectorAll('.spage__fields .field:not([data-region-field])')]; return f.length >= 7 && f.every(x => x.querySelector('.help') && x.querySelector('.help').textContent.length > 10) })()`))
+  check('Notifications says banners are this board only and the chime is every board', await evalJS(`(() => { const h = [...settingsRoot().querySelectorAll('[data-section=notifications] .help')].map(x => x.textContent).join(' '); return /this board only/.test(h) && /every board/.test(h) })()`))
   await evalJS(`settingsRoot().querySelector('[data-board-banners]').click()`)
   await press('Save')
   await wait(2500)
   check('switching banners off sends only banners', JSON.stringify(boardSet()) === '{"banners":false}', JSON.stringify(boardSet()))
   await reopen()
   check('and it reopens with banners off', await evalJS(`settingsRoot().querySelector('[data-board-banners]').getAttribute('aria-checked')`) === 'false')
-  await evalJS(`settingsRoot().querySelector('[data-board-agents]').click()`)
-  await press('Save')
+  await openAgentsTab()
+  await evalJS(`document.querySelector('#agentOptions [data-board-agents]').click()`)
+  await evalJS(`document.querySelector('[data-agent-options-save]').click()`)
   await wait(2500)
   check('switching agents off adds only agents', JSON.stringify(boardSet()) === '{"banners":false,"agents":false}', JSON.stringify(boardSet()))
   await reopen()
@@ -332,20 +356,25 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await wait(2500)
   check('Same as main sends inherit, which drops the entry key', !('memory_root' in boardSet()) && boardSet().banners === false, JSON.stringify(boardSet()))
   await reopen()
-  await evalJS(`settingsRoot().querySelector('[data-board-banners]').click(); settingsRoot().querySelector('[data-board-agents]').click()`)
+  await evalJS(`settingsRoot().querySelector('[data-board-banners]').click()`)
   await press('Save')
+  await wait(2500)
+  await openAgentsTab()
+  await evalJS(`document.querySelector('#agentOptions [data-board-agents]').click()`)
+  await evalJS(`document.querySelector('[data-agent-options-save]').click()`)
   await wait(2500)
   check('switching both back on empties the entry', boardSet() === undefined, JSON.stringify(boardSet()))
   // Signed in, the server's settings are not the visitor's: no group.
   await reopen()
   await evalJS(`closeModal(); state.who = { name: 'Visitor', teams: [] }`)
   await reopen()
-  check('signed in, there is no This board group', await evalJS(`!settingsRoot().querySelector('[data-board-group]')`))
+  check('signed in, there is only the You section', await evalJS(`[...settingsRoot().querySelectorAll('.spage__label')].map(h => h.textContent).join() === 'You'`))
   await evalJS(`closeModal(); state.who = null`)
   // The list had a profile of its own while it kept its own folder; put the owner's back as it was.
   rmSync(join(data, listName, 'profile.md'), { force: true })
   writeFileSync(join(data, 'profile.md'), profileBefore)
   await reload()
+  check('Settings is the tab a freshly loaded page opens on', await evalJS(`settingsTab === 'settings'`))
   await reopen()
 
   const regionList = await fetch(`${base}/holiday-regions.json?country=GB`).then(x => x.json())

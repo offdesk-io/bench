@@ -214,12 +214,12 @@ function memContextHTML(){
   return memSection('context', 'Context', text ? memRender(text) : memEmpty('No context yet. Note who is away and what is live this week.'), memEditBtn('context'));
 }
 
-/* The profile's editable parts: the facts file and the four sections, the same
-   fields Settings used to hold, saved through PUT /profile-basics.json. Name,
-   address and holidays stay in Settings. */
+/* The profile's editable parts: the facts file and the sections but Setup, which
+   Settings holds, saved through PUT /profile-basics.json. Name and holidays
+   stay in Settings. */
 function memProfileFields(p){
   const about = SETTINGS_ABOUT.filter(([k]) => k === 'facts_file' && k in (p.about || {}));
-  const sections = SETTINGS_SECTIONS.filter(([k]) => k in (p.sections || {}));
+  const sections = SETTINGS_SECTIONS.filter(([k]) => k !== 'setup' && k in (p.sections || {}));
   return { about, sections };
 }
 
@@ -238,7 +238,7 @@ function memProfileForm(p){
 function memProfileHTML(){
   const p = memData.profile || {};
   const about = Object.entries(p.about || {}).filter(([, v]) => String(v || '').trim());
-  const sections = SETTINGS_SECTIONS.filter(([k]) => k in (p.sections || {}));
+  const sections = SETTINGS_SECTIONS.filter(([k]) => k !== 'setup' && k in (p.sections || {}));
   const f = memProfileFields(p);
   const editable = f.about.length + f.sections.length > 0;
   if (memEditing === 'profile' && editable) return memSection('profile', 'Your profile', memProfileForm(p));
