@@ -1221,6 +1221,19 @@ before today.
 14 days, so restarting the server repeats nothing. A banner that fails to post is
 retried every ten minutes and only its first failure is written to the log.
 
+**Snooze.** With `alerter` installed (`brew install vjeantet/tap/alerter`) every
+banner comes up as an alert with Snooze 1h, Tomorrow (09:00 the next day) and
+Dismiss, and stays on screen until one is pressed. A snoozed due banner gets an
+entry of its own under `snoozed` in the same `notify-state.json` and goes out
+again at that time, unless the item is done by then or another banner for it
+goes out in the same minute, which is what happens when Tomorrow lands on the
+09:00 overdue banner. A snoozed agent's line goes back on its queue with a
+`not_before` time, and both drainers leave it there until then. `alerter` does
+not return until the alert is answered, so the tick starts it and moves on, and
+a thread waits for the answer without holding the queue's lock. A snooze
+answered after the server has stopped is lost. Without `alerter` the banners
+go through `terminal-notifier` as before, with no snooze.
+
 **Agents' messages.** The queue an agent asks for a banner on belongs to the
 notifier, a folder of its own in PACKAGES (`~/Code/PACKAGES/notify` on the
 owner's Mac, `$NOTIFY_HOME` elsewhere), because agents outside Bench need it as
@@ -1254,9 +1267,9 @@ same reason as every other link into the board: a link differing only after the
 second tab on one list, and two tabs autosaving one `todo.md` is the failure the
 board is written to avoid.
 
-**Where it runs.** On a Mac, with `terminal-notifier` found in `PATH`,
-`/opt/homebrew/bin`, `/usr/local/bin` or the rvm gems folder (the server can
-start without the user's `PATH`). The Linux server never starts it, a throwaway
+**Where it runs.** On a Mac, with `alerter` found in `PATH`, `/opt/homebrew/bin`
+or `/usr/local/bin`, or `terminal-notifier` found there or in the rvm gems
+folder (the server can start without the user's `PATH`). The Linux server never starts it, a throwaway
 data root such as the test runner's never starts it, and `BENCH_NOTIFY=0`
 switches it off anywhere. The schedule page lists it as Desktop banners and says
 why when it is off. Due banners go out only while the board is running; the
