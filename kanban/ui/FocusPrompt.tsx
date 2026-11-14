@@ -1,10 +1,13 @@
-/* The floating PA prompt, for whatever a hold has put in focus (hold.ts).
+/* The floating PA prompt, for the whole list or whatever a hold has put in
+ * focus (hold.ts).
  *
- * Fixed at the bottom centre of the viewport while a card, a sub-task or a
- * drawer section is held. It carries `data-focus-keep`, so a press inside it
- * does not end the focus and the spotlight does not dim it.
+ * Fixed at the bottom centre of the viewport on every view. Collapsed, it is
+ * one "Ask the PA" button, and pressing it opens the prompt on the whole list,
+ * with no chip. While a card, a sub-task or a drawer section is held it is
+ * open on that. It carries `data-focus-keep`, so a press inside it does not
+ * end the focus and the spotlight does not dim it.
  *
- * Four states, from the Figma file: Idle (the chip above a box to type in),
+ * Four open states, from the Figma file: Idle (the chip above a box to type in),
  * Typing (the box grows with what is in it, then scrolls), Working (a status
  * card in place of the box, saying what the PA is doing) and Done (the card
  * turns green and says what the PA did). An error is Working's card with a
@@ -21,10 +24,15 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 export type FocusPromptPhase = 'idle' | 'working' | 'done' | 'error'
 
 export interface FocusPromptProps {
+  /** Drawn as the one "Ask the PA" button, and nothing else below is read. */
+  collapsed?: boolean
+  /** The "Ask the PA" button was pressed. */
+  onOpen?: () => void
   /** Changes with every new focus, which empties the box. */
   focusId: number
-  /** `Task`, `Subtask` or a section's name, then what it names. */
-  chip: { label: string, title: string }
+  /** `Task`, `Subtask` or a section's name, then what it names. Null for the
+   *  whole list, which has no chip. */
+  chip: { label: string, title: string } | null
   placeholder: string
   phase: FocusPromptPhase
   /** The status card's line: what the PA is doing, did, or the error. */
@@ -37,6 +45,9 @@ export interface FocusPromptProps {
   leaving: boolean
   /** Enter, with something in the box. */
   onSend: (text: string) => void
+  /** Esc in the box. A focus never sees it (hold.ts takes Esc first), so it
+   *  is the whole-list prompt's way to close. */
+  onClose?: () => void
 }
 
 /** Where the box stops growing and starts to scroll. */
@@ -80,8 +91,13 @@ export function FocusPrompt(p: FocusPromptProps) {
   }, [text, p.phase])
 
   const key = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    /* Escape is left alone: hold.ts takes it on window, ahead of this, and
-       ends the focus. */
+    /* With a focus on, Escape never gets here: hold.ts takes it on window,
+       ahead of this, and ends the focus. */
+    if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
+      e.preventDefault()
+      if (p.onClose) p.onClose()
+      return
+    }
     if (e.key !== 'Enter' || e.shiftKey || e.nativeEvent.isComposing) return
     e.preventDefault()
     if (!text.trim()) return
@@ -89,19 +105,33 @@ export function FocusPrompt(p: FocusPromptProps) {
     setText('')
   }
 
+  if (p.collapsed) {
+    return (
+      <div className="focus-prompt focus-prompt--collapsed" data-focus-keep="">
+        <button type="button" className="focus-prompt__open" onClick={p.onOpen}>
+          <Hexagon />
+          <span>Ask the PA</span>
+        </button>
+      </div>
+    )
+  }
+
   const status = p.phase !== 'idle'
+  const about = p.chip ? p.chip.label.toLowerCase() + ' "' + p.chip.title + '"' : 'the whole list'
   return (
     <div className={'focus-prompt' + (p.leaving ? ' is-leaving' : '')} data-focus-keep="">
-      <div className="focus-prompt__chip" title={p.chip.label + ': "' + p.chip.title + '"'}>
-        <i className="focus-prompt__dot" aria-hidden="true" />
-        <span className="focus-prompt__chiptext"><b>{p.chip.label}:</b> {'"' + p.chip.title + '"'}</span>
-      </div>
+      {p.chip && (
+        <div className="focus-prompt__chip" title={p.chip.label + ': "' + p.chip.title + '"'}>
+          <i className="focus-prompt__dot" aria-hidden="true" />
+          <span className="focus-prompt__chiptext"><b>{p.chip.label}:</b> {'"' + p.chip.title + '"'}</span>
+        </div>
+      )}
       {!status ? (
         <div className="focus-prompt__box">
           <textarea
             ref={box}
             className="focus-prompt__input"
-            aria-label={'Ask the PA about ' + p.chip.label.toLowerCase() + ' "' + p.chip.title + '"'}
+            aria-label={'Ask the PA about ' + about}
             placeholder={p.placeholder}
             rows={1}
             value={text}

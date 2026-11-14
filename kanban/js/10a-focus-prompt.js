@@ -3,12 +3,16 @@
 /* =========================================================================
    The focus prompt
 
-   A hold puts one thing in focus (hold.ts: a board or timeline card, a drawer
-   sub-task or a drawer section), and while it lasts a prompt floats at the
-   bottom centre of the page to ask the PA about it. FocusPrompt.tsx draws it;
+   The PA's one way in, at the bottom centre of every view. With nothing in
+   focus it sits collapsed as "Ask the PA", and opening it asks about the whole
+   list, with no chip. A hold puts one thing in focus instead (hold.ts: a board
+   or timeline card, a drawer sub-task or a drawer section), and while it lasts
+   the prompt is open on that, its chip naming it. FocusPrompt.tsx draws it;
    this is everything around it: when it shows, what its chip says, the message
    that goes out, the run, and what the reply changes. It took the place of the
-   PA bar docked in the bottom-right corner on 13 Oct 2026.
+   PA bar docked in the bottom-right corner on 13 Oct 2026, and has sat
+   collapsed in view since 14 Nov 2026, because a hold that nothing on screen
+   mentions, on a list with no card to hold, hid the PA altogether.
 
    The PA is the same one the bar talked to. A message goes under PA_KEY,
    wrapped by paPreface() the first time, with paBeforeSend() saving anything
@@ -17,12 +21,15 @@
    runs with no window: claudeRunLines() reads the run's stream here, so the
    doing: line can show while the reply is still coming.
 
-   One conversation per focus. Nothing is filed until a message goes, so a hold
-   ended with Esc leaves no session behind; a second message in the same focus
-   carries the same session on. A run outlives its focus: if the focus ends
-   while the PA is working, the prompt stays to show Working and then Done, and
-   the changes still land. A new focus takes the prompt over, and a run still
-   going for the old one finishes unseen.
+   One conversation per focus, and one per opening of the whole-list prompt.
+   Nothing is filed until a message goes, so a hold ended with Esc leaves no
+   session behind; a second message in the same focus carries the same session
+   on. A run outlives its focus: if the focus ends while the PA is working, the
+   prompt stays to show Working and then Done, and the changes still land. A
+   new focus takes the prompt over, and a run still going for the old one
+   finishes unseen. The whole-list prompt closes the same way a focus ends, on
+   Esc or a press outside it, and it does not swallow that press: a click on a
+   card both closes it and opens the card.
    ========================================================================= */
 
 const FOCUS_DONE_MS = 4000;    // how long Done, or an error, stays before fading
@@ -30,8 +37,9 @@ const FOCUS_FADE_MS = 300;
 
 let fpNode = null;
 let fpSeq = 0;
-/* The conversation on screen, or null. */
+/* The conversation on screen, or null, which is the prompt collapsed. */
 let fp = null;
+let fpShown = '';
 
 function fpFadeMs(){
   const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -81,9 +89,28 @@ function fpStart(d){
   return c;
 }
 
+/* The whole-list prompt, opened from its collapsed "Ask the PA". It has no
+   element and no chip, so the PA reads the list itself. */
+function fpStartList(){
+  return {
+    id: ++fpSeq, kind: 'list', el: null, key: '', section: '',
+    stepKey: '', focusOn: true, session: '', title: '', chip: null, placeholder: '',
+    phase: 'idle', line: '', time: '', fading: false, leaving: false, timer: 0,
+  };
+}
+
+/* A list with no tasks at all has nothing to hold, so the prompt asks for
+   the first ones. Read on every draw: the PA's reply may have just added them. */
+function fpListPlaceholder(){
+  const any = !!state.doc && state.doc.buckets.some(b => b.tiers.some(ti => ti.tasks.length));
+  return any ? 'What moved today?' : 'What needs doing this week?';
+}
+
 /* The held card's id and title, for the server's second check: a change to
-   the card the person is holding counts as one they named. */
+   the card the person is holding counts as one they named. The whole list
+   names no card, so only the person's words do. */
 function fpFocusRefs(c){
+  if (c.kind === 'list') return [];
   const t = fpFindTask(c.key);
   return t ? [t.stableId, t.title].filter(Boolean) : [];
 }
@@ -91,6 +118,7 @@ function fpFocusRefs(c){
 /* The line ahead of the owner's words that says what is held, readable and
    easy to pick apart: what it is, then what it holds now. */
 function fpReference(c){
+  if (c.kind === 'list') return '(No focused element: the owner is asking about the whole list.)';
   const t = fpFindTask(c.key);
   if (!t) return '(Focused element: ' + c.chip.label.toLowerCase() + ' "' + c.chip.title + '".)';
   const task = 'task ' + (t.stableId ? t.stableId + ' ' : '') + JSON.stringify(t.title);
@@ -124,14 +152,69 @@ function fpRender(){
     document.body.appendChild(fpNode);
   }
   const c = fp;
+  // Collapsed whenever the PA could be asked and nothing is open: a locked
+  // tab, or a board with no chat engine, has no PA to ask.
+  const collapsed = !c && !!state.doc && claudeOn();
+  fpShown = fpShowing();
   document.body.classList.toggle('focus-prompting', !!c);
-  if (!c) { BoardUI.mount(fpNode, null); return; }
+  document.body.classList.toggle('focus-prompt-collapsed', collapsed);
+  if (!c && !collapsed) { BoardUI.mount(fpNode, null); return; }
+  if (collapsed) {
+    BoardUI.mount(fpNode, BoardUI.h(BoardUI.FocusPrompt, {
+      collapsed: true, onOpen: fpOpenList,
+      focusId: 0, chip: null, placeholder: '', phase: 'idle', line: '', time: '', fading: false, leaving: false,
+      onSend: fpSend,
+    }));
+    return;
+  }
+  const list = c.kind === 'list';
   BoardUI.mount(fpNode, BoardUI.h(BoardUI.FocusPrompt, {
-    focusId: c.id, chip: c.chip, placeholder: c.placeholder,
+    focusId: c.id, chip: c.chip, placeholder: list ? fpListPlaceholder() : c.placeholder,
     phase: c.phase, line: c.line, time: c.time, fading: c.fading, leaving: c.leaving,
     onSend: fpSend,
+    // Esc in a focus is hold.ts's, which takes it on window ahead of the box.
+    onClose: list ? () => fpCloseList(c) : () => BoardUI.endFocus(),
   }));
 }
+
+/* What the prompt last drew, as one string (fpShown, above), so the tick
+   below redraws only when it would draw something else. */
+function fpShowing(){
+  const ready = !!state.doc && claudeOn();
+  return ready + '|' + (fp ? fp.id : '') + '|' + (fp && fp.kind === 'list' ? fpListPlaceholder() : '');
+}
+
+/* Whether the PA can be asked moves under the prompt from many places (the
+   chat engine's status arriving, a backup preview locking the tab, a list
+   loading or switching, the PA's own reply filling an empty list), and none of
+   them knows about it. A cheap check once a second covers them all. */
+function fpTick(){
+  if (typeof BoardUI === 'undefined' || fpShowing() === fpShown) return;
+  fpRender();
+}
+setInterval(fpTick, 1000);
+
+function fpOpenList(){
+  if (fp || !state.doc || !claudeOn()) return;
+  fp = fpStartList();
+  fpRender();
+}
+
+/* Esc or a press outside: the whole-list prompt's end, the way a focus ends.
+   A run still going keeps it up until Done has shown. */
+function fpCloseList(c){
+  if (fp !== c || !c.focusOn) return;
+  c.focusOn = false;
+  if (c.phase === 'idle') fpHide(c);
+}
+
+window.addEventListener('pointerdown', e => {
+  const c = fp;
+  if (!c || c.kind !== 'list' || !c.focusOn) return;
+  const t = e.target;
+  if (t && t.closest && t.closest('#focusPrompt')) return;
+  fpCloseList(c);
+}, true);
 
 function fpHide(c){
   if (fp !== c || c.leaving) return;

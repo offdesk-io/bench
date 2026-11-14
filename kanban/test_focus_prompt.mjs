@@ -1,7 +1,8 @@
 /**
  * The focus prompt (FocusPrompt.tsx, kanban/js/10a-focus-prompt.js): the
- * floating prompt to the PA that a hold on a card, a sub-task or a drawer
- * section brings up, driven in headless Chrome.
+ * floating prompt to the PA, collapsed as "Ask the PA" on every view, opened
+ * on the whole list from there, or on a card, a sub-task or a drawer section
+ * by a hold, driven in headless Chrome.
  *
  *   scripts/test-board.sh test_focus_prompt.mjs
  *
@@ -142,8 +143,88 @@ const holdOn = async sel => {
   await evalJS(`__ptr('pointerup', null, ...__pt)`)
   await wait(100)
 }
-const P = `document.querySelector('#focusPrompt .focus-prompt')`
-const chipText = () => evalJS(`(${P} && ${P}.querySelector('.focus-prompt__chiptext').textContent) || ''`)
+/* P is the prompt open, on a focus or the whole list; C is it collapsed. */
+const P = `document.querySelector('#focusPrompt .focus-prompt:not(.focus-prompt--collapsed)')`
+const C = `document.querySelector('#focusPrompt .focus-prompt--collapsed')`
+const chipText = () => evalJS(`(${P} && ${P}.querySelector('.focus-prompt__chiptext') && ${P}.querySelector('.focus-prompt__chiptext').textContent) || ''`)
+const runs = () => evalJS(`__runs.length`)
+
+/* ---- collapsed ---- */
+check('with nothing held, the prompt sits collapsed as one "Ask the PA" button', await until(
+  `!!${C} && !${P} && ${C}.querySelector('button').textContent.trim() === 'Ask the PA' && !${C}.querySelector('textarea, .focus-prompt__chip')`),
+  await evalJS(`document.querySelector('#focusPrompt') ? document.querySelector('#focusPrompt').innerHTML.slice(0, 200) : 'no node'`))
+check('  at the bottom centre, 36px up, and not dimmed', await evalJS(`(() => {
+  const r = ${C}.getBoundingClientRect();
+  return Math.abs(innerHeight - r.bottom - 36) < 1.5 && Math.abs(r.left + r.width / 2 - innerWidth / 2) < 1.5 && r.height >= 31 && __eff(${C}) === 1;
+})()`), await evalJS(`JSON.stringify(${C}.getBoundingClientRect())`))
+check('  and the toasts are lifted clear of it', await evalJS(
+  `document.body.classList.contains('focus-prompt-collapsed') && !document.body.classList.contains('focus-prompting') &&
+   (!document.querySelector('.toasts') || getComputedStyle(document.querySelector('.toasts')).bottom === '84px')`))
+const onView = async v => {
+  await evalJS(`state.view = '${v}'; renderView()`)
+  return until(`!!${C} && state.view === '${v}'`)
+}
+check('  it shows on every view', (await onView('overview')) && (await onView('timeline')) && (await onView('reports')) && (await onView('settings')),
+  await evalJS(`state.view`))
+await onView('board')
+
+/* ---- the phone ---- */
+await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true })
+await until(`innerWidth === 390 && getComputedStyle(document.querySelector('.phtabs')).display !== 'none'`)
+check('on a phone it sits above the tab bar, centred', await until(`(() => {
+  const r = ${C} && ${C}.getBoundingClientRect(), bar = document.querySelector('.phtabs').getBoundingClientRect();
+  return !!r && r.bottom <= bar.top - 8 && Math.abs(innerHeight - r.bottom - 72) < 1.5 && Math.abs(r.left + r.width / 2 - innerWidth / 2) < 1.5;
+})()`), await evalJS(`JSON.stringify([${C} && ${C}.getBoundingClientRect(), document.querySelector('.phtabs').getBoundingClientRect()])`))
+await evalJS(`openDrawer('bd0001')`)
+check('  and goes while the drawer, which is the screen there, is open', await until(`!!${C} && getComputedStyle(${C}).display === 'none'`))
+await evalJS(`closeDrawer()`)
+await until(`!!${C} && getComputedStyle(${C}).display !== 'none'`)
+await send('Emulation.clearDeviceMetricsOverride', {})
+await until(`innerWidth === 1500`)
+await wait(200)
+
+/* ---- the whole list ---- */
+await evalJS(`${C}.querySelector('button').click()`)
+check('pressing "Ask the PA" opens the prompt on the whole list, with no chip', await until(
+  `!!${P} && !${C} && !${P}.querySelector('.focus-prompt__chip') && !!${P}.querySelector('textarea')`))
+check('  the box has keyboard focus, and a suggestion for the list', await until(
+  `document.activeElement === ${P}.querySelector('textarea') && ${P}.querySelector('textarea').placeholder === 'What moved today?' &&
+   ${P}.querySelector('textarea').getAttribute('aria-label') === 'Ask the PA about the whole list'`),
+  await evalJS(`${P} && ${P}.querySelector('textarea').placeholder`))
+check('  it is 300px wide, where a held card’s prompt is', await evalJS(`Math.abs(${P}.getBoundingClientRect().width - 300) < 1`))
+await key('Escape')
+check('Esc closes it back to collapsed, and sends nothing', await until(`!${P} && !!${C}`) && (await runs()) === 0)
+await evalJS(`${C}.querySelector('button').click()`)
+await until(`!!${P}`)
+await evalJS(`(() => { const el = ${card('bd0003')}; const pt = __mid(el); __ptr('pointerdown', el, ...pt); __ptr('pointerup', null, ...pt); el.click(); })()`)
+check('a press outside closes it, and the click still opens the card it landed on', await until(
+  `!${P} && !!${C} && $('#drawer').classList.contains('open') && state.openTask === 'bd0003'`))
+await evalJS(`closeDrawer()`)
+await wait(200)
+await evalJS(`${C}.querySelector('button').click()`)
+await until(`!!${P}`)
+await holdOn(card('bd0002'))
+check('holding a card while it is open points it at that card', await until(`!!${P} && !!${P}.querySelector('textarea')`) && (await chipText()) === 'Task: "Beta"', await chipText())
+await key('Escape')
+await until(`!${P} && !!${C}`)
+
+await evalJS(`${C}.querySelector('button').click()`)
+await until(`!!${P} && document.activeElement === ${P}.querySelector('textarea')`)
+await type('What is due this week?')
+await key('Enter')
+check('Enter sends a message about the whole list', await until(`__runs.length === 1`))
+const listSent = await evalJS(`__runs[0].body`)
+check('  to the PA, as a new session, with no element named and no card for the second check',
+  listSent.owner === 'board-pa' && listSent.session === '' && Array.isArray(listSent.focus) && listSent.focus.length === 0 &&
+  listSent.prompt.startsWith('/pa (No focused element: the owner is asking about the whole list.)\n\nWhat is due this week?') &&
+  listSent.prompt.includes('"No focused element" line'), JSON.stringify(listSent).slice(0, 240))
+check('  Working shows, still with no chip', await until(`!!${P} && !!${P}.querySelector('.focus-prompt__status--working') && !${P}.querySelector('.focus-prompt__chip')`))
+await evalJS(`__runs[0].push({ type: 'result', result: 'doing: Reading the list\\nNothing due.\\ndone: Checked the week' }); __runs[0].end()`)
+check('  then Done', await until(`!!${P} && !!${P}.querySelector('.focus-prompt__status--done') && ${P}.querySelector('.focus-prompt__line').textContent === 'Checked the week'`))
+await evalJS(`__ptr('pointerdown', document.body, 5, 5); __ptr('pointerup', null, 5, 5)`)
+check('  a press outside during Done keeps it up until it fades', await evalJS(`!!${P} && !!${P}.querySelector('.focus-prompt__status--done')`))
+check('  then it is back to collapsed', await until(`!${P} && !!${C}`, 5500))
+await evalJS(`__runs.length = 0`)
 
 /* ---- a card ---- */
 await holdOn(card('bd0002'))
@@ -163,7 +244,7 @@ await evalJS(`(() => { const t = ${P}.querySelector('textarea'); __ptr('pointerd
 check('a press inside the prompt keeps the focus', await evalJS(`${card('bd0002')}.classList.contains('is-held') && !!${P}`))
 
 await key('Escape')
-check('Esc in the box ends the focus and closes the prompt', await until(`!${P} && !${card('bd0002')}.classList.contains('is-held')`))
+check('Esc in the box ends the focus and the prompt folds back to collapsed', await until(`!${P} && !!${C} && !${card('bd0002')}.classList.contains('is-held')`))
 check('  and holding then Esc without sending leaves no session behind', await evalJS(`__runs.length === 0`))
 
 /* ---- a sub-task and a section, in the drawer ---- */
@@ -308,13 +389,48 @@ await wait(200)
 
 /* ---- locked ---- */
 await evalJS(`state.locked = true`)
+check('a locked tab shows no prompt, not even collapsed', await until(`!${P} && !${C}`))
 await holdOn(card('bd0001'))
-check('a locked tab shows no prompt, and the hold still works', await evalJS(`!${P} && ${card('bd0001')}.classList.contains('is-held')`))
+check('  and the hold still works', await evalJS(`!${P} && !${C} && ${card('bd0001')}.classList.contains('is-held')`))
 await key('Escape')
 await evalJS(`state.locked = false; chat.available = () => false`)
+check('nor does a board with no chat engine', await until(`!${P} && !${C}`))
 await holdOn(card('bd0001'))
-check('nor does a board with no chat engine', await evalJS(`!${P} && ${card('bd0001')}.classList.contains('is-held')`))
+check('  and the hold still works there too', await evalJS(`!${P} && !${C} && ${card('bd0001')}.classList.contains('is-held')`))
 await key('Escape')
+await evalJS(`chat.available = () => true`)
+check('the collapsed prompt comes back once the PA can be asked again', await until(`!!${C}`))
+
+/* ---- a list with no tasks ---- */
+await evalJS(`(() => {
+  load(['# To-do', '', '## 1. People', '', '### To do', '', '', '### Doing', '', ''].join('\\n'), 'demo.md', {});
+  state.locked = false;
+  saveFile = async () => { state.dirty = false; };
+  diskVersion = async () => ({ stamp: '', hash: '' });
+  renderView();
+  __runs.length = 0;
+})()`)
+await until(`!!${C}`)
+await evalJS(`${C}.querySelector('button').click()`)
+check('on a list with no tasks, the prompt asks what needs doing this week', await until(
+  `!!${P} && ${P}.querySelector('textarea').placeholder === 'What needs doing this week?'`), await evalJS(`${P} && ${P}.querySelector('textarea').placeholder`))
+await until(`document.activeElement === ${P}.querySelector('textarea')`)
+await type('Book the offsite venue')
+await key('Enter')
+await until(`__runs.length === 1`)
+await evalJS(`(() => {
+  const fence = String.fromCharCode(96).repeat(3);
+  const text = 'doing: Adding the first task\\ndone: Added 1 task\\n' + fence + 'pa-changes\\n' +
+    JSON.stringify([{ kind: 'add', title: 'Book the offsite venue', bucket: 'People', impact: 'low', effort: 'S' }]) + '\\n' + fence;
+  __runs[0].push({ type: 'result', result: text }); __runs[0].end();
+})()`)
+check('  and the PA can write the first task from it', await until(
+  `state.doc.buckets.some(b => b.tiers.some(t => t.tasks.some(k => k.title === 'Book the offsite venue')))`))
+check('  after which, back at Idle, the suggestion is the one for a list with tasks', await until(
+  `!!${P} && !!${P}.querySelector('textarea') && ${P}.querySelector('textarea').placeholder === 'What moved today?'`, 6000),
+  await evalJS(`${P} ? ${P}.innerHTML.slice(0, 200) : 'gone'`))
+await key('Escape')
+await until(`!${P} && !!${C}`)
 
 check('nothing reached disk', await evalJS(`window.__blocked.every(b => /^(PUT|HEAD) \\/data\\/todo\\.md|^POST \\/chat-viewed/.test(b))`), await evalJS(`window.__blocked.join(' | ')`))
 
