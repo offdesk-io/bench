@@ -407,8 +407,8 @@ from unittest import mock  # noqa: E402
 
 
 class FakeAlerter:
-    def __init__(self, reply="", hold=False):
-        self.reply, self.calls, self.gate = reply, [], threading.Event()
+    def __init__(self, reply="", hold=False, code=0):
+        self.reply, self.calls, self.gate, self.code = reply, [], threading.Event(), code
         if not hold:
             self.gate.set()
 
@@ -417,7 +417,7 @@ class FakeAlerter:
         fake = self
 
         class Proc:
-            returncode = 0
+            returncode = fake.code
 
             def communicate(self):
                 fake.gate.wait(5)
@@ -618,6 +618,63 @@ with tempfile.TemporaryDirectory() as data:
             mock.patch.object(notify_due, "find_notifier", return_value=None), \
             mock.patch.object(notify_due, "find_alerter", return_value=None):
         check("enabled: neither is off", notify_due.enabled(), False)
+
+    # Tomorrow skips to the board's next working day, by the board's own calendar.
+    def on_calendar(fake, now, days=working):
+        return notify_due.make_poster(data, BASE, "/no/terminal-notifier", "/fake/alerter", lambda *a: None,
+                                      working_for=lambda board: days, spawn=fake, clock=lambda: now)
+    os.remove(os.path.join(wdir, notify_due.STATE_FILE))
+    write_todo("- [ ] **Friday job** [due:: 2026-10-30]")
+    tick_at(at(FRI, "09:00"), on_calendar(FakeAlerter(pressed("Tomorrow")), at(FRI, "17:00")))
+    settle()
+    check("tomorrow: a Friday's due banner skips the weekend and the board's holiday Monday",
+          [s["at"] for s in notify_due.read_snoozed(wdir)], ["2026-11-03T09:00:00"])
+    got = []
+    tick_at(at(SAT, "09:00"), lambda *a: got.append(a[0]) or (True, ""))
+    check("tomorrow: so Saturday stays quiet", got, [])
+    notify_due._write_queue(q, [{"title": "Agent", "body": "a"}])
+    tick_at(at(FRI, "17:00"), on_calendar(FakeAlerter(pressed("Tomorrow")), at(FRI, "17:00")))
+    settle()
+    check("tomorrow: a queued line on a Friday waits for the board's next working day",
+          [e["not_before"] for e in json.load(open(q))], ["2026-11-03T09:00:00"])
+    notify_due._write_queue(q, [])
+    check("tomorrow: with no board calendar, the default one (Fri to Mon)",
+          notify_due.snooze_until("Tomorrow", at(FRI, "17:00"), notify_due._default_working), at(D(2026, 11, 2), "09:00"))
+    check("tomorrow: with no day test at all, the plain next day",
+          notify_due.snooze_until("Tomorrow", at(FRI, "17:00")), at(SAT, "09:00"))
+
+    # An alerter that starts and then fails, with no answer: posted once through terminal-notifier.
+    os.remove(os.path.join(wdir, notify_due.STATE_FILE))
+    write_todo("- [ ] **Call Ana** [due:: 2026-10-27] [time:: 15:00]")
+    logs = []
+    failing = notify_due.make_poster(data, BASE, "/bin/terminal-notifier", "/fake/alerter", logs.append,
+                                     spawn=FakeAlerter("", code=1), clock=lambda: at(TUE, "15:00"))
+    with mock.patch.object(notify_due.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+        tick_at(at(TUE, "15:00"), failing)
+        settle()
+    args = run.call_args[0][0]
+    check("alerter fails: one terminal-notifier banner, grouped and linked",
+          (run.call_count, args[:5], args[args.index("-group") + 1], args[args.index("-open") + 1]),
+          (1, ["/bin/terminal-notifier", "-title", "Call Ana", "-message", "Due 15:00 · Work"],
+           "2026-10-27|Call Ana|due", BASE + "#!board=work!task=Call%20Ana"))
+    check("alerter fails: said in the log", "notify: alerter exit 1 with no answer" in logs, True)
+    check("alerter fails: the banner counts as sent, so it is not posted again",
+          notify_due.read_state(wdir), {"2026-10-27|Call Ana|due"})
+    logs = []
+    with mock.patch.object(notify_due.subprocess, "run") as run:
+        notify_due.make_poster(data, BASE, None, "/fake/alerter", logs.append, spawn=FakeAlerter("", code=2))(
+            "T", "b", None, None, None, "work")
+        settle()
+    check("alerter fails with no terminal-notifier: logged, nothing run",
+          (run.call_count, "notify: alerter exit 2 with no answer" in logs), (0, True))
+    notify_due._write_queue(q, [{"title": "Odd", "body": "o"}])
+    with mock.patch.object(notify_due.subprocess, "run") as run:
+        tick_at(at(TUE, "10:00"), notify_due.make_poster(data, BASE, "/bin/terminal-notifier", "/fake/alerter",
+                                                          lambda *a: None, spawn=FakeAlerter(pressed("Snooze 1h"), code=1),
+                                                          clock=lambda: at(TUE, "10:00")))
+        settle()
+    check("alerter: an answer with a bad exit is still the answer",
+          (run.call_count, [e["not_before"] for e in json.load(open(q))]), (0, ["2026-10-27T11:00:00"]))
 if saved_home is None:
     os.environ.pop("NOTIFY_HOME", None)
 else:

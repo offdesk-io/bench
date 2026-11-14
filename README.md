@@ -1222,8 +1222,9 @@ before today.
 retried every ten minutes and only its first failure is written to the log.
 
 **Snooze.** With `alerter` installed (`brew install vjeantet/tap/alerter`) every
-banner comes up as an alert with Snooze 1h, Tomorrow (09:00 the next day) and
-Dismiss, and stays on screen until one is pressed. A snoozed due banner gets an
+banner comes up as an alert with Snooze 1h, Tomorrow and Dismiss, and stays on
+screen until one is pressed. Tomorrow is 09:00 on the list's next working day,
+by its own holiday calendar, so a Friday's comes back on Monday. A snoozed due banner gets an
 entry of its own under `snoozed` in the same `notify-state.json` and goes out
 again at that time, unless the item is done by then or another banner for it
 goes out in the same minute, which is what happens when Tomorrow lands on the
@@ -1231,8 +1232,12 @@ goes out in the same minute, which is what happens when Tomorrow lands on the
 `not_before` time, and both drainers leave it there until then. `alerter` does
 not return until the alert is answered, so the tick starts it and moves on, and
 a thread waits for the answer without holding the queue's lock. A snooze
-answered after the server has stopped is lost. Without `alerter` the banners
-go through `terminal-notifier` as before, with no snooze.
+answered after the server has stopped is lost. An `alerter` that exits with an
+error before anyone answers has its banner posted once through
+`terminal-notifier` instead. Without `alerter` the banners go through
+`terminal-notifier` as before, with no snooze. The notifier's own poster
+cannot read a list's calendar, so a line it snoozes for Tomorrow comes back
+the plain next day, weekends included.
 
 **Agents' messages.** The queue an agent asks for a banner on belongs to the
 notifier, a folder of its own in PACKAGES (`~/Code/PACKAGES/notify` on the

@@ -46,8 +46,10 @@ own or none goes by its own profile's holidays. Without it every board uses
 `is_working`.
 
 Snooze. Through alerter every banner is an alert with Snooze 1h, Tomorrow
-(09:00 the next day) and Dismiss; terminal-notifier has no buttons, so without
-alerter nothing can be snoozed. A snoozed due banner gets an entry of its own
+(09:00 on the board's next working day, by its own calendar) and Dismiss;
+terminal-notifier has no buttons, so without alerter nothing can be snoozed,
+and an alerter that fails before an answer has its banner posted once through
+terminal-notifier instead. A snoozed due banner gets an entry of its own
 under `snoozed` in notify-state.json, and the tick posts it again once its time
 comes, unless the item is done by then or another banner for it goes out in
 the same tick. A snoozed agent's line goes back on its queue with `not_before`,
@@ -132,6 +134,10 @@ def _next_working_day(day, is_working):
             return day
         day += dt.timedelta(days=1)
     return day
+
+
+def _default_working(day):
+    return todo.is_working_day(day, tuple(todo.REGIONS))
 
 
 def _time_of(hhmm):
@@ -615,12 +621,15 @@ def notify_sound():
     return name or "default"
 
 
-def snooze_until(choice, now):
-    """When a snooze pressed at `now` ends, or None for any other answer."""
+def snooze_until(choice, now, is_working=None):
+    """When a snooze pressed at `now` ends, or None for any other answer.
+    Tomorrow is 09:00 on the next day `is_working` says is a working day, so a
+    Friday's goes to Monday, or the plain next day without one."""
     if choice == SNOOZE_HOUR:
         return now + dt.timedelta(hours=1)
     if choice == SNOOZE_TOMORROW:
-        return dt.datetime.combine(now.date() + dt.timedelta(days=1), TOMORROW_AT)
+        day = _next_working_day(now.date(), is_working) if is_working else now.date() + dt.timedelta(days=1)
+        return dt.datetime.combine(day, TOMORROW_AT)
     return None
 
 
@@ -650,11 +659,15 @@ def open_in_browser(url):
         pass
 
 
-def alert(args, url, on_snooze, log=print, spawn=subprocess.Popen, clock=dt.datetime.now, opener=None):
+def alert(args, url, on_snooze, log=print, spawn=subprocess.Popen, clock=dt.datetime.now, opener=None,
+          fallback=None, is_working=None):
     """Put an alert up and return at once, (ok, detail). alerter keeps running
     until the alert is answered, so a thread waits for it, holding no lock, and
     carries the answer out: a snooze calls `on_snooze(until)`, pressing the
-    alert opens `url`. `spawn`, `clock` and `opener` are there for the tests."""
+    alert opens `url`. An alerter that exits with an error and no answer calls
+    `fallback()` once, so the banner is still seen. `is_working` is the day
+    test Tomorrow skips by. `spawn`, `clock` and `opener` are there for the
+    tests."""
     try:
         proc = spawn(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                      stderr=subprocess.DEVNULL, text=True)
@@ -665,7 +678,12 @@ def alert(args, url, on_snooze, log=print, spawn=subprocess.Popen, clock=dt.date
         try:
             out, _ = proc.communicate()
             choice = answer(out)
-            until = snooze_until(choice, clock())
+            if choice is None and proc.returncode:
+                log("notify: alerter exit %d with no answer" % proc.returncode)
+                if fallback:
+                    fallback()
+                return
+            until = snooze_until(choice, clock(), is_working)
             if until:
                 on_snooze(until)
             elif choice == "open" and url:
@@ -678,9 +696,11 @@ def alert(args, url, on_snooze, log=print, spawn=subprocess.Popen, clock=dt.date
 
 
 def post(notifier, base_url, title, body, task=None, view=None, group=None, log=print, board=None,
-         alerter=None, on_snooze=None, spawn=subprocess.Popen, clock=dt.datetime.now, opener=None):
+         alerter=None, on_snooze=None, spawn=subprocess.Popen, clock=dt.datetime.now, opener=None,
+         is_working=None):
     """One banner: through `alerter` when given, as an alert whose snooze calls
-    `on_snooze(until)`, else through `notifier`, terminal-notifier."""
+    `on_snooze(until)`, else through `notifier`, terminal-notifier. An alert
+    whose alerter fails before an answer is posted once through `notifier`."""
     url = board_url(base_url, task, view, board)
     if alerter:
         args = [alerter, "--title", title, "--message", body,
@@ -690,7 +710,11 @@ def post(notifier, base_url, title, body, task=None, view=None, group=None, log=
             args += ["--group", group]
         if notify_sound():
             args += ["--sound", notify_sound()]
-        ok, detail = alert(args, url, on_snooze or (lambda until: None), log, spawn, clock, opener)
+        def fallback():
+            if notifier:
+                post(notifier, base_url, title, body, task, view, group, log, board)
+        ok, detail = alert(args, url, on_snooze or (lambda until: None), log, spawn, clock, opener,
+                           fallback, is_working)
         if ok:
             log("notify: %r alert up" % title)
         return ok, detail
@@ -715,11 +739,12 @@ def calendars(boards, regions_for):
     return {b: (lambda regions: lambda d: todo.is_working_day(d, regions))(regions_for(b)) for b in boards}
 
 
-def make_poster(data_root, base_url, notifier, alerter=None, log=print, **fakes):
+def make_poster(data_root, base_url, notifier, alerter=None, log=print, working_for=None, **fakes):
     """The `post` run_tick calls, (title, body, task, view, group, board). A
     due banner carries its fired key as `group`, so its snooze is an entry in
     the board's state; a queued line has none, so its snooze puts it back on the
-    board's queue, held. `fakes` (spawn, clock, opener) are passed to post()."""
+    board's queue, held. `working_for(board)` is the board's day test, read
+    when Tomorrow is pressed. `fakes` (spawn, clock, opener) are passed to post()."""
     def poster(title, body, task, view, group, board):
         clock = fakes.get("clock") or dt.datetime.now
 
@@ -730,8 +755,11 @@ def make_poster(data_root, base_url, notifier, alerter=None, log=print, **fakes)
                 requeue(queue_file(data_root, board), title, body, task, view, until)
             log("notify: %r snoozed until %s" % (title, until.isoformat(timespec="minutes")))
 
+        def is_working(day):
+            return (working_for(board) if working_for else _default_working)(day)
+
         return post(notifier, base_url, title, body, task, view, group, log, board,
-                    alerter=alerter, on_snooze=snoozed, **fakes)
+                    alerter=alerter, on_snooze=snoozed, is_working=is_working, **fakes)
     return poster
 
 
@@ -743,7 +771,8 @@ def start(data_root, list_boards, regions_for, base_url, log=print, read_text=re
     otherwise (see notify_sound)."""
     if not enabled():
         return None
-    poster = make_poster(data_root, base_url, find_notifier(), find_alerter(), log)
+    poster = make_poster(data_root, base_url, find_notifier(), find_alerter(), log,
+                         working_for=lambda board: calendars([board], regions_for)[board])
 
     def loop():
         stop = threading.Event()
