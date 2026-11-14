@@ -4,6 +4,22 @@
    6. Loading & saving
    ========================================================================= */
 
+/* The view a list opens on when the URL names none: the one last used on this
+   list, and for a list opened for the first time Board when nothing is ticked
+   off yet, since Overview would be a report of zeros with nowhere to add a task. */
+const VIEW_KEY = 'bench-view:';
+function rememberView(){
+  if (!state.docBoard || state.locked || state.view === 'settings' || state.view === 'projects') return;
+  try { localStorage.setItem(VIEW_KEY + state.docBoard, state.view); } catch (e) {}
+}
+function openingView(board){
+  let saved = '';
+  try { saved = localStorage.getItem(VIEW_KEY + board) || ''; } catch (e) {}
+  if (saved && isKnownView(saved) && saved !== 'settings' && saved !== 'projects') return saved;
+  const ticked = state.doc.buckets.some(b => b.tiers.some(t => t.tasks.some(x => x.done)));
+  return ticked ? 'overview' : 'board';
+}
+
 function load(text, name, opts){
   opts = opts || {};
   const doc = parseDoc(text);
@@ -38,6 +54,7 @@ function load(text, name, opts){
   // *previous* dataset's buckets — drop whichever ones this file doesn't have
   // rather than showing an empty board because every toggled name is stale.
   state.bucketFilter.forEach(name => { if (!doc.buckets.some(b => b.name === name)) state.bucketFilter.delete(name); });
+  if (opts.opening && !state.viewFromHash) state.view = openingView(opts.board || '');
   markClean('');
   state.migratedOnly = false;
   loadBucketAgents();
@@ -119,10 +136,11 @@ async function loadFile(){
   try {
     const res = await fetchList();
     if (!res.ok) throw new Error('the server answered ' + res.status);
-    load(await res.text(), 'todo.md');
+    load(await res.text(), 'todo.md', { opening: true, board: res.headers.get('X-Bench-Board') || '' });
     state.diskStamp = res.headers.get('Last-Modified') || null;
     state.diskHash = res.headers.get('X-Todo-Hash') || null;
     state.docBoard = res.headers.get('X-Bench-Board') || '';
+    rememberView();
     state.boardMoved = '';
     /* A real list always wins: whatever was standing in for it stops here. */
     state.demo = false;

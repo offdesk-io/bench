@@ -146,7 +146,11 @@ const state = {
      drawer's own width is — a drag the owner does once should not repeat itself. */
   tlLabelWidth: (+localStorage.getItem('bench-tl-label')) || 200,
   sort: {},           /* column name -> 'priority'; absent means the owner's own order */
-  view: 'overview',   /* the view the file opens on */
+  view: 'overview',   /* the view the file opens on; load() picks it when the URL names none, see openingView() */
+  viewFromHash: false, /* the URL named a view, which beats the remembered one */
+  /* The task a drawer was opened on straight from + Add task. Its Bucket, Due
+     and Delegate to sit under the title until another card opens. */
+  newTaskId: null,
   openTask: null,
   /* Set while the drawer shows a sub-task: the task it belongs to, which is where
      the Back button goes. openTask holds the sub-task's own id then, the six
@@ -355,7 +359,8 @@ function openChatByKey(id){
 function initViewFromHash(){
   const h = parseHash();
   const onSettings = adoptSettingsRoute(h);
-  if (!onSettings && isKnownView(h.view)) state.view = h.view;
+  if (onSettings) state.viewFromHash = true;
+  else if (isKnownView(h.view)) { state.view = h.view; state.viewFromHash = true; }
   /* A link naming another board holds its card back until /datasets.json has
      said whether that board is there: opening it on this list first would find
      the wrong card or none. See resolvePendingBoard() in 21-datasets.js. */

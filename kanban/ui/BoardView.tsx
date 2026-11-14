@@ -45,6 +45,9 @@ export interface BoardColumn {
   canEdit: boolean
   canAdd: boolean
   cards: BoardCard[]
+  /** A board with no tasks: the column holds one input, and each line typed
+   *  into it becomes a task. */
+  intake?: { placeholder: string; onSubmit: (lines: string[]) => void }
 }
 
 export interface BoardViewProps {
@@ -61,6 +64,25 @@ export interface BoardViewProps {
   onAdd: (tier: string) => void
   onEdit: (tier: string) => void
   onSort: (tier: string) => void
+}
+
+/* One textarea rather than an input, so a pasted list keeps its lines. Enter
+   adds them, Shift+Enter starts another line. */
+function Intake({ placeholder, onSubmit }: { placeholder: string; onSubmit: (lines: string[]) => void }) {
+  const [text, setText] = useState('')
+  const submit = () => {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    if (!lines.length) return
+    setText('')
+    onSubmit(lines)
+  }
+  return (
+    <textarea
+      className="intake" rows={2} value={text} placeholder={placeholder} aria-label={placeholder}
+      onChange={e => setText(e.target.value)}
+      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit() } }}
+    />
+  )
 }
 
 const PENCIL = 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'
@@ -161,7 +183,7 @@ export function BoardView(props: BoardViewProps) {
               <button className="addbtn" data-add={col.tier} onClick={() => onAdd(col.tier)}>+ Add task</button>
             ) : undefined}
             {...drop}
-            children={col.cards.length ? cards : <ColumnEmpty>Nothing here</ColumnEmpty>}
+            children={col.intake ? <Intake {...col.intake} /> : col.cards.length ? cards : <ColumnEmpty>Nothing here</ColumnEmpty>}
           />
         )
       })}
