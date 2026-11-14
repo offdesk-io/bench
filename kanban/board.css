@@ -2575,18 +2575,8 @@
      things that are required. */
   .setupform{display:flex; flex-direction:column; gap:14px}
   .fielderr{color:var(--tenon-text-error)}
-  .agentopts{border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-default)}
-  .agentopts > summary{cursor:pointer; list-style:none; padding:9px 11px; font-weight:600}
-  .agentopts > h2{margin:0; padding:9px 11px 0; font-size:var(--tenon-typography-size-sm); font-weight:640; color:var(--tenon-text-subtle)}
-  .agentopts--open{max-width:1100px}
-  .agentopts--open .agentopts__body{max-width:520px}
-  .agentopts > summary::-webkit-details-marker{display:none}
-  .agentopts > summary::before{content:'\25B8  '; color:var(--tenon-text-faint)}
-  .agentopts[open] > summary::before{content:'\25BE  '}
-  .agentopts__body{display:flex; flex-direction:column; gap:14px; padding:2px 11px 12px}
   .agentopts__group{display:flex; flex-direction:column; gap:10px; padding-top:12px; border-top:1px solid var(--tenon-stroke-default)}
   .agentopts__group h4{display:flex; align-items:center; gap:8px; margin:0; font-size:var(--tenon-typography-size-sm); font-weight:650; color:var(--tenon-text-default)}
-  .agentopts__note{margin:-4px 0 0}
   /* First list, step 2: a bucket is a name, a Remove, and what goes in it. */
   .bucketrows{display:flex; flex-direction:column; gap:12px}
   .bucketrow{display:grid; grid-template-columns:1fr auto; gap:6px 8px; align-items:center}
@@ -3094,49 +3084,24 @@
    the hidden attribute, so the drawer's raw-edit boxes would never hide. */
 .tenon-textarea[hidden] { display: none; }
 
-/* The Agents tab's cards (agentCardsHTML() in 27-agents.js): what each agent
-   does, cannot do and needs from the person. Below the hour tracks once an
-   agent is set up, and the whole tab before that. */
-.agentsview { display: flex; flex-direction: column; gap: 24px; padding-bottom: 32px; }
-.agentcards { max-width: 1100px; }
-.agentcards h2 { font-size: var(--tenon-typography-size-sm); font-weight: 640; color: var(--tenon-text-subtle); margin: 0 0 10px; }
-.agentcards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-.agentcard {
-  background: var(--tenon-background-raised); border: 1px solid var(--tenon-stroke-default);
-  border-radius: var(--tenon-radius-md); padding: 14px 16px;
-}
-.agentcard.on { border-color: var(--tenon-stroke-accent); box-shadow: 0 0 0 1px var(--tenon-stroke-accent); }
-.agentcard header { border: 0; padding: 0; display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-.agentcard header .avatar { display: inline-flex; }
-.agentcard h3 { margin: 0; font-size: var(--tenon-typography-size-lg); font-weight: 640; color: var(--tenon-text-default); }
-.agentcard dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
-.agentcard dt { font-size: var(--tenon-typography-size-xs); font-weight: 640; color: var(--tenon-text-faint); text-transform: uppercase; letter-spacing: .04em; }
-.agentcard dd { margin: 2px 0 0; font-size: var(--tenon-typography-size-sm); color: var(--tenon-text-default); line-height: 1.45; }
-.agentcard-level { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; }
-.agentcard-level label { font-size: var(--tenon-typography-size-xs); font-weight: 640; color: var(--tenon-text-faint); text-transform: uppercase; letter-spacing: .04em; }
-.agentcard-level select { align-self: flex-start; }
+/* The Agents page (27-agents.js): inside the shared page layout. The facts under
+   the PA and Bucket agents sections, and one card per bucket agent. */
+.agentsview { padding-bottom: 32px; }
+.agentfacts { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.agentfacts dt { font-size: var(--tenon-typography-size-xs); font-weight: 640; color: var(--tenon-text-faint); text-transform: uppercase; letter-spacing: .04em; }
+.agentfacts dd { margin: 2px 0 0; font-size: var(--tenon-typography-size-sm); color: var(--tenon-text-default); line-height: 1.45; }
 .agentsetup { max-width: 640px; padding-top: 8px; }
 .agentsetup h1 { margin: 0 0 8px; font-size: var(--tenon-typography-size-lg); }
 .agentsetup p { margin: 0 0 14px; color: var(--tenon-text-subtle); line-height: 1.5; }
-.agentsetup-more { margin: 12px 0 0; }
-.agentsetup-missing { color: var(--tenon-text-error); margin: 0 0 8px; font-size: var(--tenon-typography-size-sm); }
-.agentsetup-done .agentcards h2 { display: none; }
-.agentsetup-done .agentcards-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-.agentsetup-next { margin: 14px 0 0; line-height: 1.5; }
-.planners { max-width: 1100px; }
-.planners h2 { font-size: var(--tenon-typography-size-sm); font-weight: 640; color: var(--tenon-text-subtle); margin: 0 0 10px; }
-.planners ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.planners li {
+.agentbuckets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.agentbuckets li {
   background: var(--tenon-background-raised); border: 1px solid var(--tenon-stroke-default);
   border-radius: var(--tenon-radius-md); padding: 8px 14px; font-size: var(--tenon-typography-size-sm);
 }
 .bagent > summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none; }
 .bagent > summary::-webkit-details-marker { display: none; }
 .bagent > summary .planner-name { margin-left: auto; }
-.bagent__body { margin: 10px 0 2px; display: flex; flex-direction: column; gap: 10px; }
-.bagent__field dt { font-weight: 600; color: var(--tenon-text-default); margin: 0 0 2px; }
-.bagent__field dd { margin: 0; white-space: pre-wrap; color: var(--tenon-text-default); }
-.bagent__field dd.bagent__empty { color: var(--tenon-text-subtle); }
+.bagent__body { margin: 10px 0 2px; display: flex; flex-direction: column; gap: 14px; }
 .planner-bucket { color: var(--tenon-text-default); font-weight: 560; }
 .planner-name { color: var(--tenon-text-subtle); }
 
@@ -3240,47 +3205,37 @@ body.signed-in #runAgentBtn{display:none !important}
 .bucketbar--page #editBuckets, .bucketbar--page #editTiers, .bucketbar--page #filterChips,
 .bucketbar--page #agentFilterChip, .bucketbar--page #mineChip,
 .bucketbar--page #q{display:none !important}
-.settingspanel .settingspage{padding:0}
-.settingspage__actions{display:flex; gap:8px; margin-top:16px}
-.lists.pview.memview, .lists.pview.settingsview{max-width:860px}
-.agentsview #refCardsRoot{max-width:860px}
+.lists.pview.settingsview{max-width:none}
+/* The page layout every Settings tab shares (settingsPageLayoutHTML() in
+   29-settings.js): a title row with Save, a divider, then sections as rows of
+   title and fields in 3:9. 1200px wide and left-aligned with the tabs. */
+.spage{max-width:1200px}
+.spage__head{display:flex; align-items:center; justify-content:space-between; gap:16px; padding:8px 0 16px; border-bottom:1px solid var(--tenon-stroke-default)}
+.spage__title{margin:0; font-size:var(--tenon-typography-size-2xl); font-weight:650; color:var(--tenon-text-default)}
+.spage__section{display:grid; grid-template-columns:1fr 3fr; gap:var(--tenon-dimension-300); padding-top:var(--tenon-dimension-600)}
+.spage__side{display:flex; flex-direction:column; gap:var(--tenon-dimension-050); min-width:0}
+.spage__desc{margin:0; max-width:32ch; font-size:var(--tenon-typography-size-sm); line-height:1.5; color:var(--tenon-text-faint)}
+.spage__label{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:650; text-transform:uppercase; letter-spacing:.06em; color:var(--tenon-text-subtle)}
+.spage__fields{display:flex; flex-direction:column; gap:14px; min-width:0; max-width:640px}
+.spage__fields--wide{max-width:none}
+.spage__foot{display:flex; justify-content:flex-end; padding-top:var(--tenon-dimension-600)}
+@media (max-width:900px){
+  .spage__section{grid-template-columns:1fr; gap:var(--tenon-dimension-150); padding-top:var(--tenon-dimension-400)}
+  .spage__foot{padding-top:var(--tenon-dimension-400)}
+}
 
 /* Memory (31-memory.js): one panel per section. */
-.memcolbody{display:flex; flex-direction:column; gap:8px}
-.memhead{display:flex; align-items:center; justify-content:space-between; gap:12px}
-.memhead h3{margin:0; font-size:var(--tenon-typography-size-lg); font-weight:660; letter-spacing:-.01em; color:var(--tenon-text-default)}
-.memhead h4, .memtext h4{margin:0; font-size:var(--tenon-typography-size-sm); font-weight:600; color:var(--tenon-text-subtle)}
-.membucket{display:flex; flex-direction:column; gap:8px; padding:12px 0; border-top:1px solid var(--tenon-stroke-default)}
-.memtext{max-width:68ch}
-.memdesc{margin:0; max-width:68ch; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-subtle)}
 .memempty{margin:0; padding:14px 16px; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-faint); border:1px dashed var(--tenon-stroke-default); border-radius:var(--tenon-radius-md)}
 .memerr{margin:0; font-size:var(--tenon-typography-size-sm); color:var(--tenon-text-error)}
 .memactions{display:flex; align-items:center; flex-wrap:wrap; gap:8px}
-.memarea{
-  width:100%; box-sizing:border-box; min-height:160px; padding:8px 10px; resize:vertical;
-  font:inherit; font-size:var(--tenon-typography-size-sm); line-height:1.6;
-  color:var(--tenon-text-default); background:var(--tenon-background-raised);
-  border:1px solid var(--tenon-stroke-default); border-radius:var(--tenon-radius-md);
-}
-.memarea:focus{outline:2px solid var(--tenon-stroke-focus); outline-offset:1px}
-.memscroll{overflow-x:auto}
-.memtable{width:100%; border-collapse:collapse; font-size:var(--tenon-typography-size-sm)}
-.memtable th{text-align:left; padding:6px 10px 6px 0; font-weight:650; color:var(--tenon-text-faint); border-bottom:1px solid var(--tenon-stroke-default)}
-.memtable td{padding:6px 10px 6px 0; vertical-align:top; color:var(--tenon-text-subtle); border-bottom:1px solid var(--tenon-stroke-default)}
-.memtable td:first-child{color:var(--tenon-text-default); font-weight:600}
+.tenon-field[hidden]{display:none}
+/* Tenon's Field fills its column; on the Settings and Memory pages every Field
+   shares one width, the Team rows aside. */
+.spage__fields .tenon-field{max-width:640px}
+.memrow .tenon-field{max-width:none}
 .memrows{display:flex; flex-direction:column; gap:12px}
 .memrow{display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)) auto; gap:8px; align-items:end}
-.memdl{display:grid; grid-template-columns:max-content 1fr; gap:4px 14px; margin:0 0 10px; font-size:var(--tenon-typography-size-sm)}
-.memdl dt{color:var(--tenon-text-faint)}
-.memdl dd{margin:0; color:var(--tenon-text-subtle)}
 @media (max-width:640px){
   .memrow{grid-template-columns:1fr 1fr}
   .memrow .btn{grid-column:1 / -1; justify-self:start}
-  .memtable thead{display:none}
-  .memtable, .memtable tbody, .memtable tr, .memtable td{display:block}
-  .memtable tr{padding:8px 0; border-bottom:1px solid var(--tenon-stroke-default)}
-  .memtable td{border:0; padding:2px 0}
-  .memtable td:empty{display:none}
-  .memtable td::before{content:attr(data-label) ": "; color:var(--tenon-text-faint)}
-  .memtable td:first-child::before{content:""}
 }

@@ -168,12 +168,10 @@ await evalJS(`openSettingsPage('spend')`)
 await new Promise(r => setTimeout(r, 300))
 check('an old Spend call opens the Agents tab', await evalJS(`settingsTab === 'agents'`))
 
-check('the clock card is its own column, stacked under Token Session', await evalJS(`
-  (() => { const card = document.querySelector('#schedOut').closest('.tenon-column');
-    return card && card.parentElement.classList.contains('pvcol') &&
-      card.closest('#lists') &&
-      card.querySelector('h3').textContent === 'What runs on a clock' &&
-      card.previousElementSibling.querySelector('h3').textContent === 'Token Session' })()
+check('Token Session sits under Spending and the clock card under Schedules', await evalJS(`
+  (() => { const clock = document.querySelector('#schedOut').closest('.tenon-column'), usage = document.querySelector('#usageOut').closest('.tenon-column');
+    return !!clock && !!usage && !!clock.closest('[data-section=schedules]') && !!usage.closest('[data-section=spending]') &&
+      clock.querySelector('h3').textContent === 'What runs on a clock' && usage.querySelector('h3').textContent === 'Token Session' })()
 `))
 const jobs = await evalJS(`document.querySelectorAll('#schedOut .schedjob').length`)
 check('one row per scheduled job', jobs === 3, `${jobs} rows`)

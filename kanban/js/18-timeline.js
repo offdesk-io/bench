@@ -800,6 +800,8 @@ function renderViewTabs(defs){
    from redrawing where you already are. Only the report list cares: it is
    re-read on arrival at Reports and not on every filter change there. */
 let lastRenderedView = null;
+/* True while renderView() carries out a move the person already agreed to. */
+let settingsLeaveOk = false;
 
 /* Two views: the board, and the hand-written summaries from the end of the file.
    The bucket tabs and search only make sense on the board. */
@@ -819,6 +821,15 @@ function renderView(){
   // Memory and Backups were views of their own: they are tabs of the Settings
   // page now, and anything that still names them lands there.
   if (state.view === 'memory' || state.view === 'agents' || state.view === 'backups') { settingsTab = state.view; state.view = 'settings'; }
+  // Leaving the Settings page with unsaved changes asks first (settingsPageGate(),
+  // 29-settings.js). Staying puts the page back; Discard and Save carry on here.
+  if (lastRenderedView === 'settings' && state.view !== 'settings' && !settingsLeaveOk && settingsPageDirty()) {
+    const target = state.view;
+    state.view = 'settings';
+    syncHash();
+    settingsPageAsk(() => { settingsLeaveOk = true; state.view = target; syncHash(true); try { renderView(); } finally { settingsLeaveOk = false; } });
+    return;
+  }
   const isSettings = state.view === 'settings';
   // Projects has no tab, but a #projects link still draws its list.
   const isProjects = state.view === 'projects';

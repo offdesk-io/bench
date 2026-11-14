@@ -90,11 +90,10 @@ function settingsEmptyLabel(key, models){
 }
 
 function settingsModelField(key, name, help, draft, choices){
-  return '<label class="field"><span>' + esc(name) + '</span>' +
-    '<select data-model="' + key + '">' +
-    '<option value="">' + esc(settingsEmptyLabel(key, draft.models)) + '</option>' +
-    choices.map(m => '<option value="' + esc(m) + '"' + (draft.models[key] === m ? ' selected' : '') + '>' + esc(settingsCap(m)) + '</option>').join('') +
-    '</select><span class="help">' + esc(help) + '</span></label>';
+  return tenonFieldHTML({ label: name, kind: 'select', attrs: 'data-model="' + key + '"', readonly: state.locked,
+    options: '<option value="">' + esc(settingsEmptyLabel(key, draft.models)) + '</option>' +
+      choices.map(m => '<option value="' + esc(m) + '"' + (draft.models[key] === m ? ' selected' : '') + '>' + esc(settingsCap(m)) + '</option>').join(''),
+    hint: help });
 }
 
 function settingsCountryOptions(draft, first){
@@ -108,8 +107,7 @@ function settingsCountryOptions(draft, first){
 function settingsAboutField(draft, key){
   const f = SETTINGS_ABOUT.find(a => a[0] === key);
   if (!f || !(key in draft.about)) return '';
-  return '<label class="field"><span>' + esc(f[1]) + '</span><input type="text" data-about="' + key + '" value="' + escAttr(draft.about[key]) + '" placeholder="Not set">' +
-    '<span class="help">' + esc(f[2]) + '</span><span class="help fielderr" data-err="about-' + key + '" hidden></span></label>';
+  return tenonFieldHTML({ label: f[1], attrs: 'data-about="' + key + '"', value: draft.about[key], placeholder: 'Not set', hint: f[2], err: 'data-err="about-' + key + '"' });
 }
 
 /* "This board": the open list's own memory folder, banners and agents, kept
@@ -118,48 +116,192 @@ function settingsAboutField(draft, key){
 const BOARD_MEMORY_MODES = [['inherit', 'Same as main memory folder'], ['none', 'None, keep everything in Bench'], ['own', 'Its own folder']];
 
 function boardSwitchHTML(attr, on, name, help){
-  return '<label class="field"><span>' + esc(name) + '</span>' +
-    '<button type="button" role="switch" class="tenon-switch' + (on ? ' tenon-switch--on' : '') + '" ' + attr + ' aria-checked="' + on + '"></button>' +
-    '<span class="help">' + esc(help) + '</span></label>';
+  return tenonFieldHTML({ label: name, kind: 'switch', attrs: attr, on, hint: help });
+}
+
+/* The board's own memory folder: the choice, and the path it asks for when it
+   is "Its own folder". Shared by the pop-up's This board group and the page's
+   Folders section. */
+function boardMemoryFieldHTML(draft, label){
+  const b = draft.board;
+  return tenonFieldHTML({ label: label || 'Memory folder', kind: 'select', attrs: 'data-board-memory-mode',
+    options: BOARD_MEMORY_MODES.map(([v, l]) => '<option value="' + v + '"' + (b.mode === v ? ' selected' : '') + '>' + esc(l) + '</option>').join(''),
+    hint: 'Where facts about you and this list’s people are kept. Same as main uses the memory folder above, None keeps everything in data/' + draft.list + '/.' }) +
+    tenonFieldHTML({ label: 'Folder path', attrs: 'data-board-memory' + (b.mode === 'own' ? '' : ' hidden'), value: b.path, placeholder: '/absolute/path/to/folder',
+      wrap: 'data-board-memory-field' + (b.mode === 'own' ? '' : ' hidden'), err: 'data-err="board-memory"' });
 }
 
 function boardGroupHTML(draft, first){
   if (first || draft.signedIn || !draft.list) return '';
   const b = draft.board;
   return '<div class="agentopts__group" data-board-group><h4>This board</h4>' +
-    '<label class="field"><span>Memory folder</span><select data-board-memory-mode>' +
-    BOARD_MEMORY_MODES.map(([v, l]) => '<option value="' + v + '"' + (b.mode === v ? ' selected' : '') + '>' + esc(l) + '</option>').join('') +
-    '</select>' +
-    '<input type="text" data-board-memory value="' + escAttr(b.path) + '" placeholder="/absolute/path/to/folder"' + (b.mode === 'own' ? '' : ' hidden') + '>' +
-    '<span class="help">Where facts about you and this list’s people are kept. Same as main uses the memory folder above, None keeps everything in data/' + esc(draft.list) + '/.</span>' +
-    '<span class="help fielderr" data-err="board-memory" hidden></span></label>' +
+    boardMemoryFieldHTML(draft) +
     boardSwitchHTML('data-board-banners', b.banners, 'Desktop banners', 'A banner when a task on this board is due. Off, it sends none.') +
     boardSwitchHTML('data-board-agents', b.agents, 'Agents', 'Lets this board’s bucket agents work. Off, they leave it alone.') +
     '</div>';
 }
 
+function settingsNameFields(draft){
+  return tenonFieldHTML({ label: 'Name', attrs: 'data-name', value: draft.name, placeholder: 'First name',
+    hint: draft.signedIn ? 'What the PA calls you.' : 'Who the review sub-tasks are assigned to.', err: 'data-err="name"' });
+}
+
+function settingsPlaceFields(draft, first){
+  return tenonFieldHTML({ label: 'Country', kind: 'select', attrs: 'data-country', options: settingsCountryOptions(draft, first),
+    hint: 'Its public holidays count as days off.',
+    notes: tenonFieldNote('data-nolist', 'No public holiday list available for this country, so only weekends count as days off.'),
+    err: 'data-err="country"' }) +
+    tenonFieldHTML({ label: 'Region', kind: 'select', attrs: 'data-region', options: settingsRegionOptions(draft),
+      wrap: 'data-region-field' + (draft.regions.length ? '' : ' hidden') });
+}
+
+function settingsMemoryFolderField(draft){
+  return tenonFieldHTML({ label: 'Memory folder', attrs: 'data-memory', value: draft.memoryRoot, placeholder: 'Not set',
+    hint: 'A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.' });
+}
+
+function settingsProjectsField(draft){
+  return tenonFieldHTML({ label: 'Projects folder for ' + draft.list, attrs: 'data-projects', value: draft.projectsRoot, placeholder: 'Not set',
+    hint: 'A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + draft.list + '/projects/.' });
+}
+
+function settingsChimeField(draft, help){
+  return tenonFieldHTML({ label: 'Reply chime', kind: 'switch', attrs: 'data-chime', on: draft.chime,
+    hint: help || 'A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.' });
+}
+
 function settingsFormHTML(draft, choices, first){
-  return '<div class="setupform">' +
-    '<label class="field"><span>Name</span><input type="text" data-name value="' + escAttr(draft.name) + '" placeholder="First name">' +
-    '<span class="help">' + (draft.signedIn ? 'What the PA calls you.' : 'Who the review sub-tasks are assigned to.') + '</span>' +
-    '<span class="help fielderr" data-err="name" hidden></span></label>' +
-    (first ? '' : settingsAboutField(draft, 'addressing')) +
-    '<label class="field"><span>Country</span><select data-country>' + settingsCountryOptions(draft, first) + '</select>' +
-    '<span class="help">Its public holidays count as days off.</span>' +
-    '<span class="help" data-nolist hidden>No public holiday list available for this country, so only weekends count as days off.</span>' +
-    '<span class="help fielderr" data-err="country" hidden></span></label>' +
-    '<label class="field" data-region-field' + (draft.regions.length ? '' : ' hidden') + '><span>Region</span>' +
-    '<select data-region>' + settingsRegionOptions(draft) + '</select></label>' +
-    (draft.signedIn ? (draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '') + '</div>' :
-    (first ? '' : '<label class="field"><span>Memory folder</span><input type="text" data-memory value="' + escAttr(draft.memoryRoot) + '" placeholder="Not set">' +
-      '<span class="help">A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.</span></label>') +
-    (first || !draft.list ? '' : '<label class="field"><span>Projects folder for ' + esc(draft.list) + '</span><input type="text" data-projects value="' + escAttr(draft.projectsRoot) + '" placeholder="Not set">' +
-      '<span class="help">A folder of this list’s own, one folder per project inside it, which no other list may use. Set, a project is looked for there first and new ones are made there. Empty keeps them in data/' + esc(draft.list) + '/projects/.</span></label>') +
-    boardGroupHTML(draft, first) +
-    '<label class="field"><span>Reply chime</span>' +
-    '<button type="button" role="switch" class="tenon-switch' + (draft.chime ? ' tenon-switch--on' : '') + '" data-chime aria-checked="' + draft.chime + '"></button>' +
-    '<span class="help">A short sound when a reply finishes in any chat: two rising notes for done, one low note for an error or a stop.</span></label>' +
-    '</div>');
+  const you = settingsNameFields(draft) + (first ? '' : settingsAboutField(draft, 'addressing')) + settingsPlaceFields(draft, first);
+  if (draft.signedIn) {
+    const sharing = draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '';
+    return '<div class="setupform">' + you + sharing + '</div>';
+  }
+  return '<div class="setupform">' + you +
+    (first ? '' : settingsMemoryFolderField(draft)) +
+    (first || !draft.list ? '' : settingsProjectsField(draft)) +
+    boardGroupHTML(draft, first) + settingsChimeField(draft) + '</div>';
+}
+
+/* ---- The page layout every tab of the Settings page shares ----
+
+   A title row with a Save on its right and a divider under it, then one row per
+   section: its title on the left, its fields on the right, 3:9. A second Save
+   closes the content. `sections` is [{ id, title, description, html, wide }], description being a line under the title that says what the group is for, wide letting the fields use the whole
+   right-hand column. `opts.save` false
+   leaves both Saves out (Backups); `opts.saveAttr` is the data attribute the
+   caller wires its handler to. Under 900px each section stacks, title first. */
+function settingsPageLayoutHTML(title, sections, opts){
+  opts = opts || {};
+  const save = opts.save === false ? '' :
+    '<button type="button" class="btn primary" ' + (opts.saveAttr || 'data-settings-save') + '>Save</button>';
+  return '<div class="spage">' +
+    '<div class="spage__head"><h1 class="spage__title">' + esc(title) + '</h1>' + save + '</div>' +
+    sections.map(sec =>
+      '<section class="spage__section" data-section="' + escAttr(sec.id || sec.title) + '">' +
+        '<div class="spage__side"><h2 class="spage__label">' + esc(sec.title) + '</h2>' +
+          (sec.description ? '<p class="spage__desc"' + (sec.descAttrs ? ' ' + sec.descAttrs : '') + '>' + esc(sec.description) + '</p>' : '') + '</div>' +
+        '<div class="spage__fields' + (sec.wide ? ' spage__fields--wide' : '') + '">' + sec.html + '</div></section>').join('') +
+    (save ? '<div class="spage__foot">' + save + '</div>' : '') +
+    '</div>';
+}
+
+/* ---- Tenon's Field, drawn as a string ----
+
+   Settings and Memory are HTML strings, so Field.tsx's markup is written out
+   here once (tenon/src/components/Field): a .tenon-field block holding the
+   label tied to its control by for/id, the control, the hint under it, and an
+   error line that shows in place when there is one. Nothing on those pages
+   styles a field itself; every labelled text box, number, dropdown and textarea
+   comes through this. o: label, kind ('input' | 'textarea' | 'select' |
+   'switch'), attrs (data-* and the like, as a string), value, type,
+   placeholder, rows, options (a select's <option>s, as HTML), hint, hintAttrs,
+   notes (extra lines under the hint, as HTML), err (the data attribute naming
+   the error line, e.g. 'data-err="name"'), required, readonly (disabled on a select or a switch, which have no read-only), on (a switch),
+   wrap (attributes on the block, e.g. 'data-region-field hidden'). */
+/* True when a write must not go out: a locked tab (the example list, a backup
+   preview) saves nothing, and a tab whose list the server has moved off, from
+   another tab, goes over to that list through the board's own prompt rather
+   than writing into it. Every save on the Settings, Memory and Agents pages asks. */
+/* The welcome (first run) opens over the example list, which is locked, and has
+   to save: its two steps are exempt from the lock. */
+let settingsWelcome = false;
+/* Only while the welcome's modal is on screen, and cleared on every way it ends. */
+const settingsLocked = () => state.locked && !(settingsWelcome && !!modalEl);
+function writeBlocked(){
+  if (settingsLocked()) return true;
+  if (state.boardMoved) { boardMoved(state.boardMoved, true); return true; }
+  return false;
+}
+
+let tenonFieldSeq = 0;
+const TENON_CHEVRON = '<svg class="tenon-select__chevron" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+function tenonFieldHTML(o){
+  const id = 'tf-' + (++tenonFieldSeq), hintId = id + '-note', errId = id + '-err';
+  const kind = o.kind || 'input';
+  const hasHint = o.hint !== undefined && o.hint !== null && o.hint !== '';
+  const ro = o.readonly || settingsLocked();
+  const common = ' id="' + id + '"' + (hasHint ? ' aria-describedby="' + hintId + '"' : '') + (o.required ? ' required' : '') +
+    (ro ? (kind === 'select' || kind === 'switch' ? ' disabled' : ' readonly') : '') + (o.attrs ? ' ' + o.attrs : '');
+  let control;
+  if (kind === 'select') {
+    control = '<span class="tenon-field__select"><select class="tenon-field__control"' + common + '>' + (o.options || '') + '</select>' + TENON_CHEVRON + '</span>';
+  } else if (kind === 'textarea') {
+    control = '<textarea class="tenon-field__control" rows="' + (o.rows || 5) + '"' + common + ' placeholder="' + escAttr(o.placeholder || '') + '" spellcheck="true">' + esc(o.value || '') + '</textarea>';
+  } else if (kind === 'switch') {
+    control = '<button type="button" role="switch" class="tenon-switch' + (o.on ? ' tenon-switch--on' : '') + '" aria-checked="' + !!o.on + '"' + common + '></button>';
+  } else {
+    control = '<input class="tenon-field__control" type="' + (o.type || 'text') + '"' + common + ' value="' + escAttr(o.value || '') + '"' + (o.placeholder ? ' placeholder="' + escAttr(o.placeholder) + '"' : '') + '>';
+  }
+  return '<div class="tenon-field"' + (o.wrap ? ' ' + o.wrap : '') + '>' +
+    '<label class="tenon-field__label" for="' + id + '">' + esc(o.label) +
+      (o.required ? '<span class="tenon-field__required" aria-hidden="true">*</span>' : '') + '</label>' +
+    control +
+    (hasHint ? '<span id="' + hintId + '" class="tenon-field__note"' + (o.hintAttrs ? ' ' + o.hintAttrs : '') + '>' + esc(o.hint) + '</span>' : '') +
+    (o.notes || '') +
+    (o.err ? '<span id="' + errId + '" class="tenon-field__note tenon-field__note--error" ' + o.err + ' hidden></span>' : '') +
+    '</div>';
+}
+/* A line under a field that shows only when it applies, as Field's own note. */
+function tenonFieldNote(attrs, text){
+  return '<span class="tenon-field__note" ' + attrs + ' hidden>' + esc(text) + '</span>';
+}
+/* Shows or clears the error line of a field drawn by tenonFieldHTML, as Field
+   does for an error: the block goes invalid, the control says so, and the
+   error describes the control as well as the hint. A line outside such a field
+   is only shown or hidden. */
+function tenonFieldError(el, msg){
+  el.textContent = msg || '';
+  el.hidden = !msg;
+  const field = el.closest('.tenon-field');
+  const control = field && field.querySelector('.tenon-field__control');
+  if (!field || !control) return;
+  field.classList.toggle('tenon-field--invalid', !!msg);
+  if (msg) control.setAttribute('aria-invalid', 'true'); else control.removeAttribute('aria-invalid');
+  const ids = (control.getAttribute('aria-describedby') || '').split(/\s+/).filter(x => x && x !== el.id);
+  if (msg) ids.push(el.id);
+  if (ids.length) control.setAttribute('aria-describedby', ids.join(' ')); else control.removeAttribute('aria-describedby');
+}
+
+/* The Settings tab's sections. Signed in, the profile is the visitor's own and
+   the server's settings are not theirs, so only You is offered, with How to
+   address you, which has no other home for them. */
+function settingsPageSections(draft){
+  const sections = [{ id: 'you', title: 'You',
+    html: settingsNameFields(draft) + (draft.signedIn ? settingsAboutField(draft, 'addressing') : '') + settingsPlaceFields(draft, false) +
+      (draft.signedIn && draft.list ? '<div><button type="button" class="btn ghost small" data-sharing>Who sees ' + esc(prettyDataset(draft.list)) + '</button></div>' : '') }];
+  if (draft.signedIn) return sections;
+  sections.push({ id: 'folders', title: 'Folders',
+    html: settingsMemoryFolderField(draft) + (draft.list ? settingsProjectsField(draft) + boardMemoryFieldHTML(draft, 'This board’s memory folder') : '') });
+  if ('setup' in draft.sections) {
+    const [, name, help] = SETTINGS_SECTIONS.find(x => x[0] === 'setup');
+    sections.push({ id: 'setup', title: name,
+      html: tenonFieldHTML({ label: name, kind: 'textarea', attrs: 'data-setup', value: draft.sections.setup,
+        placeholder: draft.hints.setup || '', hint: help, err: 'data-err="setup"' }) });
+  }
+  sections.push({ id: 'notifications', title: 'Notifications',
+    html: (draft.list ? boardSwitchHTML('data-board-banners', draft.board.banners, 'Desktop banners', 'A banner when a task on this board is due, on this board only. Off, it sends none.') : '') +
+      settingsChimeField(draft, 'A short sound when a reply finishes in any chat, on every board: two rising notes for done, one low note for an error or a stop.') });
+  return sections;
 }
 
 async function loadSettingsDraft(first){
@@ -192,7 +334,7 @@ async function loadSettingsDraft(first){
     board, boardWas: Object.assign({}, board),
     name: prof.name || '', country, region, legacy, memoryRoot, list, projectsRoot, signedIn,
     about: Object.assign({}, prof.about), sections: Object.assign({}, prof.sections), hints: prof.hints || {},
-    was: { country, region, memoryRoot, projectsRoot },
+    was: { country, region, memoryRoot, projectsRoot, setup: (prof.sections || {}).setup || '' },
     touched: {},
     countries: places.countries || [], regions: legacy.length ? [] : ((places.regions || {})[prof.country] || []),
     chime: set.chime !== false,
@@ -204,6 +346,7 @@ function settingsErrors(draft, first){
   if (!draft.name.trim()) err.name = 'Add your name.';
   if (first && !draft.country) err.country = 'Choose a country.';
   if (/[<>`]/.test(draft.about.addressing || '')) err['about-addressing'] = 'Leave out < > and backticks.';
+  if (/^##?(\s|$)/m.test(draft.sections.setup || '')) err.setup = 'A # or ## heading would split the profile. Use ### or none.';
   if (!draft.signedIn && draft.board && draft.board.mode === 'own' && !draft.board.path.trim()) err['board-memory'] = 'Enter the folder’s full path.';
   return err;
 }
@@ -225,12 +368,9 @@ function paintSetupErrors(draft, first, attempted){
   const err = settingsErrors(draft, first);
   root.querySelectorAll('[data-err]').forEach(el => {
     const k = el.dataset.err;
-    const show = !!err[k] && (draft.touched[k] || attempted);
-    el.textContent = show ? err[k] : '';
-    el.hidden = !show;
+    tenonFieldError(el, !!err[k] && (draft.touched[k] || attempted) ? err[k] : '');
   });
-  const save = root.querySelector('button[data-i="0"], [data-settings-save]');
-  if (save) save.disabled = Object.keys(err).length > 0;
+  root.querySelectorAll('button[data-i="0"], [data-settings-save]').forEach(save => { save.disabled = Object.keys(err).length > 0; });
 }
 
 /* A country Nager.Date has no public holidays for is still saved; the note says
@@ -277,6 +417,7 @@ function trackSettingsForm(draft, first){
       draft.board.mode = bm.value;
       const bp = root.querySelector('[data-board-memory]');
       bp.hidden = bm.value !== 'own';
+      bp.closest('.tenon-field').hidden = bp.hidden;
       draft.board.path = bp.value;
       if (e && e.target === bp) draft.touched['board-memory'] = true;
     }
@@ -284,6 +425,8 @@ function trackSettingsForm(draft, first){
     if (bb) draft.board.banners = bb.getAttribute('aria-checked') === 'true';
     const ba = root.querySelector('[data-board-agents]');
     if (ba) draft.board.agents = ba.getAttribute('aria-checked') === 'true';
+    const su = root.querySelector('[data-setup]');
+    if (su) { draft.sections.setup = su.value; if (e && e.target === su) draft.touched.setup = true; }
     const pr = root.querySelector('[data-projects]');
     if (pr) draft.projectsRoot = pr.value;
     if (e && e.target && e.target.matches('[data-name]')) draft.touched.name = true;
@@ -329,11 +472,14 @@ function trackSettingsForm(draft, first){
 }
 
 async function saveSettingsDraft(draft, first){
+  if (settingsLocked()) throw new Error('This tab is read-only.');
   const put = (url, body) => sendJSON('PUT', url, body);
   const basics = { name: draft.name };
   /* Every field and box the server sent, so the welcome, which shows none,
      sends none. */
-  if (!first && 'addressing' in draft.about) basics.about = { addressing: draft.about.addressing };
+  const root = settingsRoot();
+  if (!first && 'addressing' in draft.about && root && root.querySelector('[data-about="addressing"]')) basics.about = { addressing: draft.about.addressing };
+  if (!first && !draft.signedIn && 'setup' in draft.sections && draft.sections.setup !== draft.was.setup) basics.sections = { setup: draft.sections.setup };
   /* Holidays are sent only when the owner changed them: saving a name alone must not
      rewrite a profile that still has the old Holidays: line. */
   if (draft.country && (draft.country !== draft.was.country || draft.region !== draft.was.region)) {
@@ -366,25 +512,42 @@ function boardChanges(draft){
   return Object.keys(out).length ? out : null;
 }
 
+/* Reads the owner's name again from /owner.js, for a save that does not reload
+   the page, so what the board writes in `[to::]` and compares against follows it. */
+async function refreshOwnerName(){
+  try {
+    const text = await fetch('/owner.js', { cache: 'no-store' }).then(r => r.text());
+    const m = /OWNER_NAME\s*=\s*("(?:[^"\\]|\\.)*")/.exec(text);
+    if (m) OWNER_NAME = JSON.parse(m[1]) || 'Me';
+  } catch (err) { /* keeps the name it has */ }
+}
+
 /* Checks the form and saves it, from the welcome's button or the page's. */
-async function runSettingsSave(draft, first, needsList){
-  if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return; }
+async function runSettingsSave(draft, first, needsList, opts){
+  if (writeBlocked()) return false;
+  if (Object.keys(settingsErrors(draft, first)).length) { paintSetupErrors(draft, first, true); return false; }
   try { await saveSettingsDraft(draft, first); }
-  catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
-  if (first && needsList) { openFirstList(); return; }
+  catch (err) { showToast('Could not save: ' + (err.message || err)); return false; }
+  if (first && needsList) { openFirstList(); return true; }
   /* Signed in, the name on the page is the sign-in's, so nothing to reload. */
-  if (draft.signedIn) { if (!settingsHostEl) closeModal(); showToast('Saved.', 'good'); return; }
-  /* The owner's name is read once, from /owner.js, as the page loads. */
+  if (draft.signedIn) { if (!settingsHostEl) closeModal(); showToast('Saved.', 'good'); return true; }
+  /* A save made on the way to somewhere else carries on to it instead of reloading. */
+  if (opts && opts.noReload) { await refreshOwnerName(); showToast('Saved.', 'good'); return true; }
+  /* The owner's name is read once, from /owner.js, as the page loads. The
+     page is saved by now, so the browser has nothing to warn about. */
+  settingsDiscarded = true;
   location.reload();
+  return true;
 }
 
 /* first: the welcome. needsList: step 2 follows step 1 (no list on disk). The
    welcome is the one place this form is still a pop-up; Data > Settings opens
    the same form as a tab of the Settings page (drawSettingsTab). */
 async function openSettings(first, needsList){
+  settingsWelcome = false;
   let loaded;
   try { loaded = await loadSettingsDraft(first); }
-  catch (err) { showToast('Could not read settings: ' + (err.message || err)); return; }
+  catch (err) { settingsWelcome = false; showToast('Could not read settings: ' + (err.message || err)); return; }
   const { draft, set } = loaded;
   const choices = (set.choices && set.choices.models) || [];
   settingsHostEl = null;
@@ -398,6 +561,7 @@ async function openSettings(first, needsList){
                        : 'Two things to set up. You can change them later under Data, Settings.') : '',
     settingsFormHTML(draft, choices, first) + note, buttons,
     first ? { required: true } : { keepOpen: true });
+  settingsWelcome = !!first;
   trackSettingsForm(draft, first);
   if (first) { const n = modalEl && modalEl.querySelector('[data-name]'); if (n) n.focus(); }
 }
@@ -507,10 +671,12 @@ function openFirstList(){
     const body = { name: list.name.trim(), buckets: list.buckets.map(b => ({ name: b.name.trim(), about: b.about.trim() })) };
     try { await postJSON('/datasets', body); }
     catch (err) { showToast('Could not create that list: ' + (err.message || err), 'bad'); return; }
+    settingsWelcome = false;
     location.reload();
   } };
   showModal('Welcome to Bench', 'Step 2 of 2: your first list. You can add more under Lists, New list.',
     listFormHTML(list), [make], { required: true });
+  settingsWelcome = true;
   trackListForm(list);
   const n = modalEl && modalEl.querySelector('[data-list-name]');
   if (n) { n.focus(); n.select(); }
@@ -552,6 +718,7 @@ async function openSharing(){
     { label: 'Save', primary: true, run: async () => {
       const got = sharingBody(sh);
       if (got.error) { showToast(got.error, 'bad'); return; }
+      if (state.locked) { showToast('This tab is read-only.', 'bad'); return; }
       try { await postJSON('/dataset/access', { name: acc.board, teams: got.body.teams, people: got.body.people }); }
       catch (err) { showToast('Could not save: ' + (err.message || err), 'bad'); return; }
       closeModal();
@@ -563,13 +730,13 @@ async function openSharing(){
 
 /* ---- The Settings page ------------------------------------------------------
    Data > Settings opens one page in the board's own area, with four tabs drawn
-   in the bucket bar while it is up: Memory (31-memory.js), Settings (this form),
+   in the bucket bar while it is up: Settings (this form), Memory (31-memory.js),
    Agents (27-agents.js, with Spend and Schedules, the two cards of 14-schedule.js,
    as panels under it), Backups (15-backups.js).
    The URL is #settings/<tab>; an old #memory, #agents or #backups link opens its tab. */
 const SETTINGS_TABS = [
+  ['settings', 'Settings', 'you, your folders, setup and notifications'],
   ['memory', 'Memory', 'what Bench keeps about this board and you'],
-  ['settings', 'Settings', 'your profile, models, folders and agent options'],
   ['agents', 'Agents', 'when each agent runs, what it does, what it has spent and what runs on a clock'],
   ['backups', 'Backups', 'every copy of this list the board has kept'],
 ];
@@ -591,17 +758,6 @@ function settingsTabName(tab){
   return tab === 'spend' || tab === 'schedules' ? 'agents' : tab;
 }
 
-/* One panel in Tenon's column markup, the one the Overview and Backups draw:
-   a title, an optional line under it, an optional action at the head's end. */
-function settingsPanelHTML(id, title, desc, bodyHTML, actionHTML){
-  return '<section class="tenon-column settingspanel" data-panel="' + escAttr(id) + '">' +
-    '<div class="tenon-column__head"><div class="tenon-column__head-row">' +
-      '<div class="tenon-column__head-start"><h3 class="tenon-column__title">' + esc(title) + '</h3></div>' +
-      '<div class="tenon-column__head-end">' + (actionHTML || '') + '</div></div>' +
-      (desc ? '<p class="tenon-column__desc">' + esc(desc) + '</p>' : '') + '</div>' +
-    '<div class="tenon-column__body">' + bodyHTML + '</div></section>';
-}
-
 /* A hash or a stray state.view that names the page, or one of the views that
    became its tabs. True when it did, with settingsTab and state.view set. */
 function adoptSettingsRoute(h){
@@ -615,11 +771,71 @@ function adoptSettingsRoute(h){
 }
 
 function openSettingsPage(tab){
-  if (tab) settingsTab = settingsTabName(tab);
-  state.view = 'settings';
-  syncHash(true);
-  renderView();
+  const go = () => {
+    if (tab) settingsTab = settingsTabName(tab);
+    state.view = 'settings';
+    syncHash(true);
+    renderView();
+  };
+  if (tab && state.view === 'settings' && settingsTabName(tab) !== settingsTab) settingsPageAsk(go);
+  else go();
 }
+
+/* ---- Unsaved changes ----
+
+   The Settings tab and the Memory tab hold typing until Save. Leaving either
+   for another tab, a board view or another list asks first, in the board's own
+   modal: Stay, Discard or Save. The browser's own warning covers closing or
+   reloading the tab. `settingsDiscarded` says the typing has been given up (or
+   saved on the way out), so nothing asks again before the page is drawn anew. */
+let settingsLiveDraft = null;
+let settingsSnapshot = '';
+let settingsDiscarded = false;
+
+function settingsDraftSnapshot(d){
+  return JSON.stringify([d.name, d.country, d.region, d.memoryRoot, d.projectsRoot, (d.sections || {}).setup,
+    d.chime, d.board && [d.board.mode, d.board.path, d.board.banners, d.board.agents], (d.about || {}).addressing]);
+}
+
+/* True when the page on screen holds changes that are not saved. */
+function settingsPageDirty(){
+  if (settingsDiscarded || state.locked) return false;
+  if (settingsTab === 'settings') {
+    return !!(settingsLiveDraft && settingsHostEl && settingsHostEl.isConnected && settingsDraftSnapshot(settingsLiveDraft) !== settingsSnapshot);
+  }
+  if (settingsTab === 'memory') return typeof memIsDirty === 'function' && memIsDirty();
+  if (settingsTab === 'agents') return typeof agentsIsDirty === 'function' && agentsIsDirty();
+  return false;
+}
+
+/* Saves the page on screen, true when it went through. */
+async function settingsPageSave(){
+  if (settingsTab === 'memory') return memSaveAll();
+  if (settingsTab === 'agents') return agentsSaveAll();
+  if (settingsTab === 'settings' && settingsLiveDraft) return runSettingsSave(settingsLiveDraft, false, false, { noReload: true });
+  return true;
+}
+
+/* Resolves true when the move may go on: nothing was unsaved, or the person
+   chose Discard, or chose Save and it worked. */
+function settingsPageGate(){
+  return new Promise(resolve => {
+    if (!settingsPageDirty()) { resolve(true); return; }
+    let settled = false;
+    const finish = ok => { if (settled) return; settled = true; if (ok) settingsDiscarded = true; resolve(ok); closeModal(); };
+    showModal('Unsaved changes', 'This page has changes that are not saved yet.', '', [
+      { label: 'Stay', run: () => finish(false) },
+      { label: 'Discard', danger: true, run: () => finish(true) },
+      { label: 'Save', primary: true, run: async () => { finish(await settingsPageSave()); } },
+    ], { keepOpen: true, onClose: () => { if (!settled) { settled = true; resolve(false); } } });
+  });
+}
+function settingsPageAsk(proceed){ settingsPageGate().then(ok => { if (ok) proceed(); }); }
+
+window.addEventListener('beforeunload', e => {
+  if (!settingsPageDirty()) return;
+  e.preventDefault(); e.returnValue = '';
+});
 
 /* The bucket bar, while the page is up: the five tabs where the bucket tabs
    were, and none of the bucket bar's other controls. */
@@ -635,7 +851,7 @@ function renderSettingsTabs(){
   BoardUI.mountFlushed(wrap, BoardUI.h(BoardUI.FilterTabs, {
     tabs: tabs.map(([key, label, title]) => ({ key, label, on: settingsTab === key, title })),
     label: 'Settings sections',
-    onToggle: key => { if (key !== settingsTab) { settingsTab = key; syncHash(true); renderSettingsPage(); } }
+    onToggle: key => { if (key !== settingsTab) settingsPageAsk(() => { settingsTab = key; syncHash(true); renderSettingsPage(); }); }
   }));
   renderPhoneChrome();
 }
@@ -653,6 +869,7 @@ function leaveSettingsPage(){
 }
 
 function renderSettingsPage(){
+  settingsDiscarded = false;
   renderSettingsTabs();
   if (settingsTab !== 'agents') leaveAgentsView();
   settingsHostEl = null;
@@ -672,66 +889,53 @@ function refreshSettingsPage(){
   else if (settingsTab === 'backups') renderBackupsView();
 }
 
-/* The Settings tab: the form of the pop-up, drawn in the page. */
+/* The Settings tab, drawn in the shared page layout. */
 async function drawSettingsTab(){
   const lists = $('#lists');
-  const panel = body => '<div class="lists pview settingsview" style="--pcols:1">' +
-    settingsPanelHTML('settings', 'Settings', '', '<div class="settingspage" id="settingsPage">' + body + '</div>') + '</div>';
-  lists.innerHTML = panel('<p class="memempty">Reading settings…</p>');
+  const shell = body => '<div class="lists pview settingsview" style="--pcols:1"><div class="settingspage" id="settingsPage">' + body + '</div></div>';
+  lists.innerHTML = shell('<p class="memempty">Reading settings…</p>');
   let loaded;
   try { loaded = await loadSettingsDraft(false); }
   catch (err) {
     if (state.view === 'settings' && settingsTab === 'settings')
-      lists.innerHTML = panel('<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>');
+      lists.innerHTML = shell('<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>');
     return;
   }
   if (state.view !== 'settings' || settingsTab !== 'settings') return;
-  const { draft, set } = loaded;
-  const choices = (set.choices && set.choices.models) || [];
+  const { draft } = loaded;
   const host = $('#settingsPage');
-  const title = lists.querySelector('.tenon-column__title');
-  if (title && draft.signedIn) title.textContent = 'Your profile';
-  host.innerHTML = settingsFormHTML(draft, choices, false) +
-    '<div class="settingspage__actions"><button type="button" class="btn primary" data-settings-save>Save</button></div>';
+  host.innerHTML = settingsPageLayoutHTML(draft.signedIn ? 'Your profile' : 'Settings', settingsPageSections(draft), { save: !state.locked });
   settingsHostEl = host;
+  settingsLiveDraft = draft;
+  settingsSnapshot = settingsDraftSnapshot(draft);
   trackSettingsForm(draft, false);
-  host.querySelector('[data-settings-save]').onclick = () => runSettingsSave(draft, false, false);
+  host.querySelectorAll('[data-settings-save]').forEach(btn => { btn.onclick = () => runSettingsSave(draft, false, false); });
 }
 
-/* ---- Agent options, at the top of the Agents tab ----
+/* ---- The Agents page's settings ----
 
-   The models each job runs on and the daily budgets. They save to the same
-   keys through the same PUT /settings.json as before, from a Save of their
-   own, since they are no longer part of the Settings form. */
-function agentOptionsHTML(draft, choices){
-  const agents = '<div class="agentopts__group"><h4>' + plannerAvatarHTML('var(--tenon-text-secondary, #8a8a8a)', 18) + 'Bucket agents</h4>' +
-    SETTINGS_AGENTS.map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('') +
-    '<label class="field"><span>Daily budget ($)</span><input type="text" inputmode="decimal" data-agent-budget="bucket" value="' + escAttr(draft.agentBudgets.bucket) + '" placeholder="No limit">' +
-    '<span class="help">Every bucket’s agent on every board spends from this. Its runs stop for the day once it is spent. Empty means no limit.</span>' +
-    '<span class="help fielderr" data-err="budget-bucket" hidden></span></label></div>';
-  const other = SETTINGS_OTHER.map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('');
-  return '<section class="agentopts agentopts--open" data-agent-options aria-label="Agent options"><h2>Agent options</h2>' +
-    '<div class="agentopts__body">' +
-    settingsModelField('default', 'Default model', 'Used by any model below that is left on Use default.', draft, choices) +
-    agents +
-    '<div class="agentopts__group"><h4>Other</h4>' + other + '</div>' +
-    '<div class="agentopts__group"><h4>Spending</h4>' +
-    '<label class="field"><span>All agents together, daily budget ($)</span><input type="text" inputmode="decimal" data-budget value="' + escAttr(draft.budget) + '" placeholder="No limit">' +
-    '<span class="help">Every agent’s scheduled runs stop for the day once this is spent, whatever its own budget. Empty means no limit.</span>' +
-    '<span class="help fielderr" data-err="budget" hidden></span></label></div>' +
-    '<div class="settingspage__actions"><button type="button" class="btn primary" data-agent-options-save>Save</button></div>' +
-    '</div></section>';
+   The models each job runs on, the board's Agents switch and the daily budgets,
+   drawn into the Agents page (27-agents.js) as Tenon Fields. They save to the
+   same keys through the same PUT /settings.json as before, from the page's one
+   Save, which also writes any bucket brief that changed (agentsSaveAll()). */
+const AGENT_MODEL_FIELDS = (draft, choices) =>
+  settingsModelField('default', 'Default model', 'Used by any model below that is left on Use default.', draft, choices) +
+  SETTINGS_AGENTS.concat(SETTINGS_OTHER).map(([key, name, help]) => settingsModelField(key, name, help, draft, choices)).join('');
+
+function agentSpendFieldsHTML(draft){
+  const num = o => tenonFieldHTML(Object.assign({ type: 'number', placeholder: 'No limit', readonly: state.locked }, o));
+  return num({ label: 'Daily budget, all agents together ($)', attrs: 'data-budget min="0" step="any" inputmode="decimal"', value: draft.budget,
+      hint: 'Every agent’s scheduled runs stop for the day once this is spent, whatever its own budget. Empty means no limit.', err: 'data-err="budget"' }) +
+    num({ label: 'Daily budget, bucket agents ($)', attrs: 'data-agent-budget="bucket" min="0" step="any" inputmode="decimal"', value: draft.agentBudgets.bucket,
+      hint: 'Every bucket’s agent on every board spends from this. Its runs stop for the day once it is spent. Empty means no limit.', err: 'data-err="budget-bucket"' });
 }
 
 function paintAgentOptionErrors(draft, host, attempted){
   const err = agentOptionErrors(draft);
   host.querySelectorAll('[data-err]').forEach(el => {
-    const show = !!err[el.dataset.err] && (draft.touched[el.dataset.err] || attempted);
-    el.textContent = show ? err[el.dataset.err] : '';
-    el.hidden = !show;
+    tenonFieldError(el, !!err[el.dataset.err] && (draft.touched[el.dataset.err] || attempted) ? err[el.dataset.err] : '');
   });
-  const save = host.querySelector('[data-agent-options-save]');
-  if (save) save.disabled = Object.keys(err).length > 0;
+  host.querySelectorAll('[data-agents-save]').forEach(save => { save.disabled = Object.keys(err).length > 0; });
 }
 
 function trackAgentOptions(draft, host){
@@ -748,41 +952,70 @@ function trackAgentOptions(draft, host){
   };
   host.addEventListener('input', sync);
   host.addEventListener('change', sync);
+  host.addEventListener('click', e => {
+    const sw = e.target.closest('[data-board-agents]');
+    if (!sw || sw.disabled) return;
+    const on = sw.getAttribute('aria-checked') !== 'true';
+    sw.setAttribute('aria-checked', String(on));
+    sw.classList.toggle('tenon-switch--on', on);
+    draft.agentsOn = on;
+  });
   paintAgentOptionErrors(draft, host);
 }
 
-async function saveAgentOptions(draft, host){
-  if (Object.keys(agentOptionErrors(draft)).length) { paintAgentOptionErrors(draft, host, true); return; }
+/* What the page's settings hold, to tell whether Save has anything to write. */
+const agentOptsSnapshot = d => JSON.stringify([d.models, d.budget, d.agentBudgets, d.agentsOn]);
+/* The open Agents page's settings draft and what it was loaded as; null before they arrive. */
+let agentsOpts = null;
+
+/* Writes the settings the page holds when they changed. True when it went through. */
+async function saveAgentOptions(draft){
+  if (state.locked) return false;
   const dollars = v => v.trim() === '' ? null : Number(v);
   const agentBudgets = {};
   for (const k in draft.agentBudgets) agentBudgets[SETTINGS_BUDGET_IDS[k]] = dollars(draft.agentBudgets[k]);
   try {
     await sendJSON('PUT', '/settings.json', { models: draft.models,
       daily_budget: dollars(draft.budget), agent_budgets: agentBudgets });
-  } catch (err) { showToast('Could not save: ' + (err.message || err)); return; }
-  showToast('Saved.', 'good');
+    /* Its own request, as in the Settings page, so one refusal does not stop the other. */
+    if (draft.list && draft.agentsOn !== draft.agentsWas) {
+      await sendJSON('PUT', '/settings.json', { boards: { [draft.list]: { agents: draft.agentsOn } } });
+      draft.agentsWas = draft.agentsOn;
+    }
+  } catch (err) { showToast('Could not save: ' + (err.message || err)); return false; }
+  return true;
 }
 
-/* Fills `host` (the Agents tab's #agentOptions) once; a redraw of the tab leaves
-   it alone, so nothing typed in it is lost. */
-async function drawAgentOptions(host){
-  if (!host || host.firstChild || state.who) return;
+/* Fills the Agents page's models, board switch and budgets once; a redraw of the
+   tab leaves them alone, so nothing typed in them is lost. `page` is #agentsPage. */
+async function drawAgentOptions(page){
+  if (!page || page.dataset.opts || state.who) return;
+  page.dataset.opts = 'loading';
   let set;
   try { set = await fetch('/settings.json').then(r => r.json()); }
   catch (err) {
-    if (host.isConnected && !host.firstChild) host.innerHTML = '<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>';
+    delete page.dataset.opts;
+    const box = page.querySelector('#agentModels');
+    if (box && page.isConnected && !box.firstChild) box.innerHTML = '<p class="memerr" role="alert">Could not read settings: ' + esc(err.message || err) + '</p>';
     return;
   }
-  if (!host.isConnected || host.firstChild) return;
+  if (!page.isConnected) return;
   const models = Object.assign({ default: null, plan: null, implement: null, chat: null, brief: null }, set.models);
   delete models.planner;
   const dollars = v => v == null ? '' : String(v);
   const agentBudgets = {};
   for (const k in SETTINGS_BUDGET_IDS) agentBudgets[k] = dollars((set.agent_budgets || {})[SETTINGS_BUDGET_IDS[k]]);
-  const draft = { models, budget: dollars(set.daily_budget), agentBudgets, touched: {} };
-  host.innerHTML = agentOptionsHTML(draft, (set.choices && set.choices.models) || []);
-  trackAgentOptions(draft, host);
-  host.querySelector('[data-agent-options-save]').onclick = () => saveAgentOptions(draft, host);
+  const list = state.dataset || '';
+  const agentsOn = ((set.boards || {})[list] || {}).agents !== false;
+  const draft = { models, budget: dollars(set.daily_budget), agentBudgets, touched: {}, list, agentsOn, agentsWas: agentsOn };
+  page.querySelector('#agentModels').innerHTML = AGENT_MODEL_FIELDS(draft, (set.choices && set.choices.models) || []);
+  page.querySelector('#agentBoardSwitch').innerHTML = draft.list
+    ? tenonFieldHTML({ label: 'Agents', kind: 'switch', attrs: 'data-board-agents', on: draft.agentsOn, readonly: state.locked,
+        hint: 'Lets this board’s bucket agents work. Off, they leave it alone.' }) : '';
+  page.querySelector('#agentSpendFields').innerHTML = agentSpendFieldsHTML(draft);
+  page.dataset.opts = 'ready';
+  agentsOpts = { draft, base: agentOptsSnapshot(draft) };
+  trackAgentOptions(draft, page);
 }
 
 $('#settingsBtn').onclick = () => { closeDataMenu(); openSettingsPage('settings'); };

@@ -154,6 +154,12 @@ check('the tab is locked', await evalJS(`state.locked === true`))
 await evalJS(`renderBackupsView()`)
 await new Promise(r => setTimeout(r, 500))
 
+check('Backups is the shared page layout, titled Backups, with no Save and no Saves row', await evalJS(`
+  document.querySelector('#backupsPage h1.spage__title').textContent === 'Backups' &&
+  !document.querySelector('#backupsPage button.primary, #backupsPage .spage__foot, #backupsPage [data-settings-save]') &&
+  !!document.querySelector('#backupsPage .spage__section #backupsRoot') && !!document.querySelector('#backupsPage .spage__desc')
+`))
+check('the React root is a node the view made, not #lists', await evalJS(`backupsRoot === document.querySelector('#backupsRoot') && backupsRoot.parentElement !== document.querySelector('#lists')`))
 check('every group is drawn', await evalJS(`
   [...document.querySelectorAll('#backupsOut h2')].map(h => h.textContent).join('|')
 `) === 'Archived finished work|Weekly snapshots|Recent sessions')

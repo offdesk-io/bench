@@ -40,8 +40,6 @@ function schedWhen(iso){
 let usageState = { kind: 'loading' };
 let schedState = { kind: 'loading' };
 let runResultsState = null;
-/* Which of the two cards the page is drawing: 'spend' or 'schedules' (13-agent-run.js). */
-let refCardsShow;
 
 function setRunResults(r){
   runResultsState = r;
@@ -49,17 +47,20 @@ function setRunResults(r){
 }
 
 function paintRefCards(){
-  const host = $('#refCardsRoot');
-  if (!host) return;
-  BoardUI.mount(host, BoardUI.RefCards({
-    usage: usageState,
-    days: usageDays,
-    ranges: USAGE_RANGES,
-    onDays: days => { usageDays = days; renderUsage(); },
-    schedule: schedState,
-    runResults: runResultsState,
-    show: refCardsShow
-  }));
+  /* Two nodes on the Agents page: Spending holds the chart, Schedules the job list. */
+  [['#refSpendRoot', 'spend'], ['#refSchedRoot', 'schedules']].forEach(([sel, show]) => {
+    const host = $(sel);
+    if (!host) return;
+    BoardUI.mount(host, BoardUI.RefCards({
+      usage: usageState,
+      days: usageDays,
+      ranges: USAGE_RANGES,
+      onDays: days => { usageDays = days; renderUsage(); },
+      schedule: schedState,
+      runResults: runResultsState,
+      show
+    }));
+  });
 }
 
 /* How far back the chart looks. Four stops rather than a free number: these

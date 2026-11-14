@@ -311,6 +311,7 @@ function openBucketEditor(){
           const wasEmpty = !brief.exists || !brief.filled;
           parts.summary = val;
           const text = serializeBriefText(parts, keepBriefMarker(wasEmpty, parts));
+          if (state.locked) throw new Error('This tab is read-only.');
           await putJSON('/bucket-brief', { bucket: b.name, text });
           summaries[b.name] = val;
         } catch (err) {
@@ -610,8 +611,8 @@ async function openBucketBrief(bucketName, back){
      { label:'Save brief', primary:true, run: async () => {
         try {
           const text = serializeBriefText(briefParts, keepBriefMarker(briefWasEmpty, briefParts));
+          if (state.locked) throw new Error('This tab is read-only.');
           const res = await putJSON('/bucket-brief', { bucket: bucketName, text });
-          checkAgentsSetup();
           reloadBucketAgentsPanel();
           showToast(res.filled ? 'Brief saved.'
             : 'Brief saved — still carrying the empty marker, so no agent reads it yet.',

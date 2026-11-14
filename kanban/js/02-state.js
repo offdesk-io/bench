@@ -124,11 +124,6 @@ const state = {
   /* "Mine": tasks whose `[to:: ]`, or a sub-task's, names whoever is signed
      in (forMe() in 21-datasets.js). In memory only, like agentFilter. */
   mineFilter: false,
-  /* Whether this list has an agent set up: a bucket whose agent is ready, or
-     a brief with something the person wrote in it. null until
-     /bucket-brief.json has answered, and read only through agentsSetUp()
-     (27-agents.js), which also counts any task already delegated to an agent. */
-  agentsSetup: null,
   /* Whether an agent can run on this machine at all: the `claude` CLI and
      agents-engine both there (/agents-status.json, loadAgentsStatus() in
      27-agents.js). null until it answers, and where there is no server to ask,
@@ -399,7 +394,7 @@ const DONE_COL = DONE_HEADING;
 /* Who the two review sub-tasks of a handover are assigned to, and so whose move
    it is when one of them opens. The name as people.md and `[to::]` spell it. */
 /* Set by /owner.js from data/profile.md; "Me" where there is no server. */
-const OWNER_NAME = window.OWNER_NAME || 'Me';
+let OWNER_NAME = window.OWNER_NAME || 'Me';
 /* Not a special column the way Done is — just a tier the board tints, so a
    renamed section simply stops matching and goes back to looking normal. It
    used to be called Waiting for review: a column says the state of the
@@ -432,7 +427,7 @@ const RESERVED_TIERS = [BACKLOG_TIER, TODO_TIER, DOING_TIER, WAIT_COL, DONE_COL]
    needs a name no heading in the file could ever produce. */
 const ALL_BUCKETS = '__all__';
 /* What each agent does, what it cannot do and what it needs from the person,
-   one card each at the top of the Agents tab (agentCardsHTML() in
+   one card each at the top of the Agents tab (the Agents page in
    27-agents.js). Written for someone who has never handed a task to an agent,
    so it names what they will see rather than how it works. The rules behind
    it are `[to:: ]` in CONVENTIONS.md and the two agents' READMEs; change this

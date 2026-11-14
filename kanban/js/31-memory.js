@@ -1,39 +1,32 @@
 'use strict';
 
 /* =========================================================================
-   4d. Memory — everything Bench keeps about the current board, on one page:
-   the company, the team, each bucket's brief, its Context,
-   and the owner's profile.
+   4d. Memory — everything Bench keeps about the current board, on one page in
+   the shared page layout (settingsPageLayoutHTML(), 29-settings.js): About you,
+   Meeting recorder, Company and team, and Other context. The buckets' briefs are
+   on the Agents page.
 
-   Each of the first four is read as rendered text and has its own Edit button
-   that swaps it for a form. One section is in edit at a time, since a second
-   open form would be a second draft nobody is looking at. The sections reach
-   the disk three different ways, on purpose:
+   Every field is always editable and the page's two Saves write whatever
+   changed, each section through its own route and only when it differs from
+   what was loaded. Drafts live in memDraft, filled from the DOM before any
+   redraw, so adding a person never loses typing. The routes:
 
      Company   PUT /about            (one file, replaced whole)
      Team      PUT /people           (one table in people.md)
-     Buckets   PUT /bucket-brief     (the route the bucket editor already uses,
-                                      with the section form it already has)
+     Profile   PUT /profile-basics.json (the facts file, How to address you and
+                                      the Working habits, Writing and Meeting
+                                      recorder sections; only the keys changed)
      Context   PUT /context          (context.md; a list that still keeps a
                                       `## Context` section in todo.md shows that
                                       until the first save, which moves it out
                                       through state.doc + autosave)
-
-   The profile (facts file and its four sections) saves through
-   PUT /profile-basics.json, the route Settings uses for the rest of it.
-
-   Drawn as plain markup into #lists, one panel per section in the same column
-   markup the Overview and Backups use, with one click handler on the host. Drafts live in the DOM while a form is open and are read
-   at Save, so there is no second copy of the text to keep in step.
    ========================================================================= */
 
 let memData = null;       // the last /memory.json answer, null until it arrives
 let memError = '';
-let memEditing = null;    // 'about' | 'people' | 'context' | 'bucket:<heading>' | null
-let memFormError = '';    // the last save's message, shown inside the open form
-let memPeopleDraft = null;
-let memBucketParts = null;
-let memDraft = {};        // text typed into the open about / context / profile form, kept across a redraw
+let memPageError = '';    // the last page Save's message, shown under the title
+let memDraft = null;      // what the page's fields hold, kept across redraws
+let memBase = null;       // what was loaded, as JSON, to tell what changed
 
 const MEM_PEOPLE_COLS = [
   { key: 'name', label: 'Name' }, { key: 'role', label: 'Role' }, { key: 'team', label: 'Team' },
@@ -81,367 +74,242 @@ function memRemoveContextSection(){
 
 /* ---- Drawing ---- */
 
-function memRender(md, isBrief){
-  const clean = String(md || '').split('\n')
-    .filter(l => l.trim() !== BRIEF_MARKER && !(isBrief && /^>/.test(l.trim())));
-  /* A heading with nothing under it before the next heading, or the end, gets
-     the same dashed empty line a section does. The H1 is the brief's title and
-     has no heading of its own on screen, so it is left out. */
-  const chunks = [];
-  let cur = { head: null, lines: [] };
-  clean.forEach(l => {
-    if (/^#{2,6}\s/.test(l)) { chunks.push(cur); cur = { head: l, lines: [] }; }
-    else cur.lines.push(l);
-  });
-  chunks.push(cur);
-  const html = chunks.map(c => {
-    const body = c.lines.join('\n');
-    if (!c.head) return body.trim() ? mdBlocks(body, { keepH1: false }) : '';
-    return mdBlocks(c.head + '\n' + body, { keepH1: false }) + (body.trim() ? '' : memEmpty('Nothing here yet.'));
-  }).join('');
-  return '<div class="repdoc memtext">' + html + '</div>';
-}
 /* The placeholder a section shows when it holds nothing: a quiet dashed box
-   saying what goes there. The section, its index entry and its Edit button stay. */
+   saying what goes there. */
 function memEmpty(line){ return '<p class="memempty">' + esc(line) + '</p>'; }
-function memLockedNote(){ return state.locked ? '<p class="help">This tab is read-only.</p>' : ''; }
-function memEditBtn(which, hidden){
-  if (state.locked) return '';
-  const off = memEditing && memEditing !== which;
-  return hidden ? '' : '<button class="btn small outline" data-mem-edit="' + esc(which) + '"' +
-    (off ? ' disabled title="Save or cancel the open edit first"' : '') + '>Edit</button>';
-}
-function memFormButtons(which){
-  return '<div class="memactions">' +
-    '<button class="btn small primary" data-mem-save="' + esc(which) + '">Save</button>' +
-    '<button class="btn small ghost" data-mem-cancel>Cancel</button>' +
-    (memFormError ? '<span class="memerr" role="alert">' + esc(memFormError) + '</span>' : '') +
-  '</div>';
-}
-/* A stable anchor id for the index: the same text always gives the same id. */
-function memSlug(text){
-  return String(text || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'x';
-}
 /* What each section is for, shown under its heading whether or not it has content. */
 const MEM_DESC = {
   about: 'What this business does, in a few lines every agent reads first.',
   people: 'Who is who: role, team, who reports to whom, and the names that get confused.',
-  buckets: 'One per bucket: what kind of work lands there and how it should be handled.',
   context: "What changes week to week: who is on leave, dates that can't move, and what is currently live with someone that you'd get wrong from their role alone.",
   profile: 'Facts about you that agents work from: how you work, write and want things done.'
 };
-function memDesc(id){ return MEM_DESC[id] ? '<p class="memdesc">' + esc(MEM_DESC[id]) + '</p>' : ''; }
-let memIds = new Set();   // ids issued during this render, so two headings that slug alike stay apart
-function memUniqueId(base){
-  let id = base, n = 1;
-  while (memIds.has(id)) id = base + '-' + (++n);
-  memIds.add(id);
-  return id;
-}
-/* One panel: Tenon's column markup, the same one the Overview and Backups draw,
-   with the section's Edit button at the head's end. */
-function memSection(id, title, bodyHTML, edit, extra){
-  return '<section class="memsec tenon-column" id="' + esc(memUniqueId('mem-' + memSlug(id))) + '" data-mem="' + esc(id) + '">' +
-    '<div class="tenon-column__head"><div class="tenon-column__head-row">' +
-      '<div class="tenon-column__head-start"><h3 class="tenon-column__title">' + esc(title) + '</h3></div>' +
-      '<div class="tenon-column__head-end">' + (edit || '') + '</div></div></div>' +
-    '<div class="tenon-column__body memcolbody">' + memDesc(id) + (extra || '') + bodyHTML + '</div>' +
-  '</section>';
-}
+/* A group's description goes under its title, in the layout's label column. */
+const memDesc = id => ({ description: MEM_DESC[id] || '', descAttrs: 'data-mem-desc="' + id + '"' });
+/* ---- The page's drafts ---- */
 
-function memAboutHTML(){
-  const a = memData.about;
-  if (memEditing === 'about') {
-    return memSection('about', 'Company',
-      '<textarea class="memarea" data-mem-about aria-label="Company description" spellcheck="true">' + esc(memDraft.about !== undefined ? memDraft.about : a.text) + '</textarea>' +
-      memFormButtons('about'));
+/* The profile fields the page offers, each only when the server sent it. */
+const MEM_PROFILE_ABOUT = ['facts_file', 'addressing'];
+const MEM_PROFILE_SECTIONS = ['habits', 'writing', 'recorder'];
+
+function memDraftFrom(data){
+  const p = data.profile || {};
+  const d = { about: (data.about || {}).text || '', people: (data.people || []).map(x => Object.assign({}, x)),
+    context: memContextText(), pabout: {}, psections: {} };
+  MEM_PROFILE_ABOUT.forEach(k => { if (k in (p.about || {})) d.pabout[k] = p.about[k] || ''; });
+  MEM_PROFILE_SECTIONS.forEach(k => { if (k in (p.sections || {})) d.psections[k] = p.sections[k] || ''; });
+  return d;
+}
+/* The people as saved: rows with nothing in them are not people. */
+const memKeptPeople = list => list.filter(p => MEM_PEOPLE_COLS.some(c => (p[c.key] || '').trim()));
+function memSnapshot(d){
+  return JSON.stringify({ about: d.about, people: memKeptPeople(d.people).map(p => MEM_PEOPLE_COLS.map(c => (p[c.key] || '').trim())),
+    context: d.context, pabout: d.pabout, psections: d.psections });
+}
+function memResetDraft(){
+  memDraft = memDraftFrom(memData || {});
+  memBase = memSnapshot(memDraft);
+  memBaseDraft = JSON.parse(JSON.stringify(memDraft));
+}
+let memBaseDraft = null;
+
+/* What changed since the load, as the pieces each route takes. */
+function memChanges(){
+  const d = memDraft, b = memBaseDraft;
+  const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  const pabout = {}, psections = {};
+  for (const k in d.pabout) if (d.pabout[k] !== b.pabout[k]) pabout[k] = d.pabout[k];
+  for (const k in d.psections) if (d.psections[k] !== b.psections[k]) psections[k] = d.psections[k];
+  return {
+    about: d.about !== b.about,
+    people: !same(memSnapshotPeople(d), memSnapshotPeople(b)),
+    context: d.context !== b.context,
+    pabout, psections,
+    profile: !!Object.keys(pabout).length || !!Object.keys(psections).length
+  };
+}
+const memSnapshotPeople = d => memKeptPeople(d.people).map(p => MEM_PEOPLE_COLS.map(c => (p[c.key] || '').trim()));
+
+/* Copies what the fields on screen hold into memDraft. */
+function memReadPage(){
+  const host = document.querySelector('#memView');
+  if (!host || !memDraft) return;
+  const val = sel => { const el = host.querySelector(sel); return el ? el.value : null; };
+  const about = val('[data-mem-about]'); if (about !== null) memDraft.about = about;
+  const ctx = val('[data-mem-context]'); if (ctx !== null && !state.locked) memDraft.context = ctx;
+  if (host.querySelector('[data-mem-people-rows]')) {
+    memDraft.people = [...host.querySelectorAll('[data-mem-row]')].map(row => {
+      const p = {};
+      row.querySelectorAll('[data-mem-person]').forEach(inp => { p[inp.dataset.memPerson] = inp.value; });
+      return p;
+    });
   }
-  return memSection('about', 'Company',
-    a.text.trim() ? memRender(a.text) : memEmpty('No company description yet. Say here what the company does.'), memEditBtn('about'), memLockedNote());
+  host.querySelectorAll('[data-mem-profile-about]').forEach(el => { memDraft.pabout[el.dataset.memProfileAbout] = el.value; });
+  host.querySelectorAll('[data-mem-profile-section]').forEach(el => { memDraft.psections[el.dataset.memProfileSection] = el.value; });
+}
+/* True when the fields on screen differ from what was loaded. */
+function memIsDirty(){
+  if (state.locked || !memDraft || !document.querySelector('#memView')) return false;
+  memReadPage();
+  return memSnapshot(memDraft) !== memBase;
 }
 
-function memPeopleHTML(){
-  const people = memData.people;
-  if (memEditing === 'people') {
-    const rows = memPeopleDraft.map((p, i) =>
-      '<div class="memrow" data-mem-row="' + i + '">' +
-        MEM_PEOPLE_COLS.map(c =>
-          '<label class="field"><span>' + esc(c.label) + '</span>' +
-          '<input type="text" data-mem-person="' + c.key + '" value="' + esc(p[c.key] || '') + '" aria-label="' + esc(c.label + ', person ' + (i + 1)) + '"></label>'
-        ).join('') +
-        '<button class="btn small ghost danger" data-mem-remove="' + i + '" aria-label="Remove ' + esc(p.name || 'this person') + '">Remove</button>' +
-      '</div>').join('');
-    return memSection('people', 'Team',
-      '<div class="memrows">' + rows + '</div>' +
-      '<div class="memactions"><button class="btn small outline" data-mem-add>Add a person</button></div>' +
-      memFormButtons('people'));
-  }
-  if (!people.length) return memSection('people', 'Team', memEmpty('No team yet. Add the people you work with.'), memEditBtn('people'), memLockedNote());
-  const table = '<div class="memscroll"><table class="memtable"><thead><tr>' +
-    MEM_PEOPLE_COLS.map(c => '<th>' + esc(c.label) + '</th>').join('') + '</tr></thead><tbody>' +
-    people.map(p => '<tr>' + MEM_PEOPLE_COLS.map(c =>
-      '<td data-label="' + esc(c.label) + '">' + esc(p[c.key] || '') + '</td>').join('') + '</tr>').join('') +
-    '</tbody></table></div>';
-  return memSection('people', 'Team', table, memEditBtn('people'), memLockedNote());
+/* ---- Sections ---- */
+
+/* Every labelled control on the page is Tenon's Field, through tenonFieldHTML()
+   (29-settings.js), the same as on the Settings tab. A locked tab (the example
+   list, a backup preview) shows each one readonly and saves none. */
+const memField = o => tenonFieldHTML(Object.assign({ readonly: state.locked }, o));
+/* The text under a section's fields, or under its one field as that field's hint. */
+const memDescText = id => MEM_DESC[id] || '';
+
+function memAboutYouHTML(){
+  const p = memData.profile || {}, d = memDraft;
+  const sec = (k, name) => memField({ label: name, kind: 'textarea', attrs: 'data-mem-profile-section="' + k + '"', value: d.psections[k],
+    placeholder: (p.hints || {})[k] || '', hint: SETTINGS_SECTIONS.find(x => x[0] === k)[2] });
+  const abt = k => { const f = SETTINGS_ABOUT.find(x => x[0] === k); return memField({ label: f[1], attrs: 'data-mem-profile-about="' + k + '"',
+    value: d.pabout[k], placeholder: 'Not set', hint: f[2] }); };
+  const html = ('facts_file' in d.pabout ? abt('facts_file') : '') +
+    ('habits' in d.psections ? sec('habits', 'Working habits') : '') +
+    ('writing' in d.psections ? sec('writing', 'Writing rules') : '') +
+    ('addressing' in d.pabout ? abt('addressing') : '');
+  return Object.assign({ id: 'profile', title: 'About you', html: html || memEmpty('No profile yet. Set your name in Settings.') }, memDesc('profile'));
 }
 
-function memBucketsHTML(){
-  const list = memData.buckets;
-  if (!list.length) return memSection('buckets', 'Buckets', memEmpty('No buckets yet. Each bucket of the board gets its brief here.'));
-  return memSection('buckets', 'Buckets', list.map(b => {
-      const which = 'bucket:' + b.heading;
-      let body;
-      if (memEditing === which) {
-        body = '<label class="field"><span>One line: what kind of work lands here</span>' +
-          '<input type="text" data-mem-brief-summary value="' + esc(memBucketParts.summary) + '" aria-label="What kind of work lands in this bucket"></label>' +
-          BRIEF_SECTIONS.map((name, i) =>
-            '<label class="field briefsection"><span>' + esc(name) + '</span>' +
-            '<textarea data-brief-section="' + i + '" spellcheck="false" aria-label="' + esc(name) + '">' +
-            esc(memBucketParts.sections[name] || '') + '</textarea></label>').join('') +
-          memFormButtons(which);
-      } else if (!b.exists) body = memEmpty('No brief yet.');
-      else if (!b.filled) body = memEmpty('The brief is still the empty template.');
-      else body = memRender(b.text, true);
-      return '<article class="membucket" id="' + esc(memUniqueId('mem-bucket-' + memSlug(b.heading))) + '" data-mem-bucket="' + esc(b.heading) + '">' +
-        '<div class="memhead"><h4>' + esc(b.name) + '</h4>' + memEditBtn(which, memEditing === which) + '</div>' + body +
-      '</article>';
-    }).join(''), '', memLockedNote());
+function memRecorderHTML(){
+  const p = memData.profile || {}, d = memDraft;
+  const f = SETTINGS_SECTIONS.find(x => x[0] === 'recorder');
+  const html = 'recorder' in d.psections
+    ? memField({ label: f[1], kind: 'textarea', attrs: 'data-mem-profile-section="recorder"', value: d.psections.recorder, placeholder: (p.hints || {}).recorder || '', hint: f[2] })
+    : memEmpty('No profile yet. Set your name in Settings.');
+  return { id: 'recorder', title: 'Meeting recorder', html };
+}
+
+function memCompanyTeamHTML(){
+  const rows = memDraft.people.map((p, i) =>
+    '<div class="memrow" data-mem-row="' + i + '">' +
+      MEM_PEOPLE_COLS.map(c => memField({ label: c.label, attrs: 'data-mem-person="' + c.key + '"', value: p[c.key] || '' })).join('') +
+      (state.locked ? '' : '<button type="button" class="btn small ghost danger" data-mem-remove="' + i + '" aria-label="Remove ' + esc(p.name || 'this person') + '">Remove</button>') +
+    '</div>').join('');
+  return Object.assign({ id: 'company', title: 'Company and team', wide: true, html:
+    memField({ label: 'Company description', kind: 'textarea', attrs: 'data-mem-about', value: memDraft.about, placeholder: 'Say here what the company does.',
+      hint: memDescText('about'), hintAttrs: 'data-mem-desc="about"' }) +
+    (memDraft.people.length ? '' : memEmpty('No team yet. Add the people you work with.')) +
+    '<div class="memrows" data-mem-people-rows>' + rows + '</div>' +
+    (state.locked ? '' : '<div class="memactions"><button type="button" class="btn small outline" data-mem-add>Add a person</button></div>') }, memDesc('people'));
 }
 
 function memContextHTML(){
-  const text = memContextText();
-  if (memEditing === 'context' && !state.locked) {
-    return memSection('context', 'Context',
-      '<textarea class="memarea" data-mem-context aria-label="Context" spellcheck="true">' + esc(memDraft.context !== undefined ? memDraft.context : text) + '</textarea>' +
-      memFormButtons('context'));
-  }
-  if (state.locked) {
-    return memSection('context', 'Context', text ? memRender(text) : memEmpty('No context yet. Note who is away and what is live this week.'), '',
-      '<p class="help">This tab is read-only.</p>');
-  }
-  return memSection('context', 'Context', text ? memRender(text) : memEmpty('No context yet. Note who is away and what is live this week.'), memEditBtn('context'));
+  return { id: 'context', title: 'Other context', html:
+    memField({ label: 'Context', kind: 'textarea', attrs: 'data-mem-context', value: memDraft.context, placeholder: 'No context yet. Note who is away and what is live this week.',
+      hint: memDescText('context'), hintAttrs: 'data-mem-desc="context"' }) };
 }
 
-/* The profile's editable parts: the facts file and the four sections, the same
-   fields Settings used to hold, saved through PUT /profile-basics.json. Name,
-   address and holidays stay in Settings. */
-function memProfileFields(p){
-  const about = SETTINGS_ABOUT.filter(([k]) => k === 'facts_file' && k in (p.about || {}));
-  const sections = SETTINGS_SECTIONS.filter(([k]) => k in (p.sections || {}));
-  return { about, sections };
-}
+/* Every field of the page, in order. A redraw builds the same fields again, so
+   a field's place in this list names it afterwards. */
+const memFields = () => [...document.querySelectorAll('#memView textarea, #memView input')];
 
-function memProfileForm(p){
-  const f = memProfileFields(p);
-  return f.about.map(([k, name, help]) =>
-    '<label class="field"><span>' + esc(name) + '</span><input type="text" data-mem-profile-about="' + k + '" value="' + escAttr(memDraft.profile && k in memDraft.profile.about ? memDraft.profile.about[k] : (p.about || {})[k] || '') + '" placeholder="Not set">' +
-    '<span class="help">' + esc(help) + '</span></label>').join('') +
-    f.sections.map(([k, name, help]) =>
-    '<label class="field"><span>' + esc(name) + '</span>' +
-    '<textarea class="memarea" rows="4" data-mem-profile-section="' + k + '" placeholder="' + escAttr((p.hints || {})[k] || '') + '" spellcheck="true">' + esc(memDraft.profile && k in memDraft.profile.sections ? memDraft.profile.sections[k] : p.sections[k]) + '</textarea>' +
-    '<span class="help">' + esc(help) + '</span></label>').join('') +
-    memFormButtons('profile');
-}
-
-function memProfileHTML(){
-  const p = memData.profile || {};
-  const about = Object.entries(p.about || {}).filter(([, v]) => String(v || '').trim());
-  const sections = SETTINGS_SECTIONS.filter(([k]) => k in (p.sections || {}));
-  const f = memProfileFields(p);
-  const editable = f.about.length + f.sections.length > 0;
-  if (memEditing === 'profile' && editable) return memSection('profile', 'Your profile', memProfileForm(p));
-  const edit = memEditBtn('profile', !editable);
-  const note = memLockedNote();
-  const anyText = sections.some(([k]) => String(p.sections[k] || '').trim());
-  if (!(p.name || '').trim() && !about.length && !anyText && !sections.length) {
-    return memSection('profile', 'Your profile', memEmpty('No profile yet. Edit it here, or set your name in Settings.'), edit, note);
-  }
-  const body =
-    ((p.name || '').trim() ? '<p><strong>' + esc(p.name) + '</strong></p>' : '') +
-    (about.length ? '<dl class="memdl">' + about.map(([k, v]) =>
-      '<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>').join('') + '</dl>' : '') +
-    sections.map(([k, name]) => {
-      const text = String(p.sections[k] || '').trim();
-      return '<h4 id="' + esc(memUniqueId('mem-profile-' + memSlug(k))) + '" data-mem-sub>' + esc(name) + '</h4>' +
-        (text ? mdBlocks(text) : memEmpty('Nothing here yet.'));
-    }).join('');
-  return memSection('profile', 'Your profile', '<div class="repdoc memtext">' + body + '</div>', edit, note);
-}
-
-/* What the open profile form holds, or an error message. The same two rules
-   the server holds: no < > or backticks in a field, no # or ## heading in a box. */
-function memReadProfile(){
-  const about = {}, sections = {};
-  for (const el of document.querySelectorAll('#memView [data-mem-profile-about]')) {
-    if (/[<>`]/.test(el.value)) return { error: 'Leave out < > and backticks in the facts file.' };
-    about[el.dataset.memProfileAbout] = el.value.trim();
-  }
-  for (const el of document.querySelectorAll('#memView [data-mem-profile-section]')) {
-    if (/^##?(\s|$)/m.test(el.value)) return { error: 'A # or ## heading would split the profile. Use ### or none.' };
-    sections[el.dataset.memProfileSection] = el.value;
-  }
-  return { about, sections };
-}
-
-/* A form cannot be open on a locked tab. */
-function memDropEdit(){ memEditing = null; memFormError = ''; memPeopleDraft = null; memBucketParts = null; memDraft = {}; }
-
-function memDraw(){
+/* Drawn from memDraft. A redraw while fields hold unsaved typing is skipped
+   unless `force` says the page's own structure changed (a row added) or fresh
+   text arrived. A forced redraw reads the typing into the drafts first and puts
+   the cursor back. */
+function memDraw(force, fresh){
   const lists = $('#lists');
   if (!lists) return;
-  if (state.locked && memEditing) memDropEdit();
   if (memError) {
-    lists.innerHTML = '<div class="lists pview memview" style="--pcols:1"><p class="memerr" role="alert">' + esc(memError) + '</p></div>';
+    lists.innerHTML = '<div class="lists pview memview settingsview" style="--pcols:1"><p class="memerr" role="alert">' + esc(memError) + '</p></div>';
     return;
   }
-  if (!memData) { lists.innerHTML = '<div class="lists pview memview" style="--pcols:1"><p class="memempty">Reading what Bench keeps…</p></div>'; return; }
-  memIds = new Set();
-  lists.innerHTML = '<div class="lists pview memview" id="memView" style="--pcols:1">' +
-    memAboutHTML() + memPeopleHTML() + memContextHTML() + memProfileHTML() + memBucketsHTML() +
+  if (!memData) { lists.innerHTML = '<div class="lists pview memview settingsview" style="--pcols:1"><p class="memempty">Reading what Bench keeps…</p></div>'; return; }
+  if (!force && memIsDirty()) return;
+  if (force && !fresh) memReadPage();
+  if (!memDraft) memResetDraft();
+  const at = memFields().indexOf(document.activeElement);
+  const sel = at < 0 ? null : { start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd };
+  lists.innerHTML = '<div class="lists pview memview settingsview" id="memView" style="--pcols:1">' +
+    (memPageError ? '<p class="memerr" role="alert">' + esc(memPageError) + '</p>' : '') +
+    (state.locked ? '<p class="help memlocked">This tab is read-only.</p>' : '') +
+    settingsPageLayoutHTML('Memory', [memAboutYouHTML(), memRecorderHTML(), memCompanyTeamHTML(), memContextHTML()], { saveAttr: 'data-mem-save-all', save: !state.locked }) +
   '</div>';
   lists.querySelector('#memView').onclick = memClick;
-}
-
-/* ---- Reading what is on screen into a draft ---- */
-
-/* Every field of the open form, in page order. A redraw rebuilds the same form,
-   so a field's place in this list names it again afterwards. */
-function memFields(){ return [...document.querySelectorAll('#memView textarea, #memView input')]; }
-
-/* Copies what is typed in the open form into the drafts, so a redraw that did
-   not come from the form (a reload of the file, a refresh of the view, the
-   memory answer arriving late) shows it again. Returns where the cursor was. */
-function memCaptureDraft(){
-  if (!memEditing || !document.querySelector('#memView')) return null;
-  const q = sel => document.querySelector('#memView ' + sel);
-  const which = memEditing;
-  if (which === 'about' && q('[data-mem-about]')) memDraft.about = q('[data-mem-about]').value;
-  else if (which === 'context' && q('[data-mem-context]')) memDraft.context = q('[data-mem-context]').value;
-  else if (which === 'people' && q('[data-mem-row]')) memPeopleDraft = memReadPeople();
-  else if (which === 'profile' && (q('[data-mem-profile-about]') || q('[data-mem-profile-section]'))) {
-    const d = { about: {}, sections: {} };
-    document.querySelectorAll('#memView [data-mem-profile-about]').forEach(el => { d.about[el.dataset.memProfileAbout] = el.value; });
-    document.querySelectorAll('#memView [data-mem-profile-section]').forEach(el => { d.sections[el.dataset.memProfileSection] = el.value; });
-    memDraft.profile = d;
-  } else if (which.indexOf('bucket:') === 0 && q('[data-mem-brief-summary]') && memBucketParts) {
-    memBucketParts.summary = q('[data-mem-brief-summary]').value;
-    document.querySelectorAll('#memView [data-brief-section]').forEach(t => {
-      memBucketParts.sections[BRIEF_SECTIONS[+t.dataset.briefSection]] = t.value;
-    });
+  const el = at < 0 ? null : memFields()[at];
+  if (el) {
+    el.focus();
+    try { el.setSelectionRange(sel.start, sel.end); } catch (e) { /* not a text field */ }
   }
-  const at = memFields().indexOf(document.activeElement);
-  return at < 0 ? null : { at, start: document.activeElement.selectionStart, end: document.activeElement.selectionEnd };
 }
 
-/* A redraw that keeps an open form's text and cursor. */
-function memRedraw(){
-  const spot = memCaptureDraft();
-  memDraw();
-  if (!spot) return;
-  const el = memFields()[spot.at];
-  if (!el) return;
-  el.focus();
-  try { el.setSelectionRange(spot.start, spot.end); } catch (e) { /* not a text field */ }
-}
+/* Test hook and reload path: take the draft from memData and draw it. */
+function memReset(){ memResetDraft(); memDraw(true, true); }
 
-function memReadPeople(){
-  const out = [];
-  document.querySelectorAll('#memView [data-mem-row]').forEach(row => {
-    const p = {};
-    row.querySelectorAll('[data-mem-person]').forEach(inp => { p[inp.dataset.memPerson] = inp.value.trim(); });
-    out.push(p);
-  });
-  return out;
-}
+/* ---- Saving ---- */
 
-async function memSave(which){
-  if (state.locked) return;
-  memFormError = '';
+/* One request per section that changed, in the order of the page. A refusal
+   stops the rest and names what was refused; what already went through is
+   kept as saved. */
+/* True when it went through (or there was nothing to write). */
+async function memSaveAll(){
+  if (writeBlocked()) return false;
+  memReadPage();
+  memPageError = '';
+  const ch = memChanges();
+  for (const k in ch.pabout) if (/[<>`]/.test(ch.pabout[k])) { memPageError = 'Leave out < > and backticks in ' + (k === 'addressing' ? 'How to address you' : 'the facts file') + '.'; memDraw(true); return false; }
+  for (const k in ch.psections) if (/^##?(\s|$)/m.test(ch.psections[k])) { memPageError = 'A # or ## heading would split the profile. Use ### or none.'; memDraw(true); return false; }
+  const done = [];
   try {
-    if (which === 'about') {
-      const box = document.querySelector('#memView [data-mem-about]');
-      await putJSON('/about', { text: box.value });
-    } else if (which === 'people') {
-      const people = memReadPeople().filter(p => MEM_PEOPLE_COLS.some(c => p[c.key]));
-      await putJSON('/people', { people });
-    } else if (which === 'profile') {
-      const got = memReadProfile();
-      if (got.error) throw new Error(got.error);
-      await putJSON('/profile-basics.json', { about: got.about, sections: got.sections });
-    } else if (which === 'context') {
-      const box = document.querySelector('#memView [data-mem-context]');
-      await putJSON('/context', { text: box.value });
+    if (ch.about) { await putJSON('/about', { text: memDraft.about }); done.push('about'); }
+    if (ch.people) { await putJSON('/people', { people: memKeptPeople(memDraft.people).map(p => Object.fromEntries(MEM_PEOPLE_COLS.map(c => [c.key, (p[c.key] || '').trim()]))) }); done.push('people'); }
+    if (ch.profile) { await putJSON('/profile-basics.json', { about: ch.pabout, sections: ch.psections }); done.push('profile'); }
+    if (ch.context && !state.locked) {
+      await putJSON('/context', { text: memDraft.context });
       if (!memData) memData = {};
-      memData.context = { text: box.value, exists: true };
+      memData.context = { text: memDraft.context, exists: true };
       memRemoveContextSection();
-    } else if (which.indexOf('bucket:') === 0) {
-      const heading = which.slice(7);
-      const b = memData.buckets.find(x => x.heading === heading);
-      const box = document.querySelector('#memView [data-mem-brief-summary]');
-      memBucketParts.summary = box.value;
-      document.querySelectorAll('#memView [data-brief-section]').forEach(t => {
-        memBucketParts.sections[BRIEF_SECTIONS[+t.dataset.briefSection]] = t.value;
-      });
-      const wasEmpty = !b.exists || !b.filled;
-      const text = serializeBriefText(memBucketParts, keepBriefMarker(wasEmpty, memBucketParts));
-      await putJSON('/bucket-brief', { bucket: heading, text });
-      checkAgentsSetup();
-      reloadBucketAgentsPanel();
+      done.push('context');
     }
   } catch (err) {
-    memFormError = String(err.message || err);
-    if (memOnScreen()) memRedraw();
-    return;
+    memPageError = String(err.message || err);
+    memDraw(true);
+    return false;
   }
-  memEditing = null; memPeopleDraft = null; memBucketParts = null; memDraft = {};
-  if (which === 'context') { memDraw(); return; }
-  await memLoad();
-}
-
-function memStartEdit(which){
-  if (state.locked) return;
-  memFormError = '';
-  memEditing = which;
-  memDraft = {};
-  if (which === 'people') memPeopleDraft = memData.people.map(p => Object.assign({}, p));
-  if (which.indexOf('bucket:') === 0) {
-    const b = memData.buckets.find(x => x.heading === which.slice(7));
-    memBucketParts = parseBriefText(b.text);
-    if (!b.exists) memBucketParts.title = b.name;
-  }
-  memDraw();
-  const first = document.querySelector('#memView [data-mem="' + which.split(':')[0] + '"] textarea, #memView .membucket[data-mem-bucket="' +
-    (which.indexOf('bucket:') === 0 ? which.slice(7).replace(/"/g, '\\"') : '') + '"] input, #memView [data-mem="people"] input');
-  if (first) first.focus();
+  if (!done.length) { showToast('Nothing to save.'); return true; }
+  await memLoad(true);
+  showToast('Saved.', 'good');
+  return true;
 }
 
 function memClick(e){
   const t = e.target.closest('button');
   if (!t) return;
-  if (t.dataset.memEdit) { memStartEdit(t.dataset.memEdit); return; }
-  if (t.hasAttribute('data-mem-cancel')) { memDropEdit(); memDraw(); return; }
-  if (t.dataset.memSave) { memSave(t.dataset.memSave); return; }
-  if (t.hasAttribute('data-mem-add')) { memPeopleDraft = memReadPeople(); memPeopleDraft.push({}); memDraw(); return; }
+  if (t.hasAttribute('data-mem-save-all')) { memSaveAll(); return; }
+  if (t.hasAttribute('data-mem-add')) { memReadPage(); memDraft.people.push({}); memDraw(true, true); return; }
   if (t.dataset.memRemove !== undefined) {
-    memPeopleDraft = memReadPeople(); memPeopleDraft.splice(+t.dataset.memRemove, 1); memDraw(); return;
+    memReadPage(); memDraft.people.splice(+t.dataset.memRemove, 1); memDraw(true, true); return;
   }
 }
 
-async function memLoad(){
+/* Reads what Bench keeps again. Unsaved typing survives it (a watch-tick reload
+   or a late answer) unless `fresh` says the page was just saved and starts from
+   what was read. */
+async function memLoad(fresh){
+  let typing = false;
   try {
     memData = await getJSON('/memory.json');
     memError = '';
+    typing = !fresh && !!document.querySelector('#memView') && memIsDirty();
+    if (!typing) memResetDraft();
   } catch (err) {
     memError = 'Could not read what Bench keeps. The board helper may need restarting. ' + (err.message || err);
   }
-  if (memOnScreen()) memRedraw();
+  if (memOnScreen()) memDraw(true, !typing);
 }
 
 /* Drawn again for the same page (a reload of todo.md, a refresh of the view)
-   keeps an open form and what is typed in it. Arriving from anywhere else, where
+   keeps the typing. Arriving from anywhere else, where
    #memView is not on screen, starts clean. */
 function renderMemoryView(){
-  if (!document.querySelector('#memView')) memDropEdit();
-  memRedraw();
+  const same = !!document.querySelector('#memView');
+  if (!same) { memPageError = ''; if (memData) memResetDraft(); }
+  memDraw(true, !same);
   memLoad();
 }
