@@ -45,6 +45,7 @@ sys.path.insert(0, str(_CORE))
 import todo  # noqa: E402
 import owner_profile  # noqa: E402
 import archive  # noqa: E402
+import settings  # noqa: E402
 
 # handed_over() is the bucket agents' own read of what counts as a real
 # handover: the tag plus the matching sub-task. Reused rather than re-derived
@@ -315,6 +316,66 @@ def check_suggested_messages(lines):
                     f"message. Draft one indented under it so it can be sent as is.",
                 )
             )
+    return findings
+
+
+def people_on_file(todo_path):
+    """{name: language} from the people.md of the list `todo_path` sits in
+    (data/<list>/todo.md), read through settings.memory_file so a memory folder
+    wins. None for a todo.md outside the data root, so the check stays quiet
+    on a copy it cannot place."""
+    board_dir = Path(todo_path).resolve().parent
+    root = Path(settings.data_root()).resolve()
+    if board_dir.parent != root:
+        return None
+    return settings.people_languages(board_dir.name)
+
+
+def check_message_language(lines, people):
+    """Flag a `Suggested message:` addressed to someone with no language on file.
+
+    The addressee is the step's `[to:: Name]` (a bucket's agent is not a
+    person), or failing that a person from people.md named in the step. A step
+    with neither is left alone: nobody can be named as the gap."""
+    if people is None:
+        return []
+    findings = []
+    for task in all_entries(parse_tasks(lines)):
+        if task["checked"]:
+            continue
+        has_note = False
+        j = task["line"]
+        while j < len(lines):
+            nxt = lines[j]
+            if nxt.startswith("#") or not nxt.strip() or leading_spaces(nxt) <= task["indent"]:
+                break
+            if SUGGESTED_MESSAGE.search(nxt):
+                has_note = True
+                break
+            j += 1
+        if not has_note:
+            continue
+        to_m = TO_TAG.search(task["body"])
+        name = field_value(to_m).strip() if to_m else ""
+        if name.lower().endswith(" agent"):
+            name = ""
+        if not name:
+            named = [n for n in people if re.search(r"\b%s\b" % re.escape(n), task["body"])]
+            name = named[0] if named else ""
+        if not name:
+            continue
+        known = {k.lower(): v for k, v in people.items()}
+        if known.get(name.lower()):
+            continue
+        why = "is not in people.md" if name.lower() not in known else "has no language in people.md"
+        findings.append(
+            Finding(
+                task["line"],
+                "CHECK",
+                f"\"{task['title'][:40]}\" has a suggested message to {name}, who {why}. "
+                f"Ask which language they read, then write the draft in it.",
+            )
+        )
     return findings
 
 
@@ -1210,6 +1271,7 @@ def main():
         ("Cancellations", check_cancelled(tasks)),
         ("Field syntax", check_field_syntax(lines)),
         ("Suggested messages", check_suggested_messages(lines)),
+        ("Message language", check_message_language(lines, people_on_file(args.path))),
         ("Recurring tasks", check_recurring(lines, today)),
         ("Freshness", check_stale(lines, today)),
     ]
