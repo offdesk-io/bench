@@ -297,6 +297,15 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await wait(300)
   check('when the board moved to another list Save refuses and hands over to the board\'s own prompt', await evalJS(`window.__movedSaves === '[false,false]' && window.__moved && window.__moved[0] === 'elsewhere' && window.__moved[1] === true && window.__puts.length === 0`), await evalJS(`window.__movedSaves + ' ' + window.__puts.join()`))
   await evalJS(`window.boardMoved = window.__boardMoved; state.boardMoved = ''`)
+  // A welcome whose load fails must not leave the lock open for the other pages.
+  await evalJS(`window.__puts = []; state.locked = true; window.__pre = window.fetch; window.fetch = (u, o) => String(u).startsWith('/profile-basics.json') ? Promise.reject(new Error('down')) : window.__pre(u, o)`)
+  await evalJS(`openSettings(true, false)`); await wait(600)
+  await evalJS(`window.fetch = window.__pre; closeModal()`)
+  check('a failed welcome load leaves the flag off', await evalJS(`settingsWelcome === false && settingsLocked() === true`))
+  check('so a locked tab still saves nothing from Settings, Memory or Agents', await evalJS(`Promise.all([settingsLiveDraft ? runSettingsSave(settingsLiveDraft, false, false) : false, memSaveAll(), agentsSaveAll()]).then(r => r.every(x => x === false))`))
+  check('and no write went out', await evalJS(`window.__puts.length === 0`), await evalJS(`window.__puts.join()`))
+  check('the flag ends with the welcome: an open welcome unlocks, a closed one does not', await evalJS(`(() => { settingsWelcome = true; const closed = settingsLocked(); showModal('Welcome', '', '', [{ label: 'x' }]); const open = !settingsLocked(); closeModal(); const after = settingsLocked(); settingsWelcome = false; return closed && open && after })()`))
+  await evalJS(`state.locked = false`)
 
   // The page's sections, the Setup box and where How to address you went.
   check('Settings has no How to address you, facts file or other profile sections', await evalJS(

@@ -225,7 +225,8 @@ function settingsPageLayoutHTML(title, sections, opts){
 /* The welcome (first run) opens over the example list, which is locked, and has
    to save: its two steps are exempt from the lock. */
 let settingsWelcome = false;
-const settingsLocked = () => state.locked && !settingsWelcome;
+/* Only while the welcome's modal is on screen, and cleared on every way it ends. */
+const settingsLocked = () => state.locked && !(settingsWelcome && !!modalEl);
 function writeBlocked(){
   if (settingsLocked()) return true;
   if (state.boardMoved) { boardMoved(state.boardMoved, true); return true; }
@@ -543,10 +544,10 @@ async function runSettingsSave(draft, first, needsList, opts){
    welcome is the one place this form is still a pop-up; Data > Settings opens
    the same form as a tab of the Settings page (drawSettingsTab). */
 async function openSettings(first, needsList){
-  settingsWelcome = !!first;
+  settingsWelcome = false;
   let loaded;
   try { loaded = await loadSettingsDraft(first); }
-  catch (err) { showToast('Could not read settings: ' + (err.message || err)); return; }
+  catch (err) { settingsWelcome = false; showToast('Could not read settings: ' + (err.message || err)); return; }
   const { draft, set } = loaded;
   const choices = (set.choices && set.choices.models) || [];
   settingsHostEl = null;
@@ -560,6 +561,7 @@ async function openSettings(first, needsList){
                        : 'Two things to set up. You can change them later under Data, Settings.') : '',
     settingsFormHTML(draft, choices, first) + note, buttons,
     first ? { required: true } : { keepOpen: true });
+  settingsWelcome = !!first;
   trackSettingsForm(draft, first);
   if (first) { const n = modalEl && modalEl.querySelector('[data-name]'); if (n) n.focus(); }
 }
@@ -663,17 +665,18 @@ function trackListForm(list){
 /* Step 2 of 2. The profile is saved by now, so this one reloads the board once
    the list exists. */
 function openFirstList(){
-  settingsWelcome = true;
   const list = { name: ONBOARD_LIST, buckets: ONBOARD_BUCKETS.map(b => Object.assign({ touched: {} }, b)), touched: {} };
   const make = { label: 'Create list', primary: true, run: async () => {
     if (listErrors(list).bad) { paintListErrors(list, true); return; }
     const body = { name: list.name.trim(), buckets: list.buckets.map(b => ({ name: b.name.trim(), about: b.about.trim() })) };
     try { await postJSON('/datasets', body); }
     catch (err) { showToast('Could not create that list: ' + (err.message || err), 'bad'); return; }
+    settingsWelcome = false;
     location.reload();
   } };
   showModal('Welcome to Bench', 'Step 2 of 2: your first list. You can add more under Lists, New list.',
     listFormHTML(list), [make], { required: true });
+  settingsWelcome = true;
   trackListForm(list);
   const n = modalEl && modalEl.querySelector('[data-list-name]');
   if (n) { n.focus(); n.select(); }
