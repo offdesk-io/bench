@@ -188,7 +188,7 @@ await evalJS(`${C}.querySelector('button').click()`)
 check('pressing "Ask the PA" opens the prompt on the whole list, with no chip', await until(
   `!!${P} && !${C} && !${P}.querySelector('.focus-prompt__chip') && !!${P}.querySelector('textarea')`))
 check('  the box has keyboard focus, and a suggestion for the list', await until(
-  `document.activeElement === ${P}.querySelector('textarea') && ${P}.querySelector('textarea').placeholder === 'What moved today?' &&
+  `document.activeElement === ${P}.querySelector('textarea') && ${P}.querySelector('textarea').placeholder === 'What should the PA do?' &&
    ${P}.querySelector('textarea').getAttribute('aria-label') === 'Ask the PA about the whole list'`),
   await evalJS(`${P} && ${P}.querySelector('textarea').placeholder`))
 check('  it is 300px wide, where a held card’s prompt is', await evalJS(`Math.abs(${P}.getBoundingClientRect().width - 300) < 1`))
@@ -427,7 +427,7 @@ await evalJS(`(() => {
 check('  and the PA can write the first task from it', await until(
   `state.doc.buckets.some(b => b.tiers.some(t => t.tasks.some(k => k.title === 'Book the offsite venue')))`))
 check('  after which, back at Idle, the suggestion is the one for a list with tasks', await until(
-  `!!${P} && !!${P}.querySelector('textarea') && ${P}.querySelector('textarea').placeholder === 'What moved today?'`, 6000),
+  `!!${P} && !!${P}.querySelector('textarea') && ${P}.querySelector('textarea').placeholder === 'What should the PA do?'`, 6000),
   await evalJS(`${P} ? ${P}.innerHTML.slice(0, 200) : 'gone'`))
 await key('Escape')
 await until(`!${P} && !!${C}`)

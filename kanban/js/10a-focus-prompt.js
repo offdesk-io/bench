@@ -103,7 +103,7 @@ function fpStartList(){
    the first ones. Read on every draw: the PA's reply may have just added them. */
 function fpListPlaceholder(){
   const any = !!state.doc && state.doc.buckets.some(b => b.tiers.some(ti => ti.tasks.length));
-  return any ? 'What moved today?' : 'What needs doing this week?';
+  return any ? 'What should the PA do?' : 'What needs doing this week?';
 }
 
 /* The held card's id and title, for the server's second check: a change to
