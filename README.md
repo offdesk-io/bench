@@ -1221,7 +1221,7 @@ before today.
 14 days, so restarting the server repeats nothing. A banner that fails to post is
 retried every ten minutes and only its first failure is written to the log.
 
-**Snooze.** With `alerter` installed (`brew install vjeantet/tap/alerter`) every
+**Snooze.** With `alerter` installed (download the signed release from github.com/vjeantet/alerter/releases and copy the `alerter` binary into `/opt/homebrew/bin`, since Homebrew can't build it on macOS 26) every
 banner comes up as an alert with Snooze 1h, Tomorrow and Dismiss, and stays on
 screen until one is pressed. Tomorrow is 09:00 on the list's next working day,
 by its own holiday calendar, so a Friday's comes back on Monday. A snoozed due banner gets an

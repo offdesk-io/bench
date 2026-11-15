@@ -1592,7 +1592,7 @@ def _banners_job():
     elif sys.platform != "darwin":
         hint = "banners are Mac only"
     elif not (notify_due.find_alerter() or notify_due.find_notifier()):
-        hint = ("install alerter for banners that can be snoozed (brew install vjeantet/tap/alerter), "
+        hint = ("install alerter for banners that can be snoozed (download the signed release from github.com/vjeantet/alerter/releases and copy it to /opt/homebrew/bin), "
                 "or terminal-notifier (brew install terminal-notifier)")
     else:
         hint = "not started on this server"
