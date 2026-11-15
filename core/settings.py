@@ -357,7 +357,7 @@ def people_path(dataset, root=None, write=False):
     return memory_file(dataset, "people", root, write)
 
 
-PERSON_HEAD = re.compile(r"^(?:#{2,4}\s+|-\s+\*\*)(.+?)(?:\*\*)?\s*(?:[:\u2014-].*)?$")
+PERSON_HEAD = re.compile(r"^(?:#{2,4}\s+|-\s+\*\*)(.+?)(?:\*\*)?\s*(?:[:\u2014].*|\s-\s.*)?$")
 LANGUAGE_FIELD = re.compile(r"\blanguage\s*:\s*\**\s*([^\n*|;]+)", re.I)
 
 

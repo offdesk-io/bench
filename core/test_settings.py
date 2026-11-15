@@ -239,6 +239,20 @@ class SettingsTest(unittest.TestCase):
         self.assertEqual(settings.people_path("work", self.root),
                          os.path.join(self.root, "work", "people.md"))
 
+    def test_people_headings_keep_hyphenated_names(self):
+        self.board("work")
+        with open(os.path.join(self.root, "work", "people.md"), "w", encoding="utf-8") as fh:
+            fh.write("# People\n\n## Mary-Jane\n\nLanguage: English\n\n"
+                     "- **Ana-Maria** - designer\n  Language: Portuguese\n\n"
+                     "## Vasco: lead\n\nLanguage: English\n\n"
+                     "## Rui — engineer\n")
+        self.assertEqual(settings.people_languages("work", self.root), {
+            "Mary-Jane": "English",
+            "Ana-Maria": "Portuguese",
+            "Vasco": "English",
+            "Rui": "",
+        })
+
     def test_a_hidden_list_has_no_memory_folder_by_default(self):
         self.board("_demo")
         mem = self.memory()
