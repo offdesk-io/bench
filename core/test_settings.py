@@ -901,6 +901,50 @@ class ProfileTest(unittest.TestCase):
         self.assertNotIn("- Spelling: British English", self.text(own))
         self.assertEqual(self.op.owner_name(self.root, self.JEROME, "work"), "Jerome")
 
+    # ---- a write creates the profile in the memory folder ---------------
+
+    def test_a_write_creates_the_profile_in_the_memory_folder(self):
+        mem = os.path.join(self.root, "mem")
+        os.makedirs(mem)
+        self.settings({"memory_root": mem})
+        self.assertIsNone(self.op.write_basics(self.root, "Ana"))
+        made = os.path.join(mem, "me", "profile.md")
+        self.assertTrue(os.path.isfile(made))
+        self.assertIn("- Name: Ana", self.text(made))
+        self.assertIn("- Spelling: British English", self.text(made))   # started from data/profile.md
+        self.assertIn("- Name: Tiago/Jerome", self.text(self.shared))   # data copy untouched
+        self.assertEqual(self.op.profile_path(self.root), made)
+
+    def test_a_write_starts_from_the_template_when_nothing_was_read(self):
+        os.remove(self.shared)
+        mem = os.path.join(self.root, "mem")
+        os.makedirs(mem)
+        self.settings({"memory_root": mem})
+        self.assertIsNone(self.op.write_basics(self.root, "Ana"))
+        made = os.path.join(mem, "me", "profile.md")
+        self.assertIn("- Name: Ana", self.text(made))
+        self.assertFalse(os.path.exists(self.shared))
+
+    def test_a_boards_write_goes_to_its_own_memory_folder(self):
+        mem = os.path.join(self.root, "boardmem")
+        os.makedirs(mem)
+        self.settings({"boards": {"demo": {"memory_root": mem}}})
+        self.assertIsNone(self.op.write_basics(self.root, "Ana", board="demo"))
+        self.assertTrue(os.path.isfile(os.path.join(mem, "me", "profile.md")))
+        self.assertFalse(os.path.exists(os.path.join(self.root, "demo", "profile.md")))
+
+    def test_no_memory_root_writes_where_it_always_did(self):
+        self.assertIsNone(self.op.write_basics(self.root, "Ana"))
+        self.assertIn("- Name: Ana", self.text(self.shared))
+
+    def test_a_signed_in_write_ignores_the_memory_folder(self):
+        mem = os.path.join(self.root, "mem")
+        os.makedirs(mem)
+        self.settings({"memory_root": mem})
+        self.op.write_basics(self.root, "Jerome", address=self.JEROME)
+        self.assertFalse(os.path.exists(os.path.join(mem, "me", "profile.md")))
+        self.assertTrue(os.path.isfile(self.op.own_profile_path(self.JEROME, self.root)))
+
 
 if __name__ == "__main__":
     unittest.main()
