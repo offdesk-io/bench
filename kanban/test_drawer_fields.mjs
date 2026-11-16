@@ -408,12 +408,45 @@ try {
     locate(__t().id).bucket.name === 'Home' && locate(__t().id).tier.name === __tierBefore && state.openTask === __t().id`), await evalJS(`JSON.stringify([locate(__t().id).bucket.name, locate(__t().id).tier.name, state.openTask, __t().id])`))
   check('and the field now says Home', await evalJS(`document.querySelector('#f-bucket-dd .tenon-dropdown__button').textContent === 'Home'`))
 
+  /* ---- lead: the Binder organisation ---- */
+
+  const setLead = v => evalJS(`(() => { const el = document.querySelector('#f-lead'); if (el) { el.value = ${JSON.stringify(v)}; el.dispatchEvent(new Event('change')); } })()`)
+  check('Lead is a labelled text field, empty on a task with no lead', await evalJS(`(() => {
+    const el = document.querySelector('#f-lead'), lab = document.querySelector('label[for="f-lead"]');
+    return !!el && el.type === 'text' && el.value === '' && !!lab && lab.textContent.trim() === 'Lead' &&
+      !document.querySelector('#dbody a[href*="binder.offdesk.io"]');
+  })()`))
+  await setLead('acme-studio')
+  await wait(300)
+  check('typing a slug writes it to the task and marks it dirty', await evalJS(`__t().lead === 'acme-studio' && __t().dirty === true`))
+  check('its line carries [lead:: acme-studio] before the id', await evalJS(`(() => {
+    const s = serializeTask(__t())[0], i = s.indexOf('[lead:: acme-studio]'), j = s.indexOf('\`id:');
+    return i > -1 && (j < 0 || i < j);
+  })()`))
+  check('the drawer offers Open in Binder for it, in a new tab', await evalJS(`(() => {
+    const a = document.querySelector('#dbody a[href="https://binder.offdesk.io/o/acme-studio"]');
+    return !!a && a.target === '_blank' && a.rel === 'noopener noreferrer' && a.textContent.trim() === 'Open in Binder';
+  })()`))
+  await setLead(' Acme-Studio ')
+  await wait(300)
+  check('a slug is lowercased and trimmed on change', await evalJS(`__t().lead === 'acme-studio' && document.querySelector('#f-lead').value === 'acme-studio'`))
+  await setLead('')
+  await wait(300)
+  check('clearing the field clears the lead, its tag and the link', await evalJS(`(() => {
+    return __t().lead === '' && !serializeTask(__t())[0].includes('lead::') && !document.querySelector('#dbody a[href*="binder.offdesk.io"]');
+  })()`))
+  await setLead('acme-studio')
+  await wait(300)
+
   await evalJS(`state.locked = true; openDrawer(__t().id)`)
   await wait(300)
   check('a locked tab disables the sliders, dates and dropdown, makes the chips read-only and drops Add', await evalJS(`
     document.querySelector('#f-impact [role=slider]').getAttribute('aria-disabled') === 'true' &&
     document.querySelector('#f-due').disabled && document.querySelector('#f-to-dd .tenon-dropdown__button').disabled && document.querySelector('#f-bucket-dd .tenon-dropdown__button').disabled &&
     !document.querySelector('#f-tagadd .tenon-tag-chip--add') && document.querySelector('.tagchips .tenon-tag-chip').disabled`))
+  check('a locked tab shows the lead as text with no input, and still links to Binder', await evalJS(`
+    !document.querySelector('#f-lead') && document.querySelector('#dbody').textContent.includes('acme-studio') &&
+    !!document.querySelector('#dbody a[href="https://binder.offdesk.io/o/acme-studio"]')`))
 
   check('every write was torn out before it left the page', await evalJS(`window.__blocked.every(w => /\\/data\\/todo\\.md$/.test(w))`), await evalJS(`window.__blocked.join(' | ')`))
 } finally {

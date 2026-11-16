@@ -116,6 +116,8 @@ export interface DrawerBodyProps {
   title: string
   /** Inner HTML of the Theme field, or null when the bucket has no themes. */
   themeHTML: string | null
+  /** Inner HTML of the Lead field, or empty when there is nothing to show. */
+  leadHTML: string
   /** Whether a section is open, by its data-collapse key. */
   open: (key: string) => boolean
   /** Inner HTML of the Column, Impact, Effort and Delegate fields. */
@@ -165,6 +167,7 @@ export function DrawerBody(p: DrawerBodyProps) {
             <HTMLBox className="field" html={'<span>Effort</span>' + p.effortHTML} />
           </div>
           <HTMLBox className="field" html={'<span>Delegate to</span>' + p.delegateHTML} />
+          {p.leadHTML ? <HTMLBox className="field" html={p.leadHTML} /> : null}
           <div id="f-dates" />
           {p.repeat ? (
             <>

@@ -116,6 +116,20 @@ function themeSelectHTML(value, themes, dis){
     '<div data-pick-host="f-theme"></div>';
 }
 
+/* The Lead field: the Binder organisation the task is for, `[lead:: <slug>]`.
+   A plain Tenon text field, which the change handler in openDrawer lowercases
+   and trims. A read-only drawer shows the slug as text, and a task with no slug
+   and a locked tab has no row at all. Once there is a slug, Open in Binder goes
+   to its page in a new tab. */
+function leadFieldHTML(slug, ro){
+  if (ro && !slug) return '';
+  const link = slug ? '<a href="' + escAttr(BINDER_URL + '/o/' + encodeURIComponent(slug)) + '" target="_blank" rel="noopener noreferrer">Open in Binder</a>' : '';
+  if (ro) return '<div class="tenon-field"><span class="tenon-field__label">Lead</span><span class="tenon-field__value">' + esc(slug) + '</span>' + link + '</div>';
+  return '<div class="tenon-field"><label class="tenon-field__label" for="f-lead">Lead</label>' +
+    '<input class="tenon-field__control" type="text" id="f-lead" value="' + escAttr(slug) + '" placeholder="organisation slug">' +
+    '<span class="tenon-field__note">The Binder organisation, as in binder.offdesk.io/o/&lt;slug&gt;</span>' + link + '</div>';
+}
+
 function dedent(lines){ return lines.map(l => l.replace(/^ {1,2}/, '')).join('\n').replace(/\n+$/, ''); }
 function indent(text){
   return text.replace(/\s+$/,'').split('\n').map(l => l.trim() === '' ? '' : '  ' + l);
@@ -1347,6 +1361,7 @@ function openDrawer(id, focusTitle){
        buckets have none, and a field offering an empty dropdown on every
        task would be a question with no answer worth asking. */
     themeHTML: bucketThemes.length || t.theme ? themeSelectHTML(t.theme, bucketThemes, dis) : null,
+    leadHTML: leadFieldHTML(t.lead, ro),
     open: key => !sectionCollapsed(key),
     /* Full width rather than sharing a grid2 with Bucket: a column name like
        "Reviewing" needs the room a slider half that wide wouldn't give its
@@ -1462,6 +1477,9 @@ function openDrawer(id, focusTitle){
     touch();
   };
   if ($('#f-theme')) $('#f-theme').onchange = e => { t.theme = e.target.value; touch(); };
+  /* Redrawn, so the Open in Binder link appears, goes or follows the new slug,
+     and the field shows the slug as it was saved. */
+  if ($('#f-lead')) $('#f-lead').onchange = e => { t.lead = e.target.value.trim().toLowerCase(); touch(); openDrawer(id); };
   wireStepSlider('f-impact', IMPACT_STOPS, v => { t.impact = v; touch(); });
   wireStepSlider('f-effort', EFFORT_STOPS, v => { t.effort = v; touch(); });
   $('#f-urgent').onchange = e => { t.urgent = e.target.checked; touch(); };
