@@ -332,13 +332,12 @@ function cardModel(t, opts){
   const doneSubs = subs.filter(s => s.done).length;
   const di = dueInfo(t.due, opts.muted);
 
-  /* What is on the card, as data. Two things draw it: cardHTML() below, as a
-     string, for the matrix's hover preview, and TaskCard (kanban/ui/TaskCard.tsx)
-     for the board. Deciding which chips a task earns lives here once, so the two
-     cannot disagree about it. A chip is { cls, text, title?, project? } for one
-     drawn as Tenon's `Tag` ({ tone, text, title? }), as Tenon's outlined `Pill`
-     ({ pill, cls?, text, title?, project? }) for what a task belongs to or
-     waits for, or, for your move alone, the board's own `.tag` class. */
+  /* What is on the card, as data. TaskCard (kanban/ui/TaskCard.tsx) draws it.
+     Deciding which chips a task earns lives here. A chip is { cls, text, title?,
+     project? } for one drawn as Tenon's `Tag` ({ tone, text, title? }), as Tenon's
+     outlined `Pill` ({ pill, cls?, text, title?, project?, href? }) for what a task
+     belongs to or waits for, or, for your move alone, the board's own `.tag` class.
+     A `pill` with an `href` is a link that opens in a new tab. */
   const chips = [];
   /* The card sitting in its own column is the same task as the one pinned in
      the headline bar, and used to give no sign of that — open two tabs and
@@ -359,6 +358,10 @@ function cardModel(t, opts){
   /* The bucket's own sub-organisation — `[theme:: ]`, values declared per
      bucket (see state.bucketThemes in 02-state.js). */
   if (t.theme) chips.push({ pill: 'neutral', text: t.theme, title: 'Theme: ' + t.theme });
+  /* The Binder organisation the task is for, `[lead:: <slug>]`. The chip opens it
+     in Binder in a new tab, and TaskCard keeps that click from opening the card. */
+  if (t.lead) chips.push({ pill: 'neutral', text: t.lead, title: 'Lead: ' + t.lead,
+    href: BINDER_URL + '/o/' + encodeURIComponent(t.lead) });
   /* A cancellation is a tick plus a tag (CONVENTIONS.md, Cancelling a task), so
      on the board it is an ordinary done card wearing one more chip rather than
      a state of its own — the same shape every other tag already renders as. It

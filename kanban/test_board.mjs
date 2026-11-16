@@ -387,6 +387,38 @@ check('theme and start date are outlined Tenon Pills, none is a .tag, and the ca
   pillCheck.proj === undefined && pillCheck.theme === 'Tokens' && pillCheck.start && pillCheck.tags === 0,
   JSON.stringify(pillCheck))
 
+/* The lead chip is a link to the organisation in Binder, in a new tab. Its
+   click and Enter must not reach the card, or the drawer would open. The
+   anchor's default is stopped with preventDefault, so no tab opens here.
+   Gamma gets a lead for the check and it is put back, as the pill check does. */
+const leadCheck = await evalJS(`(() => {
+  const t = state.doc.buckets.flatMap(b => b.tiers.flatMap(x => x.tasks)).find(x => x.id === 'bd0003');
+  const saved = { lead: t.lead };
+  t.lead = 'acme-studio';
+  renderView();
+  const a = document.querySelector('#board .tenon-card[data-id="bd0003"] a.tenon-pill.tenon-pill--neutral[href="https://binder.offdesk.io/o/acme-studio"][title="Lead: acme-studio"]');
+  const out = {
+    found: !!a,
+    target: a?.getAttribute('target'),
+    rel: a?.getAttribute('rel'),
+    text: a?.textContent,
+  };
+  if (a) {
+    a.addEventListener('click', e => e.preventDefault(), { once: true });
+    a.click();
+    out.clickOpened = state.openTask === 'bd0003';
+    a.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    out.keyOpened = state.openTask === 'bd0003';
+  }
+  Object.assign(t, saved);
+  renderView();
+  return out;
+})()`)
+check('a lead is a Pill link to its Binder page, in a new tab, and clicking or Enter on it does not open the card',
+  leadCheck.found && leadCheck.target === '_blank' && leadCheck.rel === 'noopener noreferrer' &&
+  leadCheck.text === 'acme-studio' && leadCheck.clickOpened === false && leadCheck.keyOpened === false,
+  JSON.stringify(leadCheck))
+
 /* ---- defaultAddBucket() reads the bucket filter ---- */
 
 /* A second bucket, added to state directly rather than through the fixture,

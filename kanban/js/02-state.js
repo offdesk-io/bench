@@ -426,6 +426,9 @@ const RESERVED_TIERS = [BACKLOG_TIER, TODO_TIER, DOING_TIER, WAIT_COL, DONE_COL]
 /* The first bucket tab shows every bucket at once. Not a real bucket, so it
    needs a name no heading in the file could ever produce. */
 const ALL_BUCKETS = '__all__';
+/* Binder, the offdesk leads and clients manager. A task's `[lead:: <slug>]`
+   chip opens its organisation there (cardModel() in 09-columns.js). */
+const BINDER_URL = 'https://binder.offdesk.io';
 /* What each agent does, what it cannot do and what it needs from the person,
    one card each at the top of the Agents tab (the Agents page in
    27-agents.js). Written for someone who has never handed a task to an agent,

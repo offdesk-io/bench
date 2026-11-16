@@ -2,10 +2,8 @@
  * `Card`.
  *
  * `cardModel()` in 09-columns.js decides what a task says, and this draws it.
- * `cardHTML()` in the same file draws the same model as a string for the
- * matrix's hover preview, and `test_board.mjs` compares the two element for
- * element. Change what a card shows in cardModel() and both follow; change how
- * a chip or the progress line is drawn and change it in both.
+ * The pinned shapes in `test_board.mjs` (CARD_PARITY) were captured from the
+ * string builder this replaced, and still check what is drawn here.
  *
  * The title arrives as the plain string from todo.md and Tenon's `Markdown`
  * draws it (InlineMd.tsx), links and `[placeholder]` markers included. It sits
@@ -24,8 +22,11 @@ export interface Chip {
   tone?: TagTone
   /** Tenon's `Pill`, the outlined chip, in this tone — for the chips that
    *  say what a task belongs to or waits for rather than a fact about it:
-   *  the project, the theme and the start date. Set instead of `tone`. */
+   *  the project, the theme, the start date and the lead. Set instead of `tone`. */
   pill?: PillTone
+  /** With `pill`, makes the chip a link that opens in a new tab. A click or
+   *  Enter on it does not open the card. The lead chip's Binder page. */
+  href?: string
   /** With `pill`, one extra class the board styles on top (the project
    *  chip's hover, the start date's dashed border). Alone, the board's own
    *  `.tag` classes, now only for your move: it is solid, and neither `Tag`
@@ -100,6 +101,14 @@ function ChipSpan({ c }: { c: Chip }) {
         {...(c.avatarOnly ? { role: 'img', 'aria-label': c.label || c.title } : {})} />
     : null
   if (c.tone) return <Tag tone={c.tone} title={c.title}>{avatar}{c.text}</Tag>
+  /* Tenon's Pill is a span and takes no href, so the link carries the Pill's
+     own classes. stopPropagation keeps the click and the Enter key from
+     reaching the card, whose handlers would open it. */
+  if (c.pill && c.href) return (
+    <a className={['tenon-pill', `tenon-pill--${c.pill}`, c.cls].filter(Boolean).join(' ')}
+      href={c.href} target="_blank" rel="noopener noreferrer" title={c.title}
+      onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>{avatar}{c.text}</a>
+  )
   if (c.pill) return (
     <Pill tone={c.pill} className={c.cls} data-project={c.project} title={c.title}>{avatar}{c.text}</Pill>
   )
