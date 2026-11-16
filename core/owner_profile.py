@@ -25,7 +25,10 @@ an unfilled `<placeholder>` counts as unset.
 
 With `memory_root` set in data/settings.json (core/settings.py), the profile is
 `<memory_root>/me/profile.md` when that file is there, and data/profile.md when
-it is not. Reads and writes both go to whichever profile_path() names.
+it is not. A read goes to whichever profile_path() names. A write does too
+while the memory folder has its profile, and when it has none the write
+creates `<memory_root>/me/profile.md` (folder included), starting from the
+profile that was being read, or the template when there was none.
 
 Every reader also takes a `board`, the list it is asked about, since each list
 can have a memory folder of its own in settings.json's `boards`. Given one, the
@@ -34,7 +37,8 @@ data/<board>/profile.md, then data/profile.md, the last only for a list that
 inherits the global memory folder. A list with a folder of its own, or none,
 never reads the owner's data/profile.md, and a write with no file there yet
 starts data/<board>/profile.md from the template. No board is the global
-profile, as before.
+profile, as before. A write for a list whose memory folder has no profile yet
+creates it there, as above.
 
 On a shared board (BENCH_AUTH=header, core/board_access.py) each signed-in
 person has a profile of their own, `data/users/<hash>.profile.md` beside their
@@ -103,6 +107,18 @@ def profile_path(root=None, address=None, board=None):
         if os.path.isfile(path):
             return path
     return os.path.join(root, "profile.md")
+
+
+def write_path(root=None, board=None):
+    """Where a profile write for no signed-in person lands: profile_path(),
+    except that when the memory folder in force (the list's, or the global
+    one) has no `me/profile.md` yet, it is that file, to be created."""
+    root = root or data_root()
+    board = _board(board)
+    memory = settings.board_memory_root(board, root) if board else settings.memory_root(root)
+    if memory:
+        return os.path.join(memory, "me", "profile.md")
+    return profile_path(root, board=board)
 
 
 def _text(path):
@@ -381,7 +397,7 @@ def write_basics(root=None, name=None, holidays=None, country=None, region=None,
             return "country must be a two-letter code"
         if region and not re.fullmatch(r"%s-[A-Z0-9]{1,3}" % country, region):
             return "region must look like %s-XX" % country
-    path = own_profile_path(address, root) if address else profile_path(root, board=board)
+    path = own_profile_path(address, root) if address else write_path(root, board)
     text = _text(profile_path(root, address, board))
     if text is None:
         text = _text(TEMPLATE) or "# PA profile\n\n## About\n\n"
