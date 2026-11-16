@@ -1340,6 +1340,11 @@ comes down from the task to its steps. When it is set on a person, the name
 appears on the card as an arrowed chip in the accent colour, so scanning a column
 tells you what is with somebody else without opening anything.
 
+`[lead:: <slug>]` is the Binder organisation this task is for, by its slug, as
+Binder names it (`[lead:: acme-studio]`). The card shows it as a chip that opens
+`https://binder.offdesk.io/o/<slug>`. It is optional. Binder reads it from a task's
+line, not from a sub-step's.
+
 On a shared board, Delegate to also offers the board's own people: its owner,
 the people it is shared with, and everyone who has signed in as a member of a
 team it is shared with (`/board-people.json`, from `core/board_access.py`). A

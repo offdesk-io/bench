@@ -941,7 +941,7 @@ const KNOWN_TAG_FIELDS = [
    is refused on one of these, since writing it into t.extra anyway would put
    a second, unread copy beside the field the board actually uses. */
 const RESERVED_TAG_KEYS = [
-  'impact', 'effort', 'due', 'time', 'start', 'done', 'to', 'theme', 'blocked-by', 'rank',
+  'impact', 'effort', 'due', 'time', 'start', 'done', 'to', 'theme', 'lead', 'blocked-by', 'rank',
   'tlrank', 'headline', 'chat', 'repeat', 'id', 'cancelled', 'archived',
   'urgent', 'week', 'doing'
 ];

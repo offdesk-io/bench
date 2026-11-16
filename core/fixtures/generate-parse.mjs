@@ -31,7 +31,7 @@ const old = JSON.parse(fs.readFileSync(path.join(HERE, 'parse.json'), 'utf8'))
    the other shows up as a missing key rather than as nothing at all. `id` is
    not here: it is uid(), fresh every parse, and means nothing outside one tab. */
 const FIELDS = ['done', 'title', 'bold', 'impact', 'effort', 'due', 'time', 'start', 'doneOn',
-  'to', 'theme', 'urgent', 'week', 'slug', 'blockedBy', 'rank', 'tlrank', 'headline',
+  'to', 'theme', 'lead', 'urgent', 'week', 'slug', 'blockedBy', 'rank', 'tlrank', 'headline',
   'chat', 'repeat', 'stableId', 'cancelled', 'archived', 'extra', 'doing', 'createdBy', 'editedBy']
 
 /* New cases, appended as the grammar grows. The existing lines are untouched
@@ -69,6 +69,11 @@ const NEW_LINES = [
   '- [ ] **Filed under a theme** [impact:: high] [theme:: audits]',
   '- [ ] **The other syntax reads too** `theme:ways-of-working`',
   '- [ ] **No theme at all, the way every task looked before today** [impact:: low]',
+  /* 16 Nov 2026: the Binder organisation a task is for, by its slug. The card
+     shows it as a chip that opens Binder; the value is kept as written. */
+  '- [ ] **Filed under a lead** [lead:: acme-studio]',
+  '- [ ] **A lead in code form** `lead:acme-studio`',
+  '- [ ] **No lead here** [theme:: Tokens]',
   /* 23 Oct 2026: who wrote a task and who last changed it, by sign-in email,
      written by the server on a shared board and in front of the id. */
   '- [ ] **Written and changed by two people** [due:: 2026-11-01] `created-by:jerome@example.com` `edited-by:ana@example.com` `id:au0001`',
