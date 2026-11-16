@@ -419,6 +419,24 @@ check('a lead is a Pill link to its Binder page, in a new tab, and clicking or E
   leadCheck.text === 'acme-studio' && leadCheck.clickOpened === false && leadCheck.keyOpened === false,
   JSON.stringify(leadCheck))
 
+/* A lead typed in capitals on the line is read as written, so the chip shows it
+   as written, and its link goes to the lowercased Binder page. The line is
+   parsed the way the board reads a file, not built by hand. */
+const handLead = await evalJS(`(() => {
+  const t = state.doc.buckets.flatMap(b => b.tiers.flatMap(x => x.tasks)).find(x => x.id === 'bd0003');
+  const saved = { lead: t.lead };
+  t.lead = parseTask(['- [ ] Written by hand [lead:: Acme-Studio]']).lead;
+  renderView();
+  const a = document.querySelector('#board .tenon-card[data-id="bd0003"] a.tenon-pill[title="Lead: Acme-Studio"]');
+  const out = { read: t.lead, href: a?.getAttribute('href'), text: a?.textContent };
+  Object.assign(t, saved);
+  renderView();
+  return out;
+})()`)
+check('a lead written in capitals on the line links to its lowercased Binder page',
+  handLead.read === 'Acme-Studio' && handLead.href === 'https://binder.offdesk.io/o/acme-studio' && handLead.text === 'Acme-Studio',
+  JSON.stringify(handLead))
+
 /* ---- defaultAddBucket() reads the bucket filter ---- */
 
 /* A second bucket, added to state directly rather than through the fixture,

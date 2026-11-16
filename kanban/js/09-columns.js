@@ -361,7 +361,7 @@ function cardModel(t, opts){
   /* The Binder organisation the task is for, `[lead:: <slug>]`. The chip opens it
      in Binder in a new tab, and TaskCard keeps that click from opening the card. */
   if (t.lead) chips.push({ pill: 'neutral', text: t.lead, title: 'Lead: ' + t.lead,
-    href: BINDER_URL + '/o/' + encodeURIComponent(t.lead) });
+    href: BINDER_URL + '/o/' + encodeURIComponent(t.lead.toLowerCase()) });
   /* A cancellation is a tick plus a tag (CONVENTIONS.md, Cancelling a task), so
      on the board it is an ordinary done card wearing one more chip rather than
      a state of its own — the same shape every other tag already renders as. It
