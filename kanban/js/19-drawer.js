@@ -116,18 +116,21 @@ function themeSelectHTML(value, themes, dis){
     '<div data-pick-host="f-theme"></div>';
 }
 
-/* The Lead field: the Binder organisation the task is for, `[lead:: <slug>]`.
-   A plain Tenon text field, which the change handler in openDrawer lowercases
-   and trims. A read-only drawer shows the slug as text, and a task with no slug
-   and a locked tab has no row at all. Once there is a slug, Open in Binder goes
-   to its page in a new tab. */
+/* The Lead field's inner HTML, under a `<span>Lead</span>` label in DrawerPanel.
+   What is typed is slugified by the change handler in openDrawer (leadSlug in
+   02-state.js). Open in Binder is drawn in an editable drawer and hidden until
+   there is a slug, so a change moves the link in place rather than redrawing the
+   drawer under the field. A read-only drawer shows the slug as text, and a task
+   with no slug and a locked tab has no row at all. */
+function leadHref(slug){ return BINDER_URL + '/o/' + encodeURIComponent(String(slug).toLowerCase()); }
 function leadFieldHTML(slug, ro){
   if (ro && !slug) return '';
-  const link = slug ? '<a href="' + escAttr(BINDER_URL + '/o/' + encodeURIComponent(slug)) + '" target="_blank" rel="noopener noreferrer">Open in Binder</a>' : '';
-  if (ro) return '<div class="tenon-field"><span class="tenon-field__label">Lead</span><span class="tenon-field__value">' + esc(slug) + '</span>' + link + '</div>';
-  return '<div class="tenon-field"><label class="tenon-field__label" for="f-lead">Lead</label>' +
-    '<input class="tenon-field__control" type="text" id="f-lead" value="' + escAttr(slug) + '" placeholder="organisation slug">' +
-    '<span class="tenon-field__note">The Binder organisation, as in binder.offdesk.io/o/&lt;slug&gt;</span>' + link + '</div>';
+  const link = '<a id="f-lead-open"' + (slug ? ' href="' + escAttr(leadHref(slug)) + '"' : ' hidden') +
+    ' target="_blank" rel="noopener noreferrer">Open in Binder</a>';
+  if (ro) return '<span class="dpbtn" style="cursor:default">' + esc(slug) + '</span>' + link;
+  return '<input type="text" id="f-lead" value="' + escAttr(slug) + '" placeholder="organisation slug"' +
+      ' aria-label="Lead" aria-describedby="f-lead-note">' +
+    '<span class="help" id="f-lead-note">The Binder organisation, as in binder.offdesk.io/o/&lt;slug&gt;</span>' + link;
 }
 
 function dedent(lines){ return lines.map(l => l.replace(/^ {1,2}/, '')).join('\n').replace(/\n+$/, ''); }
@@ -1477,9 +1480,19 @@ function openDrawer(id, focusTitle){
     touch();
   };
   if ($('#f-theme')) $('#f-theme').onchange = e => { t.theme = e.target.value; touch(); };
-  /* Redrawn, so the Open in Binder link appears, goes or follows the new slug,
-     and the field shows the slug as it was saved. */
-  if ($('#f-lead')) $('#f-lead').onchange = e => { t.lead = e.target.value.trim().toLowerCase(); touch(); openDrawer(id); };
+  /* The slug is written back into the field and the link moved in place: the
+     drawer is not redrawn, so the focus stays where the user moved it. */
+  if ($('#f-lead')) $('#f-lead').onchange = e => {
+    const slug = leadSlug(e.target.value);
+    e.target.value = slug;
+    t.lead = slug;
+    touch();
+    const link = $('#f-lead-open');
+    if (link) {
+      link.hidden = !slug;
+      if (slug) link.href = leadHref(slug); else link.removeAttribute('href');
+    }
+  };
   wireStepSlider('f-impact', IMPACT_STOPS, v => { t.impact = v; touch(); });
   wireStepSlider('f-effort', EFFORT_STOPS, v => { t.effort = v; touch(); });
   $('#f-urgent').onchange = e => { t.urgent = e.target.checked; touch(); };

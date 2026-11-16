@@ -429,6 +429,13 @@ const ALL_BUCKETS = '__all__';
 /* Binder, the offdesk leads and clients manager. A task's `[lead:: <slug>]`
    chip opens its organisation there (cardModel() in 09-columns.js). */
 const BINDER_URL = 'https://binder.offdesk.io';
+/* The slug a typed lead becomes, as Binder names its organisations: lowercase,
+   each run of anything but a-z and 0-9 is one hyphen, and hyphens come off the
+   ends. So a lead can never carry a `]`, a backtick, `::` or a space onto a
+   task's line. Used by the drawer's Lead field and the PA's edit. */
+function leadSlug(v){
+  return String(v == null ? '' : v).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
 /* What each agent does, what it cannot do and what it needs from the person,
    one card each at the top of the Agents tab (the Agents page in
    27-agents.js). Written for someone who has never handed a task to an agent,

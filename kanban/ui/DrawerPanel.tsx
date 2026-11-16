@@ -167,7 +167,7 @@ export function DrawerBody(p: DrawerBodyProps) {
             <HTMLBox className="field" html={'<span>Effort</span>' + p.effortHTML} />
           </div>
           <HTMLBox className="field" html={'<span>Delegate to</span>' + p.delegateHTML} />
-          {p.leadHTML ? <HTMLBox className="field" html={p.leadHTML} /> : null}
+          {p.leadHTML ? <HTMLBox className="field" html={'<span>Lead</span>' + p.leadHTML} /> : null}
           <div id="f-dates" />
           {p.repeat ? (
             <>
