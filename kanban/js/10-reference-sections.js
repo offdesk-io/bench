@@ -1233,7 +1233,7 @@ const PA_CHANGE_KINDS = ['move', 'tick', 'date', 'add', 'edit', 'step', 'note', 
    on the card as it now is. */
 const PA_ACTION_KINDS = ['open', 'view', 'filter'];
 const PA_STEP_ACTIONS = ['tick', 'date', 'add', 'edit'];
-const PA_EDIT_FIELDS = ['title', 'impact', 'effort', 'due', 'start', 'to', 'theme', 'urgent', 'week'];
+const PA_EDIT_FIELDS = ['title', 'impact', 'effort', 'due', 'start', 'to', 'theme', 'lead', 'urgent', 'week'];
 const PA_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const paApplied = new Set();
 
@@ -1316,6 +1316,7 @@ function paFieldValue(field, value){
   if (field === 'due' || field === 'start') return value === '' || PA_DATE_RE.test(String(value)) ? { value } : { error: field + ' must be YYYY-MM-DD or ""' };
   if (field === 'urgent' || field === 'week') return typeof value === 'boolean' ? { value } : { error: field + ' must be true or false' };
   if (field === 'to' || field === 'theme') return paOneLine(value) ? { value: value.trim() } : { error: field + ' must be one line' };
+  if (field === 'lead') return paOneLine(value) ? { value: leadSlug(value) } : { error: 'lead must be one line' };
   return { error: 'unknown field "' + field + '"' };
 }
 
@@ -1519,7 +1520,7 @@ function paApplyOne(req){
     if (!bucket) return { error: 'no bucket "' + req.bucket + '"' };
     const column = req.column ? paColumn(req.column) : TODO_TIER;
     if (!column || column === DONE_COL) return { error: 'add cannot go into "' + (req.column || '') + '"' };
-    const t = { id: uid(), done: false, title: req.title.trim(), bold: true, impact: '', effort: '', due: '', start: '', to: '', theme: '',
+    const t = { id: uid(), done: false, title: req.title.trim(), bold: true, impact: '', effort: '', due: '', start: '', to: '', theme: '', lead: '',
                 urgent: false, week: false, slug: '', blockedBy: [], rank: null, extra: [], body: [], raw: '', dirty: true };
     for (const f of PA_EDIT_FIELDS) {
       if (f === 'title' || req[f] === undefined) continue;

@@ -44,15 +44,15 @@ The block is a JSON list. `task` is the task's `id:` (preferred) or its exact ti
 | `move` | `task`, `column` (a column heading, e.g. `Doing`; `Done` ticks it), optional `bucket` to move it between buckets |
 | `tick` | `task`, optional `done: false` to untick |
 | `date` | `task`, `due` and/or `start` as `YYYY-MM-DD`, `""` clears |
-| `add` | `title`, optional `bucket` (default the first), `column` (default `To do`), `impact`, `effort`, `due`, `start`, `to`, `theme`, `urgent`, `week`, and a one-line `note` |
-| `edit` | `task`, `field` (one of `title`, `impact`, `effort`, `due`, `start`, `to`, `theme`, `urgent`, `week`), `value` |
+| `add` | `title`, optional `bucket` (default the first), `column` (default `To do`), `impact`, `effort`, `due`, `start`, `to`, `theme`, `lead`, `urgent`, `week`, and a one-line `note` |
+| `edit` | `task`, `field` (one of `title`, `impact`, `effort`, `due`, `start`, `to`, `theme`, `lead`, `urgent`, `week`), `value` |
 | `step` | `action` (`tick`, `date`, `add` or `edit`). `tick` and `date` and `edit` name the step with `step` (its `id:` or its text), and `task` too unless `step` is an id. `tick` takes optional `done: false`; `date` takes `due` and/or `start`; `add` and `edit` take `text`, and `add` also takes `task` and optional `due`/`start`. Step text carries no tags or backticks, dates go in their own fields |
 | `note` | `task`, `text` (one line, added after the task's existing notes), optional `replaces` (the exact text of one existing note line, which is swapped for `text`) |
 | `open` | `task` (or a step's `id:`): opens its card on the board |
 | `view` | `view`: the id of a view tab, e.g. `board`, `timeline` |
 | `filter` | `bucket` (a name, or `"all"`), or `buckets` as a list: the bucket tabs |
 
-Values are the ones the file already uses: impact `low|med|high`, effort `S|M|L`, `urgent`/`week` as `true`/`false`, `""` to clear.
+Values are the ones the file already uses: impact `low|med|high`, effort `S|M|L`, `urgent`/`week` as `true`/`false`, `""` to clear. `lead` is a Binder organisation's slug, lowercase `a-z`, `0-9` and hyphens (`acme-studio`); the board turns anything else into one.
 
 ````
 ```pa-changes
@@ -196,6 +196,7 @@ So the whole update is the tag:
 | The prompt the owner pastes | a `Prompt:` note on the step |
 | The ticket the owner raises | a `Jira (PLAT\|GROW):` note on the task or step |
 | Where its context lives | a `Project:` note on the task, naming a folder in the list's projects folder when set, otherwise under `data/projects/` |
+| The Binder organisation the task is for | `[lead:: <slug>]`, a lowercase slug as Binder names it (`[lead:: acme-studio]`) |
 | How often it comes round | `repeat:wed`, `repeat:wed-9:15`, `repeat:15`, `repeat:wd5`, `repeat:tue2`, or any with a `~` |
 | The topics the owner takes into a recurring meeting | an `Agenda:` block on the task |
 

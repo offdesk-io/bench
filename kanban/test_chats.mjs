@@ -524,6 +524,7 @@ const paApply = await evalJS(`(() => {
     { kind: 'date', task: 'chase the 360 responses', due: '2026-10-02' },
     { kind: 'tick', task: 'Decide whether to open the mid-weight design role' },
     { kind: 'edit', task: 'Tidy up the shared 1:1 notes template', field: 'impact', value: 'high' },
+    { kind: 'edit', task: 'Tidy up the shared 1:1 notes template', field: 'lead', value: 'Acme Studio' },
     { kind: 'add', title: 'Book the offsite venue', bucket: 'People', effort: 'S', note: 'From the PA panel.' },
     { kind: 'delete', task: 'Chase the 360 responses' },
     { kind: 'edit', task: 'Chase the 360 responses', field: 'impact', value: 'huge' }
@@ -537,7 +538,7 @@ const paApply = await evalJS(`(() => {
   const after = serializeDoc(state.doc);
   const res = {
     out, stepsAdded: undoStack.length - steps, dirty: state.dirty,
-    tidy: tidy && [tidy.col, tidy.t.impact], chaseDue: chase && chase.t.due,
+    tidy: tidy && [tidy.col, tidy.t.impact, tidy.t.lead], chaseDue: chase && chase.t.due,
     decide: decide && [decide.col, decide.t.done], added: added && [added.bucket, added.col, added.t.effort, added.t.body.join('|'), !!added.t.stableId],
     wroteLine: after.includes('Book the offsite venue') && after.includes('[due:: 2026-10-02]'),
   };
@@ -545,11 +546,12 @@ const paApply = await evalJS(`(() => {
   res.undone = serializeDoc(state.doc) === before;
   return res;
 })()`)
-check('a pa-changes block applies each known kind', paApply.out.applied.length === 5, JSON.stringify(paApply.out))
+check('a pa-changes block applies each known kind', paApply.out.applied.length === 6, JSON.stringify(paApply.out))
 check('  move puts the card in the named column', paApply.tidy && paApply.tidy[0] === 'Doing', JSON.stringify(paApply.tidy))
 check('  date re-dates it, found by title ignoring case', paApply.chaseDue === '2026-10-02', paApply.chaseDue)
 check('  tick ticks it into Done', paApply.decide && paApply.decide[0] === 'Done' && paApply.decide[1] === true, JSON.stringify(paApply.decide))
 check('  edit sets a field', paApply.tidy && paApply.tidy[1] === 'high')
+check('  edit of lead stores its slug, as the drawer does', paApply.tidy && paApply.tidy[2] === 'acme-studio', JSON.stringify(paApply.tidy))
 check('  add writes a new task with its fields, note and an id',
   JSON.stringify(paApply.added) === JSON.stringify(['People', 'To do', 'S', '  - From the PA panel.', true]), JSON.stringify(paApply.added))
 check('  and the document serialises with them', paApply.wroteLine)
