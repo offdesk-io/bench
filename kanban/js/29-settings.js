@@ -155,9 +155,17 @@ function settingsPlaceFields(draft, first){
       wrap: 'data-region-field' + (draft.regions.length ? '' : ' hidden') });
 }
 
+const MEMORY_MODES = [['default', 'Default (kept in Bench)'], ['custom', 'Custom folder']];
+
+/* The main memory folder: Default keeps everything in Bench's own data
+   folder, Custom names a folder outside it, and only Custom shows the path. */
 function settingsMemoryFolderField(draft){
-  return tenonFieldHTML({ label: 'Memory folder', attrs: 'data-memory', value: draft.memoryRoot, placeholder: 'Not set',
-    hint: 'A folder outside Bench that keeps facts about you for other agents to share. Set, your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Empty means none.' });
+  const custom = draft.memoryMode === 'custom';
+  return tenonFieldHTML({ label: 'Memory folder', kind: 'select', attrs: 'data-memory-mode',
+    options: MEMORY_MODES.map(([v, l]) => '<option value="' + v + '"' + (draft.memoryMode === v ? ' selected' : '') + '>' + esc(l) + '</option>').join(''),
+    hint: 'Custom is a folder outside Bench that keeps facts about you for other agents to share. Your profile and each board’s people, company text and Context are read from there first, and Bench lists its boards in boards.md inside it. A board can use a different folder, or none, under “This board”. Files in the custom folder stay there; Bench goes back to its own copies.' }) +
+    tenonFieldHTML({ label: 'Folder path', attrs: 'data-memory' + (custom ? '' : ' hidden'), value: draft.memoryRoot, placeholder: '/absolute/path/to/folder',
+      wrap: 'data-memory-field' + (custom ? '' : ' hidden'), err: 'data-err="memory"' });
 }
 
 function settingsProjectsField(draft){
@@ -332,7 +340,7 @@ async function loadSettingsDraft(first){
     banners: own.banners !== false, agents: own.agents !== false };
   return { setup: prof.needs_setup, set, draft: {
     board, boardWas: Object.assign({}, board),
-    name: prof.name || '', country, region, legacy, memoryRoot, list, projectsRoot, signedIn,
+    name: prof.name || '', country, region, legacy, memoryRoot, memoryMode: memoryRoot ? 'custom' : 'default', list, projectsRoot, signedIn,
     about: Object.assign({}, prof.about), sections: Object.assign({}, prof.sections), hints: prof.hints || {},
     was: { country, region, memoryRoot, projectsRoot, setup: (prof.sections || {}).setup || '' },
     touched: {},
@@ -347,6 +355,7 @@ function settingsErrors(draft, first){
   if (first && !draft.country) err.country = 'Choose a country.';
   if (/[<>`]/.test(draft.about.addressing || '')) err['about-addressing'] = 'Leave out < > and backticks.';
   if (/^##?(\s|$)/m.test(draft.sections.setup || '')) err.setup = 'A # or ## heading would split the profile. Use ### or none.';
+  if (!draft.signedIn && draft.memoryMode === 'custom' && !draft.memoryRoot.trim()) err.memory = 'Enter the folder’s full path.';
   if (!draft.signedIn && draft.board && draft.board.mode === 'own' && !draft.board.path.trim()) err['board-memory'] = 'Enter the folder’s full path.';
   return err;
 }
@@ -408,8 +417,15 @@ function trackSettingsForm(draft, first){
     const r = root.querySelector('[data-region]');
     if (c) draft.country = c.value;
     if (r) draft.region = r.value;
-    const m = root.querySelector('[data-memory]');
-    if (m) draft.memoryRoot = m.value;
+    const mm = root.querySelector('[data-memory-mode]');
+    if (mm) {
+      draft.memoryMode = mm.value;
+      const m = root.querySelector('[data-memory]');
+      m.hidden = mm.value !== 'custom';
+      m.closest('.tenon-field').hidden = m.hidden;
+      draft.memoryRoot = m.value;
+      if (e && e.target === m) draft.touched.memory = true;
+    }
     const ch = root.querySelector('[data-chime]');
     if (ch) draft.chime = ch.getAttribute('aria-checked') === 'true';
     const bm = root.querySelector('[data-board-memory-mode]');
@@ -492,7 +508,8 @@ async function saveSettingsDraft(draft, first){
      welcome keeps the first run's two starting models. */
   const body = { chime: draft.chime };
   if (first) body.models = draft.models;
-  if (draft.memoryRoot.trim() !== draft.was.memoryRoot) body.memory_root = draft.memoryRoot.trim() || null;
+  const memoryNow = draft.memoryMode === 'custom' ? draft.memoryRoot.trim() : '';
+  if (memoryNow !== draft.was.memoryRoot) body.memory_root = memoryNow || null;
   if (draft.list && draft.projectsRoot.trim() !== draft.was.projectsRoot)
     body.projects_roots = { [draft.list]: draft.projectsRoot.trim() || null };
   await put('/settings.json', body);
@@ -793,7 +810,7 @@ let settingsSnapshot = '';
 let settingsDiscarded = false;
 
 function settingsDraftSnapshot(d){
-  return JSON.stringify([d.name, d.country, d.region, d.memoryRoot, d.projectsRoot, (d.sections || {}).setup,
+  return JSON.stringify([d.name, d.country, d.region, d.memoryMode, d.memoryRoot, d.projectsRoot, (d.sections || {}).setup,
     d.chime, d.board && [d.board.mode, d.board.path, d.board.banners, d.board.agents], (d.about || {}).addressing]);
 }
 
