@@ -36,6 +36,14 @@ nothing raises.
   buckets, plans, chats, queues, locks, history, backups and runs stay under
   `data/` either way. Unset, the key is absent from what load() returns and
   nothing changes.
+- `binder_url`: optional, the web address of Binder, the leads and clients
+  manager, on this install (`https://binder.example.com`). Set, a
+  task's `[lead:: <slug>]` shows as a chip that opens `<binder_url>/o/<slug>`,
+  the drawer has a Lead field, and the PA may set a lead. Unset, the board
+  shows no lead anywhere and the tag is kept as it is in the file. A trailing
+  slash is taken off. Served to the page by `/owner.js`, before the board's
+  scripts run (kanban/server.py). Unset, the key is absent from what load()
+  returns and nothing changes.
 - `projects_roots`: optional, a map from a list's name to its projects folder,
   an existing folder that may sit outside the repo, one per list and never
   shared by two. For a list in it, a task's project is looked for at
@@ -123,6 +131,30 @@ def _memory_value(value):
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
+def _binder_clean(value):
+    """`binder_url` as it is kept: spaces and trailing slashes taken off, '' for
+    none."""
+    return value.strip().rstrip("/") if isinstance(value, str) else ""
+
+
+def _binder_error(value):
+    """An error for a `binder_url` a save was sent, or None. Empty or null is
+    no Binder at all."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return "binder_url must be a web address, or empty for none"
+    text = _binder_clean(value)
+    if text and not re.match(r"https?://\S+$", text):
+        return "binder_url must start with http:// or https://, or be empty for none"
+    return None
+
+
+def binder_url(root=None):
+    """The Binder address, or '' when this install has none."""
+    return load(root).get("binder_url", "")
+
+
 # The keys a list's entry in `boards` may hold beyond `memory_root`, each a
 # true-or-false that defaults to true.
 BOARD_FLAGS = ("banners", "agents")
@@ -175,6 +207,9 @@ def load(root=None):
     memory = _memory_value(raw.get("memory_root"))
     if memory:
         out["memory_root"] = memory
+    binder = _binder_clean(raw.get("binder_url"))
+    if re.match(r"https?://\S+$", binder):
+        out["binder_url"] = binder
     roots = raw.get("projects_roots")
     if isinstance(roots, dict):
         roots = {k: _memory_value(v) for k, v in roots.items() if _memory_value(v)}
@@ -468,6 +503,9 @@ def validate(data, root=None):
     err = _folder_error("memory_root", data.get("memory_root"))
     if err:
         return err
+    err = _binder_error(data.get("binder_url"))
+    if err:
+        return err
     err = _boards_error(data.get("boards"), root or data_root())
     if err:
         return err
@@ -652,6 +690,13 @@ def save(root, data):
             merged["memory_root"] = memory
         else:
             merged.pop("memory_root", None)
+    # Sent empty or null clears it, as with the memory folder.
+    if "binder_url" in data:
+        binder = _binder_clean(data["binder_url"])
+        if re.match(r"https?://\S+$", binder):
+            merged["binder_url"] = binder
+        else:
+            merged.pop("binder_url", None)
     # Per list: a list sent empty or null loses its folder, one not sent keeps it.
     if isinstance(data.get("projects_roots"), dict):
         roots = merged.get("projects_roots")

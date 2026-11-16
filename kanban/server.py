@@ -3034,13 +3034,15 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 # save fixes it.
                 return self._json(200, {"version": 1, "viewed": {}})
         if path == "/owner.js":
-            # The owner's first name, ahead of the board's scripts so a const
-            # in 02-state.js can read it. A page with no server falls back to "Me".
+            # The owner's first name and this install's Binder address, ahead of
+            # the board's scripts so the consts in 02-state.js can read them. A
+            # page with no server falls back to "Me" and no Binder.
             import owner_profile
             # Signed in, "me" is whoever is signed in, by first name.
             owner = ((requester()["name"].split() or [""])[0] if AUTH
                      else owner_profile.owner_name(DATA_ROOT, board=current_dataset()))
-            body = ("window.OWNER_NAME = %s;\n" % json.dumps(owner)).encode("utf-8")
+            body = ("window.OWNER_NAME = %s;\nwindow.BENCH_BINDER_URL = %s;\n"
+                    % (json.dumps(owner), json.dumps(settings.binder_url(DATA_ROOT)))).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))

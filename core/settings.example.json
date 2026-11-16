@@ -14,5 +14,6 @@
   },
   "chime": true,
   "memory_root": null,
+  "binder_url": null,
   "projects_roots": {}
 }

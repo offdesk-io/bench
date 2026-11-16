@@ -426,9 +426,13 @@ const RESERVED_TIERS = [BACKLOG_TIER, TODO_TIER, DOING_TIER, WAIT_COL, DONE_COL]
 /* The first bucket tab shows every bucket at once. Not a real bucket, so it
    needs a name no heading in the file could ever produce. */
 const ALL_BUCKETS = '__all__';
-/* Binder, the offdesk leads and clients manager. A task's `[lead:: <slug>]`
-   chip opens its organisation there (cardModel() in 09-columns.js). */
-const BINDER_URL = 'https://binder.offdesk.io';
+/* Binder, the leads and clients manager, if this install has one. Its address
+   is the `binder_url` setting (core/settings.py), which /owner.js hands the page
+   as window.BENCH_BINDER_URL before any board script runs, with no trailing
+   slash. Empty when there is no Binder: then a task's `[lead:: <slug>]` shows
+   nowhere, the drawer has no Lead field and the PA may not set a lead. The tag
+   itself is kept either way. */
+const BINDER_URL = (typeof window.BENCH_BINDER_URL === 'string' ? window.BENCH_BINDER_URL : '').replace(/\/+$/, '');
 /* The slug a typed lead becomes, as Binder names its organisations: lowercase,
    each run of anything but a-z and 0-9 is one hyphen, and hyphens come off the
    ends. So a lead can never carry a `]`, a backtick, `::` or a space onto a

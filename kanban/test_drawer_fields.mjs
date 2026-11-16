@@ -429,7 +429,7 @@ try {
   })()`))
   check('the drawer offers Open in Binder for it, in a new tab', await evalJS(`(() => {
     const a = document.querySelector('#f-lead-open');
-    return !!a && !a.hidden && a.getAttribute('href') === 'https://binder.offdesk.io/o/acme-studio' &&
+    return !!a && !a.hidden && a.getAttribute('href') === 'https://binder.example.com/o/acme-studio' &&
       a.target === '_blank' && a.rel === 'noopener noreferrer' && a.textContent.trim() === 'Open in Binder';
   })()`))
   await evalJS(`document.querySelector('#f-lead').focus()`)
@@ -437,7 +437,7 @@ try {
   await wait(300)
   check('a change keeps the same field and link, in place, and the focus where the user moved it', await evalJS(`
     document.querySelector('#f-lead') === window.__leadNodes.input && document.querySelector('#f-lead-open') === window.__leadNodes.link &&
-    document.activeElement.id === 'f-title' && __t().lead === 'beta-co' && window.__leadNodes.link.getAttribute('href') === 'https://binder.offdesk.io/o/beta-co'`))
+    document.activeElement.id === 'f-title' && __t().lead === 'beta-co' && window.__leadNodes.link.getAttribute('href') === 'https://binder.example.com/o/beta-co'`))
   await setLead('Acme Studio')
   await wait(300)
   check('a typed name is slugified the way Binder names it: Acme Studio is acme-studio', await evalJS(`__t().lead === 'acme-studio' && document.querySelector('#f-lead').value === 'acme-studio'`))
@@ -470,7 +470,7 @@ try {
     !document.querySelector('#f-tagadd .tenon-tag-chip--add') && document.querySelector('.tagchips .tenon-tag-chip').disabled`))
   check('a locked tab shows the lead as text with no input, and links to its lowercased Binder page', await evalJS(`
     !document.querySelector('#f-lead') && document.querySelector('#dbody').textContent.includes('Acme-Studio') &&
-    !!document.querySelector('#dbody a[href="https://binder.offdesk.io/o/acme-studio"]')`))
+    !!document.querySelector('#dbody a[href="https://binder.example.com/o/acme-studio"]')`))
   await evalJS(`__t().lead = 'acme-studio'`)
 
   check('every write was torn out before it left the page', await evalJS(`window.__blocked.every(w => /\\/data\\/todo\\.md$/.test(w))`), await evalJS(`window.__blocked.join(' | ')`))

@@ -121,16 +121,17 @@ function themeSelectHTML(value, themes, dis){
    02-state.js). Open in Binder is drawn in an editable drawer and hidden until
    there is a slug, so a change moves the link in place rather than redrawing the
    drawer under the field. A read-only drawer shows the slug as text, and a task
-   with no slug and a locked tab has no row at all. */
+   with no slug and a locked tab has no row at all, and with no Binder set up
+   (BINDER_URL in 02-state.js) there is no row for any task. */
 function leadHref(slug){ return BINDER_URL + '/o/' + encodeURIComponent(String(slug).toLowerCase()); }
 function leadFieldHTML(slug, ro){
-  if (ro && !slug) return '';
+  if (!BINDER_URL || (ro && !slug)) return '';
   const link = '<a id="f-lead-open"' + (slug ? ' href="' + escAttr(leadHref(slug)) + '"' : ' hidden') +
     ' target="_blank" rel="noopener noreferrer">Open in Binder</a>';
   if (ro) return '<span class="dpbtn" style="cursor:default">' + esc(slug) + '</span>' + link;
   return '<input type="text" id="f-lead" value="' + escAttr(slug) + '" placeholder="organisation slug"' +
       ' aria-label="Lead" aria-describedby="f-lead-note">' +
-    '<span class="help" id="f-lead-note">The Binder organisation, as in binder.offdesk.io/o/&lt;slug&gt;</span>' + link;
+    '<span class="help" id="f-lead-note">The Binder organisation, as in ' + esc(BINDER_URL) + '/o/&lt;slug&gt;</span>' + link;
 }
 
 function dedent(lines){ return lines.map(l => l.replace(/^ {1,2}/, '')).join('\n').replace(/\n+$/, ''); }

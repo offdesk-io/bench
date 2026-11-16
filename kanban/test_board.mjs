@@ -396,7 +396,7 @@ const leadCheck = await evalJS(`(() => {
   const saved = { lead: t.lead };
   t.lead = 'acme-studio';
   renderView();
-  const a = document.querySelector('#board .tenon-card[data-id="bd0003"] a.tenon-pill.tenon-pill--neutral[href="https://binder.offdesk.io/o/acme-studio"][title="Lead: acme-studio"]');
+  const a = document.querySelector('#board .tenon-card[data-id="bd0003"] a.tenon-pill.tenon-pill--neutral[href="https://binder.example.com/o/acme-studio"][title="Lead: acme-studio"]');
   const out = {
     found: !!a,
     target: a?.getAttribute('target'),
@@ -434,7 +434,7 @@ const handLead = await evalJS(`(() => {
   return out;
 })()`)
 check('a lead written in capitals on the line links to its lowercased Binder page',
-  handLead.read === 'Acme-Studio' && handLead.href === 'https://binder.offdesk.io/o/acme-studio' && handLead.text === 'Acme-Studio',
+  handLead.read === 'Acme-Studio' && handLead.href === 'https://binder.example.com/o/acme-studio' && handLead.text === 'Acme-Studio',
   JSON.stringify(handLead))
 
 /* ---- defaultAddBucket() reads the bucket filter ---- */
