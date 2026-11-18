@@ -50,7 +50,7 @@ the board. Its teams header is empty, so that means being named in the board's
 nobody, the PA identity included, so scripts/set-board-access.py gives it one
 before the identity is added:
 
-    scripts/set-board-access.py offdesk --owner tiagopedras+claude@gmail.com --team offdesk
+    scripts/set-board-access.py offdesk --owner tiagopedras+bench@example.com --team offdesk
     scripts/set-board-access.py offdesk --person pa-tiago@offdesk.invalid
 """
 

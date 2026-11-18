@@ -94,7 +94,7 @@ try {
       const m = (o && o.method) || 'GET';
       if (m !== 'GET') { if (m !== 'HEAD') window.__blocked.push(m + ' ' + u); return Promise.resolve(new Response('{}', { status: 200 })) }
       if (String(u).startsWith('/board-people.json')) return Promise.resolve(new Response(JSON.stringify({ people: [
-        { email: 'tiagopedras+claude@gmail.com', name: 'Tiago Pedras' },
+        { email: 'tiagopedras+bench@example.com', name: 'Tiago Pedras' },
         // Signed in with an override, an isolate, a mark and a bell in it.
         { email: 'jerome@example.com', name: '\\u202EJérôme\\u2066 Dupont\\u200F\\u0007' },
         { email: 'ana@example.com', name: 'Ana Silva' },
@@ -156,7 +156,7 @@ try {
   check('someone with no name gets the first letter of their email', !!carla && />C<\/text>/.test(carla.i), carla && carla.i)
   check('and nobody outside the board is offered',
     pick.filter(o => /@/.test(o.v)).map(o => o.v).sort().join() ===
-      'ana@example.com,carla@example.com,jerome@example.com,tiagopedras+claude@gmail.com')
+      'ana@example.com,carla@example.com,jerome@example.com,tiagopedras+bench@example.com')
   const agent = pick.find(o => o.v === 'Test b agent')
   check('agents keep their square faces', !!agent && !/person/.test(agent.i) && /<rect|<path/.test(agent.i))
 
@@ -218,7 +218,7 @@ try {
   check('in the picker too',
     await evalJS(`(() => { openDrawer(findTaskByKey('ap0001').id); const l = PICK_SPECS['f-to'].options.map(o => o.label);
       closeDrawer(); return l.includes('Ana S. (ana)') && l.includes('Ana S. (ana.sousa)') && l.includes('Tiago P.'); })()`))
-  check('and nobody else changes', await evalJS(`personName('tiagopedras+claude@gmail.com') === 'Tiago P.'`))
+  check('and nobody else changes', await evalJS(`personName('tiagopedras+bench@example.com') === 'Tiago P.'`))
 
   check('nothing tried to write', await evalJS(`window.__blocked.length === 0`), await evalJS(`window.__blocked.join(' | ')`))
 } catch (err) {

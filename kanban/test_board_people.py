@@ -87,7 +87,7 @@ def signed_in(root):
         ok("the board's people are listed", code == 200, "%d %s" % (code, body[:200]))
         emails = [p["email"] for p in got or []]
         ok("owner, named people, then signed-in team members",
-           emails == ["tiagopedras+claude@gmail.com", "jerome@example.com", "carla@example.com", "ana@example.com"],
+           emails == ["tiagopedras+bench@example.com", "jerome@example.com", "carla@example.com", "ana@example.com"],
            repr(emails))
         ok("nobody from another team", "bob@example.com" not in emails)
         names = {p["email"]: p["name"] for p in got or []}
@@ -121,7 +121,7 @@ def signed_in(root):
         with open(os.path.join(folder, "todo.md"), encoding="utf-8") as fh:
             step = next(l for l in fh.read().split("\n") if "His step" in l)
         ok("a request in a person's name is never an agent's",
-           "`edited-by:tiagopedras+claude@gmail.com`" in step, step)
+           "`edited-by:tiagopedras+bench@example.com`" in step, step)
 
         assignees(srv, folder)
     finally:
@@ -158,11 +158,11 @@ def assignees(srv, folder):
        "[to:: jerome@example.com]" in line("Named Jerome"), line("Named Jerome"))
     ok("a sub-task's too, written with the accents", "[to:: jerome@example.com]" in line("A step for him"),
        line("A step for him"))
-    ok("the owner's own name resolves, by first name", "[to:: tiagopedras+claude@gmail.com]" in line("Named Tiago"),
+    ok("the owner's own name resolves, by first name", "[to:: tiagopedras+bench@example.com]" in line("Named Tiago"),
        line("Named Tiago"))
     ok("someone who never signed in is found by their address",
        "[to:: carla@example.com]" in line("By address"), line("By address"))
-    ok("and by the part of it before a +", "[to:: tiagopedras+claude@gmail.com]" in line("before the +"),
+    ok("and by the part of it before a +", "[to:: tiagopedras+bench@example.com]" in line("before the +"),
        line("before the +"))
     ok("an agent keeps its name", "[to:: Plan agent]" in line("For the agent"), line("For the agent"))
     ok("an email stays as it was", "[to:: jerome@example.com]" in line("Already an email"))

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Say who may see a board, for a board made before sign-in was on.
 
-    scripts/set-board-access.py offdesk --owner tiagopedras+claude@gmail.com --team offdesk
+    scripts/set-board-access.py offdesk --owner tiagopedras+bench@example.com --team offdesk
     scripts/set-board-access.py offdesk --person someone@example.com
     scripts/set-board-access.py offdesk            # print what it has now
 
