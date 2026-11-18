@@ -200,6 +200,13 @@ def main():
                 binder_save.check_route(method, path)
             except binder_save.Refused:
                 refused += 1
+        for path in ("/api/orgs/by-slug/x\n", "/api/orgs/7\n", "/api/orgs\n"):
+            try:
+                binder_save.check_route("GET" if "slug" in path or path == "/api/orgs\n" else "PATCH", path)
+                newline = False
+            except binder_save.Refused:
+                newline = True
+            ok("a path with a trailing newline is refused: %r" % path, newline)
         ok("the route guard refuses every delete, research and summarise route", refused == len(probes))
         os.environ["PATH"] = env["PATH"]
         client = binder_save.Binder(fake.url, "binder-test", "offdesk")

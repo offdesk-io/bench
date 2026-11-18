@@ -109,7 +109,7 @@ def check_route(method, path):
         raise Refused("this script never deletes anything")
     if re.search(r"/(research|summarise)(/|$)", path):
         raise Refused("this script never starts research or summarising")
-    if not any(m == method and rx.match(path) for m, rx in ROUTES):
+    if not any(m == method and rx.fullmatch(path) for m, rx in ROUTES):
         raise Refused("%s %s is not a route this script uses" % (method, path))
 
 
@@ -189,7 +189,7 @@ def show(value):
 
 
 def org_by_slug(b, slug):
-    if not re.match(r"^[a-z0-9][a-z0-9-]*$", slug):
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
         raise Refused("%s is not a slug" % slug)
     return b.ok("GET", "/api/orgs/by-slug/" + slug)
 
