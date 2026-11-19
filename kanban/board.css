@@ -61,7 +61,7 @@
      the theme. Brand colours, not Tenon tokens: ink on light, paper on dark.
      The orange dot keeps its own fill. The b's ascender is 85% of the
      viewBox, so .9em puts it at about the cap height the old text had. */
-  h1 .wordmark{display:block; height:.9em; width:auto; overflow:visible}
+  h1 .wordmark{display:block; height:1.15rem; width:auto; overflow:visible}
   .wm-b{fill:#141414}
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"], [data-theme$="-light"]) .wm-b{fill:#e7e5e0} }
   :root[data-theme="dark"] .wm-b, :root[data-theme="1984"] .wm-b, :root[data-theme$="-dark"] .wm-b{fill:#e7e5e0}
