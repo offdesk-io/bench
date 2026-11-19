@@ -166,7 +166,13 @@ await evalJS(`closeDrawer()`)
 /* ---- dragging ---- */
 
 await evalJS(`__drag('dragstart', document.querySelector('#board .tenon-card[data-id="bd0003"]'), 0)`)
-await wait(150)
+/* The fade is set a frame after dragstart (BoardView's requestAnimationFrame),
+   so wait for it rather than for a fixed time: a loaded hosted runner can take
+   longer than 150ms to paint that frame. */
+for (let i = 0; i < 60; i++) {
+  if (await evalJS(`document.querySelector('#board .tenon-card[data-id="bd0003"]').classList.contains('dragging')`)) break
+  await wait(50)
+}
 check('a dragged card is remembered by the board and faded', await evalJS(`
   dragId === 'bd0003' && document.querySelector('#board .tenon-card[data-id="bd0003"]').classList.contains('dragging')
 `))

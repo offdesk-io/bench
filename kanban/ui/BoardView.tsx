@@ -20,7 +20,7 @@
  * `Column` gives the body a class and not props. That makes the head a valid
  * place to drop, which it was not, and puts the card at the top when it is.
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { DragEvent } from 'react'
 import { Column, ColumnEmpty, DropLine } from '@tiagopedras/tenon'
 import { TaskCard, type TaskCardModel } from './TaskCard'
@@ -101,7 +101,11 @@ export function BoardView(props: BoardViewProps) {
      fires dragend on the original element, the card has already moved to a
      different column's DOM subtree and dragend never reaches it, leaving
      dragging stuck on an id that no longer needs it. */
-  const clearAll = () => { clear(); setDragging(null) }
+  const clearAll = () => { cancelFade(); clear(); setDragging(null) }
+  /* The fade waits a frame (below). A drag that ends inside that frame must
+     not have it land afterwards and leave the card faded for good. */
+  const fade = useRef(0)
+  const cancelFade = () => { cancelAnimationFrame(fade.current); fade.current = 0 }
 
   return (
     <>
@@ -122,9 +126,10 @@ export function BoardView(props: BoardViewProps) {
               onDragStart(e, id)
               /* After the browser has taken its drag image: fading the card in
                  the handler would fade the picture of it too. */
-              requestAnimationFrame(() => setDragging(id))
+              cancelFade()
+              fade.current = requestAnimationFrame(() => { fade.current = 0; setDragging(id) })
             }}
-            onDragEnd={(e, id) => { setDragging(null); clear(); onDragEnd(e, id) }}
+            onDragEnd={(e, id) => { cancelFade(); setDragging(null); clear(); onDragEnd(e, id) }}
           />
         ))
         if (line && line.tier === col.tier) {
