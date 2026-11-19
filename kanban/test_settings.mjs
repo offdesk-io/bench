@@ -645,6 +645,16 @@ check('onboarding has no Skip button', !(await evalJS(`settingsRoot().textConten
   await send('Page.navigate', { url: `${base2}/kanban/index.html` })
   await wait(3500)
   check('step 1 is shown on a checkout with nothing', await shown() && await evalJS(`settingsRoot().textContent.includes('Step 1 of 2')`))
+  // The welcome opens over the locked example list but its fields take typing.
+  check('the first-run welcome sits over a locked board', await evalJS(`state.locked === true`))
+  await evalJS(`settingsRoot().querySelector('[data-name]').focus()`)
+  for (const ch of 'Sam') {
+    await send('Input.dispatchKeyEvent', { type: 'keyDown', key: ch, text: ch })
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch })
+  }
+  await wait(200)
+  check('typing Sam with real key events fills the name field', await evalJS(`settingsRoot().querySelector('[data-name]').value`) === 'Sam')
+  check('the name field is not readonly and the Country select is enabled', await evalJS(`!settingsRoot().querySelector('[data-name]').readOnly && !settingsRoot().querySelector('[data-country]').disabled`))
   check('the "Nothing here yet" sheet is gone', !(await evalJS(`document.body.textContent.includes('Nothing here yet')`)))
   await fill('Pat', 'DE', '', {})
   await press('Save')
