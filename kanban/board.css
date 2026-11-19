@@ -2960,8 +2960,29 @@
      and the outline sits 2px out, clear of the held ring. */
   [data-pa-changed]{outline:1px solid var(--tenon-color-green-450, #53a970) !important; outline-offset:2px}
   [data-pa-changed][data-pa-fading]{outline-color:transparent !important; transition:outline-color .3s ease}
+  /* Collapsed: one pill where the prompt opens, with the open box's gradient
+     edge so it reads as the same thing folded away. */
+  .focus-prompt--collapsed{width:auto; align-items:center}
+  .focus-prompt__open{
+    display:flex; align-items:center; gap:6px; height:32px; padding:0 14px 0 10px; box-sizing:border-box;
+    border:1px solid transparent; border-radius:9999px; cursor:pointer;
+    background:linear-gradient(#1c1f25, #1c1f25) padding-box, linear-gradient(90deg, #f0b355, var(--tenon-color-red-450, #ef5c53)) border-box;
+    box-shadow:0 2px 8px rgba(16,20,28,.24);
+    color:var(--tenon-color-neutral-50, #f6f7f8); font:inherit; font-size:12px; line-height:16px; font-weight:500;
+  }
+  .focus-prompt__open:hover{box-shadow:0 0 8px 1px #ff8a85, 0 1px 1px rgba(16,20,28,.04)}
+  .focus-prompt__open:focus-visible{outline:2px solid var(--tenon-stroke-focus); outline-offset:2px}
   /* The toasts sit at the bottom centre as well: lifted clear while the prompt is there. */
   body.focus-prompting .toasts{bottom:200px}
+  body.focus-prompt-collapsed .toasts{bottom:84px}
+  /* On a phone it sits above the tab bar (60px, plus the home bar). The drawer
+     is the screen there and covers the tab bar, so the pill goes with it. */
+  @media (max-width:640px){
+    .focus-prompt{bottom:calc(72px + env(safe-area-inset-bottom))}
+    body:has(#drawer.open) .focus-prompt--collapsed{display:none}
+    body.focus-prompting .toasts{bottom:calc(236px + env(safe-area-inset-bottom))}
+    body.focus-prompt-collapsed .toasts{bottom:calc(120px + env(safe-area-inset-bottom))}
+  }
   @media (prefers-reduced-motion: reduce){
     .focus-prompt, .focus-prompt__status, [data-pa-changed]{transition:none}
   }

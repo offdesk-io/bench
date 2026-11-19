@@ -1036,8 +1036,8 @@ let paSaving = Promise.resolve();
 function paPreface(ask){
   const ds = state.dataset || '';
   return '/pa ' + ask + '\n\n' +
-    '(Sent from the to-do board\'s PA prompt, a conversation about the list that starts from one element the owner is holding on the board: ' +
-    'the "Focused element" line names it, and the owner\'s words follow it. ' +
+    '(Sent from the to-do board\'s PA prompt, a conversation about the list that starts either from one element the owner is holding on the board, ' +
+    'which the "Focused element" line names, or from the whole list, which the "No focused element" line says. The owner\'s words follow that line. ' +
     'The list on screen is ' + (ds ? 'data/' + ds + '/todo.md, the dataset data/.current names' : 'the one data/.current names') +
     '. The board saved its unsaved changes before this message. This chat cannot write todo.md: for any change to the list, ' +
     'end your reply with a fenced pa-changes block, as the pa skill\'s "From a board chat" section describes, and the board applies it. ' +

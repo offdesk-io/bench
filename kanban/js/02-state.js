@@ -448,7 +448,7 @@ function leadSlug(v){
    when either changes. The PA first, since it is the one every list has. */
 const AGENT_CARDS = [
   { name: 'PA',
-    does: 'Keeps your list. Tell it in the chat what moved and it adds, moves, dates and ticks off tasks, and writes the message or agenda that goes with one.',
+    does: 'Keeps your list. Tell it what moved in Ask the PA, at the bottom of the screen, and it adds, moves, dates and ticks off tasks, and writes the message or agenda that goes with one. Hold a card first to ask about that card.',
     cannot: 'Do the work on a task, or change one you did not mention.',
     needs: 'You to say what changed, in your own words.' },
   { name: 'Bucket agents',
