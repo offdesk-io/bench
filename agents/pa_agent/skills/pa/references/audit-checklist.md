@@ -82,6 +82,8 @@ The script only checks that a message exists. Whether it is usable is a read.
 
 **Check the message matches how far the thing has actually got.** A first-ask message still sitting under a step where the ask has already gone out means the next session sends the wrong thing.
 
+**Check the message is in the addressee's language.** Look the person up in `people.md`. A draft in another language than the one on file gets rewritten. A person with none on file gets an English draft that says the language is unconfirmed, and a question to the owner.
+
 **A task in a bucket with its own agent follows that agent's rules.** Where the agent says a message is a draft, the note says to edit it first. Confidence in the phrasing is not a substitute for the owner choosing the words.
 
 **A gap is better than a guess.** A `[date]` or `[name]` placeholder is fine. An invented detail that reads plausibly is not, because it will be sent without being noticed.

@@ -176,6 +176,8 @@ python3 "${BENCH_ROOT:-$HOME/Code/bench}"/agents/pa_agent/skills/pa/scripts/pa_w
 
 After the push, run the same script with `done` and the same path. Run `done` even when the edit failed or you stopped to ask, since the board holds its reload until the file goes or is ten minutes old. If you stop to ask mid-batch, run `done` first and `start` again when you resume. `pa-working.json` is a file on the Mac, so on the shared board there is nothing to tell and you skip both.
 
+**People and their language.** Each live board has a `people.md` (through `memory_file()`: the memory folder first, `data/<dataset>/` after), and every person in it carries a `Language:` line, as `## Name` then `- Language: Portuguese`. Adding a person, a name in `[to::]` or one met in a message, means asking the owner which language they read before the person goes in. Every `Suggested message:` is written in the addressee's language. With no language on file the draft is in English and its first line says the language is unconfirmed, then you ask. `check_todo.py` flags a message to anyone with no language on file.
+
 **There are no sections to rebuild.** The file is four buckets and nothing else. This week, Quick wins, Big rocks and Dependency chain are worked out by the board every time it renders. Never add them back as text: a section in the file is a copy, and a copy has to be maintained by hand every session or it starts describing a file that has moved on.
 
 So the whole update is the tag:
@@ -194,7 +196,7 @@ So the whole update is the tag:
 | The one thing for now | `headline:YYYY-MM-DD`, the date it was set |
 | What is in this week | `week` |
 | What blocks what | `blocked-by:slug`, and `#slug` on the blocker |
-| The message the owner sends | a `Suggested message:` note on the step |
+| The message the owner sends | a `Suggested message:` note on the step, written in the language the addressee reads (see below) |
 | The prompt the owner pastes | a `Prompt:` note on the step |
 | The ticket the owner raises | a `Jira (PLAT\|GROW):` note on the task or step |
 | Where its context lives | a `Project:` note on the task, naming a folder in the list's projects folder when set, otherwise under `data/projects/` |

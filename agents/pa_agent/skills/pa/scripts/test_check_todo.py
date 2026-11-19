@@ -235,7 +235,65 @@ def test_pushing_code_is_not_contacting_anyone():
           contact("Ask Tiago whose work it is"), True)
 
 
+def test_a_message_to_someone_with_no_language_is_flagged():
+    """people.md is read through memory_file(), so the memory folder wins and
+    data/<list>/ is the fallback. Made-up people only."""
+    import json
+    import shutil
+    tmp = tempfile.mkdtemp(prefix="check-todo-lang-")
+    saved = os.environ.get("TODOS_DATA_ROOT")
+    os.environ["TODOS_DATA_ROOT"] = tmp
+    try:
+        mem = os.path.join(tmp, "_memory")
+        for name in ("work", "demo"):
+            os.makedirs(os.path.join(tmp, name))
+            open(os.path.join(tmp, name, "todo.md"), "w").close()
+        with open(os.path.join(tmp, "work", "people.md"), "w", encoding="utf-8") as fh:
+            fh.write("# People\n\n## Ada Example\n\n- Language: Portuguese\n\n"
+                     "## Bo Sample\n\n- Role: designer\n")
+        os.makedirs(os.path.join(mem, "bench", "demo"))
+        with open(os.path.join(mem, "bench", "demo", "people.md"), "w", encoding="utf-8") as fh:
+            fh.write("- **Cy Mock** - Language: English\n- **Di Fake**\n")
+        with open(os.path.join(tmp, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"boards": {"demo": {"memory_root": mem}}}, fh)
+        work = check_todo.people_on_file(os.path.join(tmp, "work", "todo.md"))
+        check("data/ fallback reads a language per person",
+              work, {"Ada Example": "Portuguese", "Bo Sample": ""})
+        demo = check_todo.people_on_file(os.path.join(tmp, "demo", "todo.md"))
+        check("memory folder is read first, bullet form",
+              demo, {"Cy Mock": "English", "Di Fake": ""})
+        check("a todo.md outside the data root is not checked",
+              check_todo.people_on_file(os.path.join(tmp, "x", "elsewhere", "todo.md")), None)
+
+        def flagged(*steps):
+            lines = []
+            for body in steps:
+                lines += ["- [ ] " + body, "  - Suggested message: \"Hi\""]
+            return len(check_todo.check_message_language(lines, work))
+        check("a person with a language is fine",
+              flagged("**Ask** [to:: Ada Example]"), 0)
+        check("a person listed with no language is flagged",
+              flagged("**Ask** [to:: Bo Sample]"), 1)
+        check("a person not on file is flagged",
+              flagged("**Ask** [to:: Nobody Known]"), 1)
+        check("a person named in the step, not tagged, is read from people.md",
+              flagged("**Ask Bo Sample about it**"), 1)
+        check("an agent is not a person",
+              flagged("**Ask** [to:: Work people agent]"), 0)
+        check("no addressee at all is left alone",
+              flagged("**Ask someone**"), 0)
+        check("no note, no flag",
+              len(check_todo.check_message_language(["- [ ] **x** [to:: Bo Sample]"], work)), 0)
+    finally:
+        if saved is None:
+            os.environ.pop("TODOS_DATA_ROOT", None)
+        else:
+            os.environ["TODOS_DATA_ROOT"] = saved
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def main():
+    test_a_message_to_someone_with_no_language_is_flagged()
     test_pushing_code_is_not_contacting_anyone()
     test_the_calendar_is_the_checked_lists()
     test_a_tag_with_no_handover_says_who_hands_it_over()

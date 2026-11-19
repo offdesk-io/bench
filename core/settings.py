@@ -392,6 +392,35 @@ def people_path(dataset, root=None, write=False):
     return memory_file(dataset, "people", root, write)
 
 
+PERSON_HEAD = re.compile(r"^(?:#{2,4}\s+|-\s+\*\*)(.+?)(?:\*\*)?\s*(?:[:\u2014].*|\s-\s.*)?$")
+LANGUAGE_FIELD = re.compile(r"\blanguage\s*:\s*\**\s*([^\n*|;]+)", re.I)
+
+
+def people_languages(dataset, root=None):
+    """Who is on a list's people.md, and the language each reads, as
+    {name: language or ""}. A person is a `## Name` heading or a top-level
+    `- **Name**` bullet; their language is a `Language: X` on that line or in
+    the notes indented under it, up to the next person. An empty string means
+    the person is listed with no language. A list with no people.md answers {}."""
+    try:
+        with open(people_path(dataset, root), encoding="utf-8") as fh:
+            text = fh.read()
+    except (OSError, ValueError):
+        return {}
+    out, current = {}, None
+    for line in text.splitlines():
+        head = PERSON_HEAD.match(line) if not line.startswith((" ", "\t")) else None
+        if head and not line.startswith("# "):
+            current = head.group(1).strip().strip("*").strip()
+            out.setdefault(current, "")
+        if current is None:
+            continue
+        m = LANGUAGE_FIELD.search(line)
+        if m and not out[current]:
+            out[current] = m.group(1).strip().rstrip(".,")
+    return out
+
+
 # ---- boards.md --------------------------------------------------------------
 #
 # With a memory folder set, Bench keeps `<memory_root>/boards.md` saying which
