@@ -60,10 +60,6 @@ has the one writer.
   as `{text, base}`, so the server merges it with any save made meanwhile. The
   same script reaches the shared board over HTTPS with a token from the macOS
   Keychain. `test_pa_save.py` beside it runs it against a throwaway server.
-- `skills/pa/scripts/binder_save.py` — how an agent changes Binder's leads and
-  clients over Binder's own API, with its own Keychain token. Updates send only
-  the changed fields and the `updated_at` they read; it never deletes and never
-  starts research. `test_binder_save.py` beside it runs it against a fake server.
 - `skills/pa/scripts/pa_working.py` — names the tasks `pa` is about to
   change in `data/<dataset>/pa-working.json`, and removes it after, so an open
   board can glow those cards and animate the change.
