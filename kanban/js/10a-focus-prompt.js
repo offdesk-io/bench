@@ -230,7 +230,7 @@ function fpEntry(t, b, ti){
   return {
     where: b.name + '\n' + ti.name,
     title: t.title,
-    head: [t.done, t.impact, t.effort, t.due, t.start, t.to, t.theme, t.urgent, t.week].join('|'),
+    head: [t.done, t.impact, t.effort, t.due, t.start, t.to, t.theme, t.lead, t.urgent, t.week].join('|'),
     notes: bodyParts(t).notes.join('\n'),
     steps,
   };

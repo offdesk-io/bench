@@ -32,7 +32,9 @@ script:
    `/datasets.json` answers `_test` and nothing else.
 4. Runs each suite with `BOARD_PORT` at that server, `CDP_PORT` (headless
    Chrome's debugging port) free, and `CHROME_PROFILE` inside the temp folder.
-   The dataset is reseeded before every suite.
+   The dataset is reseeded before every suite, with a `settings.json` that
+   sets `binder_url`, so the lead checks run with Binder on. `test_binder.mjs`
+   starts its own server with none, to check the install without Binder.
 5. Prints one line per suite, and the `FAIL` lines (or the log's tail) of the
    ones that failed.
 6. Kills the server and any Chrome it started and deletes the temp folder on
@@ -159,6 +161,7 @@ node kanban/test_one_board.mjs     # handing a task to its bucket's agent (plan-
 node kanban/test_signed_in.mjs     # signed in: the name, the Mac-only parts gone, sharing a list
 node kanban/test_subtasks.mjs      # sub-tasks in the drawer, and the agents' tick queue (no auto-approval of a plan)
 node kanban/test_board.mjs         # drag, drop, sort, add, Done as a heading, string card vs React one
+node kanban/test_binder.mjs        # Binder optional: no lead on any card, drawer or PA change with no binder_url; the setting on and off
 node kanban/test_chats.mjs
 node kanban/test_projects.mjs
 node kanban/test_notes.mjs

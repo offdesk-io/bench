@@ -147,7 +147,13 @@ const CASES = [
   { why: 'an unknown tag rides along on a rebuilt line',
     base: [['`id:cccccc`', '`id:cccccc` `mystery:7`']],
     mine: [['**Order badges**', '**Order name badges**']],
-    theirs: [['**Order badges** `id:cccccc`', '**Order badges** `urgent` `id:cccccc`']] }
+    theirs: [['**Order badges** `id:cccccc`', '**Order badges** `urgent` `id:cccccc`']] },
+  { why: 'a lead added in the save, the impact changed in the file: both land on one rebuilt line',
+    mine: [['[impact:: med] `id:bbbbbb`', '[impact:: med] [lead:: acme-studio] `id:bbbbbb`']],
+    theirs: [['[impact:: med] `id:bbbbbb`', '[impact:: high] `id:bbbbbb`']] },
+  { why: 'different leads set on each side is a conflict on the lead', prefer: ['', 'mine', 'theirs'],
+    mine: [['[impact:: med] `id:bbbbbb`', '[impact:: med] [lead:: acme-studio] `id:bbbbbb`']],
+    theirs: [['[impact:: med] `id:bbbbbb`', '[impact:: med] [lead:: beta-co] `id:bbbbbb`']] }
 ]
 
 const cases = []

@@ -132,8 +132,10 @@ Two rules for every view in `kanban/ui/`:
   anything reading `state.doc` — handed to the component as props.
 
 `kanban/ui/test_primitives.mjs` and `test_board.mjs` hold markup parity: change
-what a card shows in `cardModel()` (`09-columns.js`), and how it's drawn in both
-`cardHTML()` (string) and `TaskCard` (React), together.
+what a card shows in `cardModel()` (`09-columns.js`), and how `TaskCard` (React)
+draws it, together. `test_board.mjs` pins shapes (`CARD_PARITY`) captured from
+the string builder that `TaskCard` replaced, and they still check what is drawn
+here.
 
 ## After changing `kanban/server.py`
 

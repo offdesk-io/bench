@@ -121,7 +121,8 @@ function readTags(rest){
     const k = bk != null ? bk : sk, v = bk != null ? bv : sv;
     const key = k.toLowerCase();
     if (key === 'impact' || key === 'effort' || key === 'due' ||
-        key === 'start' || key === 'done' || key === 'to' || key === 'theme' || key === 'time') tags[key] = v.trim();
+        key === 'start' || key === 'done' || key === 'to' || key === 'theme' || key === 'time' ||
+        key === 'lead') tags[key] = v.trim();
     /* Retired. `[to::]` says who does the work, an agent included,
        and a backup still carrying `ai:` loses it on the next save. */
     else if (key === 'ai') {}
@@ -205,6 +206,8 @@ function readTags(rest){
        2026 this lived as free prose in the first line of Notes, `- Stream:
        audits.`, readable only by a language model rather than by a query. */
     theme: tags.theme || '',
+    /* Here `lead` is the Binder organisation's slug; a tier's `lead` is the text under its heading. */
+    lead: tags.lead || '',
     urgent, week, doing, slug, blockedBy, rank, tlrank, headline, chat, repeat, stableId,
     cancelled, archived, createdBy, editedBy, extra
   };
@@ -287,6 +290,7 @@ function serializeTask(t){
     if (t.doing)  tags.push('`doing`');
     if (t.to && t.to.trim()) tags.push('[to:: ' + t.to.trim() + ']');
     if (t.theme && t.theme.trim()) tags.push('[theme:: ' + t.theme.trim() + ']');
+    if (t.lead && t.lead.trim()) tags.push('[lead:: ' + t.lead.trim() + ']');
     if (t.blockedBy && t.blockedBy.length) tags.push('`blocked-by:' + t.blockedBy.join(',') + '`');
     if (t.rank != null && !isNaN(t.rank)) tags.push('`rank:' + t.rank + '`');
     if (t.tlrank != null && !isNaN(t.tlrank)) tags.push('`tlrank:' + t.tlrank + '`');
@@ -808,7 +812,7 @@ function priorityScore(t){
    core/fixtures/merge.json holds the cases both are held to. */
 
 const MERGE_FIELDS = ['title', 'bold', 'done', 'impact', 'effort', 'due', 'time', 'start', 'doneOn', 'to',
-  'theme', 'urgent', 'week', 'doing', 'slug', 'blockedBy', 'rank', 'tlrank', 'headline', 'chat',
+  'theme', 'lead', 'urgent', 'week', 'doing', 'slug', 'blockedBy', 'rank', 'tlrank', 'headline', 'chat',
   'repeat', 'stableId', 'cancelled', 'archived', 'createdBy', 'editedBy', 'extra'];
 
 function mgSame(a, b){ return JSON.stringify(a) === JSON.stringify(b); }

@@ -28,6 +28,8 @@ Models live in one optional file, `data/settings.json`, which git ignores. Copy 
 
 The same file can name a memory folder, `memory_root`, for when the facts about you are kept outside Bench so agents elsewhere can share them. The profile and each list's people, company text and Context are facts about you rather than board state, so with it set Bench reads `<memory_root>/me/profile.md` and `<memory_root>/bench/<list>/people.md`, `about.md` and `context.md` first and falls back to `data/` for any that are not there. Boards, queues, locks, history and runs stay in `data/`. Bench also keeps `<memory_root>/boards.md`, one line per list with the current one marked, rewritten when a list is made, when the current list changes and each time the board starts, so an agent outside Bench can see which boards exist without reading `data/`. Bench knows nothing about what a list is for or whether it is frozen, so whatever follows a list's folder on its line, and any mark besides `current`, is carried over from the file as it was. Unset, nothing changes. It is under Settings on the board.
 
+The same file can name Binder, `binder_url`, the web address of the leads and clients manager on this install (`https://binder.example.com`). Unset, which is the default, the board has no Binder: a task's lead is not shown, the drawer has no Lead field and the PA does not set a lead. Set, the lead chip, the Lead field and the PA's lead use that address, with any trailing slash taken off. The server reads it on each page load, so a change needs only a reload of the board. It is set by hand for now, as `"binder_url": "https://binder.example.com"` in `data/settings.json`; the Settings screen does not offer it yet.
+
 Each list can also name its own projects folder, under `projects_roots`, a map from list name to folder, for keeping that list's project folders outside Bench. For a list in it, a task's `data/projects/<name>` note is looked for in that folder first and at `data/<list>/projects/<name>/` after, the board starts new projects there, and the board's chats may write there. The Projects view of a list shows its own folder and its `data/` one, never another list's, which is why two lists cannot name the same folder. A list with none keeps `data/<list>/projects/`, and with the key unset nothing changes. It is under Settings, for the list that is open.
 
 Three sibling folders are optional. Each is looked up as `../PACKAGES/<name>` next to this repo, and without it the board still starts:
@@ -1339,6 +1341,14 @@ read and the tag dropped. It works on a sub-step as readily as on a task, and ne
 comes down from the task to its steps. When it is set on a person, the name
 appears on the card as an arrowed chip in the accent colour, so scanning a column
 tells you what is with somebody else without opening anything.
+
+`[lead:: <slug>]` is the Binder organisation this task is for, by its slug, as
+Binder names it (`[lead:: acme-studio]`). It is optional, and Binder reads it from
+a task's line, not from a sub-step's. The board shows it only when this install has
+Binder: with `binder_url` set in `data/settings.json` (below), the card shows it as a
+chip that opens `<binder_url>/o/<slug>`, the drawer has a Lead field, and the PA may
+set it. With `binder_url` unset, no lead is shown anywhere and the PA does not set
+one, but the tag stays in the file, round-trips and merges as any other tag does.
 
 On a shared board, Delegate to also offers the board's own people: its owner,
 the people it is shared with, and everyone who has signed in as a member of a

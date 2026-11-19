@@ -470,6 +470,60 @@
       "prefer": "",
       "text": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order name badges** `urgent` `id:cccccc` `mystery:7`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
       "conflicts": []
+    },
+    {
+      "why": "a lead added in the save, the impact changed in the file: both land on one rebuilt line",
+      "base": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "mine": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] [lead:: acme-studio] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "theirs": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: high] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "prefer": "",
+      "text": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: high] [lead:: acme-studio] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "conflicts": []
+    },
+    {
+      "why": "different leads set on each side is a conflict on the lead",
+      "base": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "mine": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] [lead:: acme-studio] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "theirs": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] [lead:: beta-co] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "prefer": "",
+      "text": null,
+      "conflicts": [
+        {
+          "task": "Book the venue",
+          "step": "",
+          "field": "lead"
+        }
+      ]
+    },
+    {
+      "why": "different leads set on each side is a conflict on the lead (prefer mine)",
+      "base": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "mine": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] [lead:: acme-studio] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "theirs": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] [lead:: beta-co] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "prefer": "mine",
+      "text": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] [lead:: acme-studio] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "conflicts": [
+        {
+          "task": "Book the venue",
+          "step": "",
+          "field": "lead"
+        }
+      ]
+    },
+    {
+      "why": "different leads set on each side is a conflict on the lead (prefer theirs)",
+      "base": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "mine": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] [lead:: acme-studio] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "theirs": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] [lead:: beta-co] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "prefer": "theirs",
+      "text": "# To-do\n\n## 1. Work\n\nWhat the work bucket is for.\n\n### To do\n\n- [ ] **Write the brief** [impact:: high] [effort:: M] [due:: 2026-10-30] `id:aaaaaa`\n  - Notes on the brief.\n- [ ] **Book the venue** [impact:: med] [lead:: beta-co] `id:bbbbbb`\n  - [ ] Call the venue `id:s00001`\n  - [ ] Send the deposit `id:s00002`\n    - Deposit is 10%.\n- [ ] **Order badges** `id:cccccc`\n\n### Doing\n\n\n### Done\n\n- [x] **Old thing** `done:2026-10-01` `id:dddddd`\n\n---\n\n## 2. Home\n\n### To do\n\n- [ ] **Fix the shelf** [to:: Jerome] `id:eeeeee`\n\n---\n\n## Context\n\n- Ana is away until Monday.\n",
+      "conflicts": [
+        {
+          "task": "Book the venue",
+          "step": "",
+          "field": "lead"
+        }
+      ]
     }
   ]
 }

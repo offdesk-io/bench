@@ -2449,6 +2449,8 @@
   }
   /* The same gate on a card, where the chip is Tenon's outlined `Pill`. */
   .tenon-pill.startdate{border-style:dashed; color:var(--tenon-text-faint)}
+  /* A lead chip is a link to Binder, drawn as the Pill it would be as a span. */
+  a.tenon-pill{text-decoration:none}
   /* Still what 19-drawer.js and 18-timeline.js draw a due-date chip as — they
      are not React yet, so they still write the class literally rather than
      asking cardModel() for a tone. The board's own two cards ask for the

@@ -116,6 +116,24 @@ function themeSelectHTML(value, themes, dis){
     '<div data-pick-host="f-theme"></div>';
 }
 
+/* The Lead field's inner HTML, under a `<span>Lead</span>` label in DrawerPanel.
+   What is typed is slugified by the change handler in openDrawer (leadSlug in
+   02-state.js). Open in Binder is drawn in an editable drawer and hidden until
+   there is a slug, so a change moves the link in place rather than redrawing the
+   drawer under the field. A read-only drawer shows the slug as text, and a task
+   with no slug and a locked tab has no row at all, and with no Binder set up
+   (BINDER_URL in 02-state.js) there is no row for any task. */
+function leadHref(slug){ return BINDER_URL + '/o/' + encodeURIComponent(String(slug).toLowerCase()); }
+function leadFieldHTML(slug, ro){
+  if (!BINDER_URL || (ro && !slug)) return '';
+  const link = '<a id="f-lead-open"' + (slug ? ' href="' + escAttr(leadHref(slug)) + '"' : ' hidden') +
+    ' target="_blank" rel="noopener noreferrer">Open in Binder</a>';
+  if (ro) return '<span class="dpbtn" style="cursor:default">' + esc(slug) + '</span>' + link;
+  return '<input type="text" id="f-lead" value="' + escAttr(slug) + '" placeholder="organisation slug"' +
+      ' aria-label="Lead" aria-describedby="f-lead-note">' +
+    '<span class="help" id="f-lead-note">The Binder organisation, as in ' + esc(BINDER_URL) + '/o/&lt;slug&gt;</span>' + link;
+}
+
 function dedent(lines){ return lines.map(l => l.replace(/^ {1,2}/, '')).join('\n').replace(/\n+$/, ''); }
 function indent(text){
   return text.replace(/\s+$/,'').split('\n').map(l => l.trim() === '' ? '' : '  ' + l);
@@ -941,7 +959,7 @@ const KNOWN_TAG_FIELDS = [
    is refused on one of these, since writing it into t.extra anyway would put
    a second, unread copy beside the field the board actually uses. */
 const RESERVED_TAG_KEYS = [
-  'impact', 'effort', 'due', 'time', 'start', 'done', 'to', 'theme', 'blocked-by', 'rank',
+  'impact', 'effort', 'due', 'time', 'start', 'done', 'to', 'theme', 'lead', 'blocked-by', 'rank',
   'tlrank', 'headline', 'chat', 'repeat', 'id', 'cancelled', 'archived',
   'urgent', 'week', 'doing'
 ];
@@ -1347,6 +1365,7 @@ function openDrawer(id, focusTitle){
        buckets have none, and a field offering an empty dropdown on every
        task would be a question with no answer worth asking. */
     themeHTML: bucketThemes.length || t.theme ? themeSelectHTML(t.theme, bucketThemes, dis) : null,
+    leadHTML: leadFieldHTML(t.lead, ro),
     open: key => !sectionCollapsed(key),
     /* Full width rather than sharing a grid2 with Bucket: a column name like
        "Reviewing" needs the room a slider half that wide wouldn't give its
@@ -1462,6 +1481,19 @@ function openDrawer(id, focusTitle){
     touch();
   };
   if ($('#f-theme')) $('#f-theme').onchange = e => { t.theme = e.target.value; touch(); };
+  /* The slug is written back into the field and the link moved in place: the
+     drawer is not redrawn, so the focus stays where the user moved it. */
+  if ($('#f-lead')) $('#f-lead').onchange = e => {
+    const slug = leadSlug(e.target.value);
+    e.target.value = slug;
+    t.lead = slug;
+    touch();
+    const link = $('#f-lead-open');
+    if (link) {
+      link.hidden = !slug;
+      if (slug) link.href = leadHref(slug); else link.removeAttribute('href');
+    }
+  };
   wireStepSlider('f-impact', IMPACT_STOPS, v => { t.impact = v; touch(); });
   wireStepSlider('f-effort', EFFORT_STOPS, v => { t.effort = v; touch(); });
   $('#f-urgent').onchange = e => { t.urgent = e.target.checked; touch(); };

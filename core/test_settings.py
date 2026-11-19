@@ -946,5 +946,55 @@ class ProfileTest(unittest.TestCase):
         self.assertTrue(os.path.isfile(self.op.own_profile_path(self.JEROME, self.root)))
 
 
+class BinderUrlTest(unittest.TestCase):
+    """`binder_url`: off unless set, kept without a trailing slash, and saved
+    or cleared by a save that sends it."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = self.tmp.name
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def write(self, data):
+        with open(os.path.join(self.root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump(data, fh)
+
+    def test_unset_means_no_binder(self):
+        self.assertNotIn("binder_url", settings.load(self.root))
+        self.assertEqual(settings.binder_url(self.root), "")
+
+    def test_read_without_trailing_slash(self):
+        self.write({"binder_url": " https://binder.example.com/// "})
+        self.assertEqual(settings.binder_url(self.root), "https://binder.example.com")
+
+    def test_a_value_that_is_not_a_web_address_reads_as_none(self):
+        self.write({"binder_url": "binder.example.com"})
+        self.assertEqual(settings.binder_url(self.root), "")
+
+    def test_validate_wants_a_web_address_or_nothing(self):
+        self.assertIsNone(settings.validate({"binder_url": "https://binder.example.com/"}, self.root))
+        self.assertIsNone(settings.validate({"binder_url": ""}, self.root))
+        self.assertIsNone(settings.validate({"binder_url": None}, self.root))
+        self.assertIsNotNone(settings.validate({"binder_url": "binder.example.com"}, self.root))
+        self.assertIsNotNone(settings.validate({"binder_url": "https://"}, self.root))
+        self.assertIsNotNone(settings.validate({"binder_url": 5}, self.root))
+
+    def test_save_sets_clears_and_keeps(self):
+        settings.save(self.root, {"binder_url": "https://binder.example.com/"})
+        self.assertEqual(settings.binder_url(self.root), "https://binder.example.com")
+        settings.save(self.root, {"chime": False})
+        self.assertEqual(settings.binder_url(self.root), "https://binder.example.com")
+        settings.save(self.root, {"binder_url": ""})
+        self.assertNotIn("binder_url", settings.load(self.root))
+
+    def test_a_refused_save_leaves_the_address_as_it_was(self):
+        settings.save(self.root, {"binder_url": "https://binder.example.com"})
+        _, err = settings.save(self.root, {"binder_url": "nope"})
+        self.assertIsNotNone(err)
+        self.assertEqual(settings.binder_url(self.root), "https://binder.example.com")
+
+
 if __name__ == "__main__":
     unittest.main()

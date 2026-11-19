@@ -77,7 +77,7 @@ ANY_TAG_RE = re.compile(r"\[([A-Za-z][\w-]*)::\s*([^\]]*)\]|`([A-Za-z][\w-]*):([
 SLUG_RE = re.compile(r"`#([a-z0-9][a-z0-9-]*)`", re.I)
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
-INLINE_KEYS = {"impact", "effort", "due", "time", "start", "done", "to", "theme"}
+INLINE_KEYS = {"impact", "effort", "due", "time", "start", "done", "to", "theme", "lead"}
 
 # The two old agents a task can be handed to, spelt the way `[to::]` writes them.
 # A bucket's agent is any other name ending in " agent" (agent_of). Anything else is a person. `ai:` is retired and is
@@ -103,7 +103,7 @@ class Task:
     promoted to attributes; anything else stays in `extra` exactly as written."""
 
     __slots__ = ("done", "title", "bold", "impact", "effort", "due", "time", "start", "done_on",
-                 "to", "theme", "urgent", "week", "doing", "slug", "blocked_by", "rank",
+                 "to", "theme", "lead", "urgent", "week", "doing", "slug", "blocked_by", "rank",
                  "tlrank", "headline", "chat", "repeat", "stable_id",
                  "cancelled", "archived", "created_by", "edited_by", "extra",
                  "body", "raw", "bucket", "column")
@@ -116,7 +116,7 @@ class Task:
         # to write a line back the way it was.
         self.bold = False
         self.impact = self.effort = self.due = self.time = self.start = ""
-        self.done_on = self.to = self.theme = ""
+        self.done_on = self.to = self.theme = self.lead = ""
         self.urgent = self.week = self.doing = False
         self.slug = self.headline = self.chat = self.repeat = ""
         # The task's own identity, minted once and written on the line. See
@@ -1104,7 +1104,7 @@ _INDENTED = re.compile(r"^\s+\S")
 _HEADING2 = re.compile(r"^##\s")
 
 MERGE_FIELDS = ("title", "bold", "done", "impact", "effort", "due", "time", "start", "doneOn", "to",
-                "theme", "urgent", "week", "doing", "slug", "blockedBy", "rank", "tlrank",
+                "theme", "lead", "urgent", "week", "doing", "slug", "blockedBy", "rank", "tlrank",
                 "headline", "chat", "repeat", "stableId", "cancelled", "archived", "createdBy",
                 "editedBy", "extra")
 _PY_NAME = {"doneOn": "done_on", "blockedBy": "blocked_by", "stableId": "stable_id",
@@ -1286,6 +1286,8 @@ def _mg_line(f, indent):
         tags.append("[to:: " + f["to"].strip() + "]")
     if f["theme"] and f["theme"].strip():
         tags.append("[theme:: " + f["theme"].strip() + "]")
+    if f["lead"] and f["lead"].strip():
+        tags.append("[lead:: " + f["lead"].strip() + "]")
     if f["blockedBy"]:
         tags.append("`blocked-by:" + ",".join(f["blockedBy"]) + "`")
     if f["rank"] is not None:
