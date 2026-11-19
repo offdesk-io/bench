@@ -19,6 +19,7 @@
  * old panel rather than patching it, as assigning innerHTML always did.
  */
 import { useLayoutEffect, useRef } from 'react'
+import { ToggleChip } from '@tiagopedras/tenon'
 
 /* HTML placed inside an element React has drawn empty. `where` follows
    insertAdjacentHTML: the summary of a <details> comes first, so the body goes
@@ -140,12 +141,33 @@ export interface DrawerBodyProps {
   /** Chats and Dependencies, as HTML; empty while DRAWER_HIDDEN has them off. */
   extraSideHTML: string
   historyHTML: string
+  /** A task just made with + Add task: Bucket, Due and Delegate to sit under
+   *  the title instead of inside the closed Details section. */
+  fresh?: boolean
+  /** The bucket as chips, one picked, for a new task made under the All tab.
+   *  Null keeps the Bucket dropdown. */
+  bucketChips?: { name: string; picked: boolean }[] | null
+  onBucketChip?: (name: string) => void
 }
 
 export function DrawerBody(p: DrawerBodyProps) {
   const { ro } = p
   const side = useHTML(p.extraSideHTML, 'afterbegin')
   const noteOpen = p.open('notes')
+  const bucketField = p.bucketChips ? (
+    <div className="field">
+      <span>Bucket</span>
+      <div className="bucketchips" id="f-bucket-chips">
+        {p.bucketChips.map(c => (
+          <ToggleChip
+            key={c.name} pressed={c.picked} disabled={ro}
+            onClick={() => p.onBucketChip && p.onBucketChip(c.name)}
+          >{c.name}</ToggleChip>
+        ))}
+      </div>
+    </div>
+  ) : <div className="field"><span>Bucket</span><div data-pick-host="f-bucket" /></div>
+  const delegateField = <HTMLBox className="field" html={'<span>Delegate to</span>' + p.delegateHTML} />
   return (
     <div className="dcols">
       <div className="dcol dcol-main">
@@ -153,8 +175,15 @@ export function DrawerBody(p: DrawerBodyProps) {
           <span>Title</span>
           <input type="text" id="f-title" defaultValue={p.title} disabled={ro} />
         </div>
+        {p.fresh ? (
+          <div className="dnewfields">
+            {bucketField}
+            <div id="f-dates" />
+            {delegateField}
+          </div>
+        ) : null}
         <SideSection label="Details" id="details" collapseKey="details" className="dgroup" open={p.open}>
-          <div className="field"><span>Bucket</span><div data-pick-host="f-bucket" /></div>
+          {p.fresh ? null : bucketField}
           {p.themeHTML != null ? <HTMLBox className="field" html={'<span>Theme</span>' + p.themeHTML} /> : null}
           <details className="field sugg subsec" data-collapse="notes" open={noteOpen}>
             <summary>Description</summary>
@@ -166,9 +195,9 @@ export function DrawerBody(p: DrawerBodyProps) {
             <HTMLBox className="field" html={'<span>Impact</span>' + p.impactHTML} />
             <HTMLBox className="field" html={'<span>Effort</span>' + p.effortHTML} />
           </div>
-          <HTMLBox className="field" html={'<span>Delegate to</span>' + p.delegateHTML} />
+          {p.fresh ? null : delegateField}
           {p.leadHTML ? <HTMLBox className="field" html={'<span>Lead</span>' + p.leadHTML} /> : null}
-          <div id="f-dates" />
+          {p.fresh ? null : <div id="f-dates" />}
           {p.repeat ? (
             <>
               <div className="field">

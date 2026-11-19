@@ -146,7 +146,11 @@ const state = {
      drawer's own width is — a drag the owner does once should not repeat itself. */
   tlLabelWidth: (+localStorage.getItem('bench-tl-label')) || 200,
   sort: {},           /* column name -> 'priority'; absent means the owner's own order */
-  view: 'overview',   /* the view the file opens on */
+  view: 'overview',   /* the view the file opens on; load() picks it when the URL names none, see openingView() */
+  viewFromHash: false, /* the URL named a view, which beats the remembered one */
+  /* The task a drawer was opened on straight from + Add task. Its Bucket, Due
+     and Delegate to sit under the title until another card opens. */
+  newTaskId: null,
   openTask: null,
   /* Set while the drawer shows a sub-task: the task it belongs to, which is where
      the Back button goes. openTask holds the sub-task's own id then, the six
@@ -355,7 +359,8 @@ function openChatByKey(id){
 function initViewFromHash(){
   const h = parseHash();
   const onSettings = adoptSettingsRoute(h);
-  if (!onSettings && isKnownView(h.view)) state.view = h.view;
+  if (onSettings) state.viewFromHash = true;
+  else if (isKnownView(h.view)) { state.view = h.view; state.viewFromHash = true; }
   /* A link naming another board holds its card back until /datasets.json has
      said whether that board is there: opening it on this list first would find
      the wrong card or none. See resolvePendingBoard() in 21-datasets.js. */
@@ -448,7 +453,7 @@ function leadSlug(v){
    when either changes. The PA first, since it is the one every list has. */
 const AGENT_CARDS = [
   { name: 'PA',
-    does: 'Keeps your list. Tell it in the chat what moved and it adds, moves, dates and ticks off tasks, and writes the message or agenda that goes with one.',
+    does: 'Keeps your list. Tell it what moved in Ask the PA, at the bottom of the screen, and it adds, moves, dates and ticks off tasks, and writes the message or agenda that goes with one. Hold a card first to ask about that card.',
     cannot: 'Do the work on a task, or change one you did not mention.',
     needs: 'You to say what changed, in your own words.' },
   { name: 'Bucket agents',

@@ -857,6 +857,7 @@ function renderView(){
   if (def.id === 'reports' && lastRenderedView !== 'reports') forgetWrittenReports();
   if (lastRenderedView === 'settings' && def.id !== 'settings') leaveSettingsPage();
   lastRenderedView = def.id;
+  rememberView();
   if (def.id !== 'settings') leaveAgentsView();
 
   renderViewTabs(defs);
@@ -1005,6 +1006,10 @@ function renderColTabs(columns){
   light(current());
 }
 
+function hasAnyTask(){
+  return state.doc.buckets.some(b => b.tiers.some(t => t.tasks.length));
+}
+
 function renderBoard(){
   if (state.view !== 'board') return;
   renderFilterBar();
@@ -1015,7 +1020,7 @@ function renderBoard(){
 
   const columns = boardColumns();
   board.style.setProperty('--cols', columns.length);
-  const data = columns.map(name => {
+  const data = columns.map((name, i) => {
     const isDone = name === DONE_COL;
     const mode = sortMode(name);
     let entries = [];
@@ -1075,7 +1080,12 @@ function renderBoard(){
       sort: isDone ? null : mode,
       canEdit: !(isDone || state.locked),
       canAdd: !(isDone || state.locked),
-      cards
+      cards,
+      /* Nothing on the list yet: the first column asks what is on the plate
+         and makes a task of every line. Gone with the first task. */
+      intake: i === 0 && !state.locked && !hasAnyTask()
+        ? { placeholder: 'What’s on your plate?', onSubmit: lines => lines.forEach(l => addTask(name, l)) }
+        : undefined
     };
   });
 
@@ -1292,13 +1302,19 @@ function dropTask(id, tierName, zone, clientY){
   if (state.openTask === id) openDrawer(id);
 }
 
-function addTask(tierName){
+/* `title` is given when the owner has already written it (the first-task input
+   on an empty board, one call per line): the task is made and no drawer opens. */
+function addTask(tierName, title){
   if (state.locked) return;
   const tier = ensureTier(defaultAddBucket(), tierName);
-  const t = { id: uid(), done:false, title:'New task', bold:true, impact:'', effort:'', due:'', to:'',
+  const t = { id: uid(), done:false, title: title || 'New task', bold:true, impact:'', effort:'', due:'', to:'',
               urgent:false, week:false, slug:'', blockedBy:[], rank:null, extra:[], body:[], raw:'', dirty:true };
   tier.tasks.push(t);
-  markDirty(); refreshView(); openDrawer(t.id, true);
+  markDirty(); refreshView();
+  if (title) return t;
+  state.newTaskId = t.id;
+  openDrawer(t.id, true);
+  return t;
 }
 
 /* Taking work back off Claude has to take the prompt with it.

@@ -20,7 +20,7 @@
  * `Column` gives the body a class and not props. That makes the head a valid
  * place to drop, which it was not, and puts the card at the top when it is.
  */
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { DragEvent } from 'react'
 import { Column, ColumnEmpty, DropLine } from '@tiagopedras/tenon'
 import { TaskCard, type TaskCardModel } from './TaskCard'
@@ -45,6 +45,9 @@ export interface BoardColumn {
   canEdit: boolean
   canAdd: boolean
   cards: BoardCard[]
+  /** A board with no tasks: the column holds one input, and each line typed
+   *  into it becomes a task. */
+  intake?: { placeholder: string; onSubmit: (lines: string[]) => void }
 }
 
 export interface BoardViewProps {
@@ -63,6 +66,25 @@ export interface BoardViewProps {
   onSort: (tier: string) => void
 }
 
+/* One textarea rather than an input, so a pasted list keeps its lines. Enter
+   adds them, Shift+Enter starts another line. */
+function Intake({ placeholder, onSubmit }: { placeholder: string; onSubmit: (lines: string[]) => void }) {
+  const [text, setText] = useState('')
+  const submit = () => {
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    if (!lines.length) return
+    setText('')
+    onSubmit(lines)
+  }
+  return (
+    <textarea
+      className="intake" rows={2} value={text} placeholder={placeholder} aria-label={placeholder}
+      onChange={e => setText(e.target.value)}
+      onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); submit() } }}
+    />
+  )
+}
+
 const PENCIL = 'M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 000-1.41l-2.34-2.34a1 1 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z'
 
 export function BoardView(props: BoardViewProps) {
@@ -79,7 +101,11 @@ export function BoardView(props: BoardViewProps) {
      fires dragend on the original element, the card has already moved to a
      different column's DOM subtree and dragend never reaches it, leaving
      dragging stuck on an id that no longer needs it. */
-  const clearAll = () => { clear(); setDragging(null) }
+  const clearAll = () => { cancelFade(); clear(); setDragging(null) }
+  /* The fade waits a frame (below). A drag that ends inside that frame must
+     not have it land afterwards and leave the card faded for good. */
+  const fade = useRef(0)
+  const cancelFade = () => { cancelAnimationFrame(fade.current); fade.current = 0 }
 
   return (
     <>
@@ -100,9 +126,10 @@ export function BoardView(props: BoardViewProps) {
               onDragStart(e, id)
               /* After the browser has taken its drag image: fading the card in
                  the handler would fade the picture of it too. */
-              requestAnimationFrame(() => setDragging(id))
+              cancelFade()
+              fade.current = requestAnimationFrame(() => { fade.current = 0; setDragging(id) })
             }}
-            onDragEnd={(e, id) => { setDragging(null); clear(); onDragEnd(e, id) }}
+            onDragEnd={(e, id) => { cancelFade(); setDragging(null); clear(); onDragEnd(e, id) }}
           />
         ))
         if (line && line.tier === col.tier) {
@@ -161,7 +188,7 @@ export function BoardView(props: BoardViewProps) {
               <button className="addbtn" data-add={col.tier} onClick={() => onAdd(col.tier)}>+ Add task</button>
             ) : undefined}
             {...drop}
-            children={col.cards.length ? cards : <ColumnEmpty>Nothing here</ColumnEmpty>}
+            children={col.intake ? <Intake {...col.intake} /> : col.cards.length ? cards : <ColumnEmpty>Nothing here</ColumnEmpty>}
           />
         )
       })}
