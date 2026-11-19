@@ -784,6 +784,44 @@ const drawerChat = await evalJS(`
 `)
 check('the drawer no longer offers New chat with this task (DRAWER_HIDDEN.chatwith)', !drawerChat.shown, JSON.stringify(drawerChat))
 
+/* ---- the reply chime's notification ---- */
+const note = await evalJS(`(async () => {
+  const real = { run: chatRunStripped, focus: focusChatWin, nf: window.Notification, wf: window.focus };
+  const notes = [], focused = [];
+  window.Notification = class {
+    static permission = 'default';
+    static requestPermission () { window.Notification.permission = 'granted'; return Promise.resolve('granted'); }
+    constructor (title, o) { this.title = title; this.body = (o && o.body) || ''; notes.push(this); }
+    close () { this.closed = true; }
+  };
+  window.focus = () => { notes.winFocus = true; };
+  focusChatWin = i => { focused.push(i); };
+  chatRunStripped = async function* () { yield JSON.stringify({ type: 'result', result: 'ok', session_id: '' }); };
+  const inst = openChatWin('', 'zzzzzz', '', '');
+  await new Promise(r => setTimeout(r, 200));
+  focused.length = 0;
+  const ta = document.querySelector('.aic-box .aic-input');
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, 'Summarise the week');
+  ta.dispatchEvent(new Event('input', { bubbles: true }));
+  await new Promise(r => setTimeout(r, 50));
+  document.querySelector('.aic-box .aic-send').click();
+  for (let i = 0; i < 60 && !notes.length; i++) await new Promise(r => setTimeout(r, 50));
+  const out = { permission: Notification.permission, n: notes.length, title: notes[0] && notes[0].title, body: notes[0] && notes[0].body };
+  if (notes[0]) notes[0].onclick();
+  out.clicked = { closed: !!(notes[0] && notes[0].closed), winFocus: !!notes.winFocus, front: focused[focused.length - 1] === inst };
+  const was = chimeAllowed; chimeAllowed = false;
+  notifyChime('done', 'quiet', () => {});
+  chimeAllowed = was;
+  out.silent = notes.length === 1;
+  chatRunStripped = real.run; focusChatWin = real.focus; window.Notification = real.nf; window.focus = real.wf;
+  inst.closeChat();
+  return out;
+})()`)
+check('a finished chat reply raises "Bench: reply finished" with the first words as its title',
+  note.permission === 'granted' && note.n === 1 && note.title === 'Bench: reply finished' && note.body === 'Summarise the week', JSON.stringify(note))
+check('  clicking it focuses the tab, brings that chat forward and closes it', note.clicked && note.clicked.closed && note.clicked.winFocus && note.clicked.front, JSON.stringify(note.clicked))
+check('  and with the chime off there is no notification', note.silent === true)
+
 const errs = await evalJS(`window.__errs || 0`)
 console.log(`\n${checks.filter(Boolean).length}/${checks.length} passed`)
 ws.close(); chrome.kill()

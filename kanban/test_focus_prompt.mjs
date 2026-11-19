@@ -130,6 +130,16 @@ await evalJS(`(() => {
   state.doc.buckets.forEach(b => b.tiers.forEach(t => t.tasks.forEach(k => { if (ids[k.title]) k.id = ids[k.title]; })));
   /* The test server may have no Claude CLI behind it: the board is told there
      is one. Nothing is saved: saveFile is a no-op and the file never moves. */
+  /* Headless has no notifications: a stand-in that records them. */
+  window.__notes = [];
+  window.__opened = [];
+  window.Notification = class {
+    static permission = 'default';
+    static requestPermission () { window.Notification.permission = 'granted'; return Promise.resolve('granted'); }
+    constructor (title, o) { this.title = title; this.body = (o && o.body) || ''; window.__notes.push(this); }
+    close () { this.closed = true; }
+  };
+  openTaskByKey = k => { window.__opened.push(k); return true; };
   chat.available = () => true;
   saveFile = async () => { state.dirty = false; };
   diskVersion = async () => ({ stamp: '', hash: '' });
@@ -300,6 +310,13 @@ await evalJS(`(() => {
 })()`)
 check('Done shows the done: line', await until(`${P}.querySelector('.focus-prompt__status--done .focus-prompt__line') &&
   ${P}.querySelector('.focus-prompt__line').textContent === 'Moved Beta to Doing'`), await evalJS(`${P} && ${P}.querySelector('.focus-prompt__line').textContent`))
+check('the first send asked for notification permission', await evalJS(`Notification.permission === 'granted'`))
+check('a list-level reply raises "Bench: reply finished" with the words it started from', await evalJS(
+  `__notes.length === 2 && __notes[0].title === 'Bench: reply finished' && __notes[0].body === 'What is due this week?'`), await evalJS(`JSON.stringify(__notes.map(n => [n.title, n.body]))`))
+check('a finished card reply raises "Bench: reply finished" naming the card', await evalJS(
+  `__notes[1].title === 'Bench: reply finished' && __notes[1].body === 'Beta'`))
+await evalJS(`window.focus = () => { window.__focused = true }; __notes[1].onclick()`)
+check('  clicking it opens that card and closes the notification', await evalJS(`__opened.length === 1 && __opened[0] === 'bd0002' && __notes[1].closed === true && window.__focused === true`), await evalJS(`JSON.stringify(__opened)`))
 check('  green, with a check in the avatar', await evalJS(`(() => {
   const s = ${P}.querySelector('.focus-prompt__status');
   return getComputedStyle(s).backgroundColor === 'rgb(4, 41, 19)' &&
@@ -353,6 +370,15 @@ await key('Enter')
 check('a failed run shows its error in muted red', await until(`${P} && ${P}.querySelector('.focus-prompt__status--error') &&
   ${P}.querySelector('.focus-prompt__line').textContent === 'The helper is not running' &&
   getComputedStyle(${P}.querySelector('.focus-prompt__line')).color === 'rgb(217, 139, 134)'`))
+check('a failed run raises "Bench: reply failed" naming the card', await evalJS(
+  `__notes.length > 0 && __notes[__notes.length - 1].title === 'Bench: reply failed' && __notes[__notes.length - 1].body === 'Gamma'`), await evalJS(`JSON.stringify(__notes.map(n => [n.title, n.body]))`))
+check('with the chime switched off there is no notification either', await evalJS(`(() => {
+  const was = chimeAllowed; chimeAllowed = false;
+  const n = __notes.length;
+  notifyChime('done', 'quiet', () => {});
+  chimeAllowed = was;
+  return __notes.length === n;
+})()`))
 check('  and goes back to Idle', await until(`${P} && !!${P}.querySelector('textarea')`, 5500))
 await key('Escape')
 await until(`!${P}`)

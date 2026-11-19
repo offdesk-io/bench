@@ -777,7 +777,13 @@ function reapChatWins(){
    Every chat that replies plays a short sound when the reply is over: a soft
    two-note rise for done, one low note for an error or a stop. Drawn with Web
    Audio, so no file ships. Settings > Chime switches it off (`chime` in
-   data/settings.json). The setting is read once; saving Settings reloads the page. */
+   data/settings.json). The setting is read once; saving Settings reloads the page.
+
+   Each chime is paired with a browser notification (notifyChime), so a reply
+   that finishes while the tab is behind another window can still be seen. It
+   asks for permission once, on a send (a user gesture), and does nothing when
+   that is refused or the browser has no Notification. Clicking it brings the
+   tab and then the chat or card the reply belongs to to the front. */
 let chimeCtx = null, chimeAllowed = null;
 
 function chimeOn(){
@@ -810,6 +816,22 @@ function playChime(kind){
       osc.stop(t0 + at + 0.55);
     }
   } catch (e) { /* no sound is not worth a broken reply */ }
+}
+
+function askNotifyPermission(){
+  if (!chimeOn() || typeof Notification === 'undefined' || Notification.permission !== 'default') return;
+  try { Notification.requestPermission(); } catch (e) { /* refused or unsupported: the chime still plays */ }
+}
+
+function notifyChime(kind, body, onClick){
+  if (!chimeOn() || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  try {
+    const n = new Notification(kind === 'done' ? 'Bench: reply finished' : 'Bench: reply failed', { body: body || '' });
+    n.onclick = () => {
+      try { window.focus(); if (onClick) onClick(); } catch (e) { /* nothing to bring forward */ }
+      n.close();
+    };
+  } catch (e) { /* a notification is not worth a broken reply */ }
 }
 
 /* Wraps a window's run so the chime knows how it ended: an error line, a
@@ -872,7 +894,7 @@ function makeChatWin(newFor){
   let inst;
   // How the last run ended, and whether the window was running at its last
   // change: a change from running to not is the reply finishing.
-  let lastEnd = 'done', wasRunning = false;
+  let lastEnd = 'done', wasRunning = false, lastTitle = '';
   // Set when a message goes out on the PA's key and cleared once the run it
   // started has ended — see "The PA panel" below. A PA conversation the focus
   // prompt started can be opened again as a window, through a `#!chat=` link,
@@ -901,12 +923,25 @@ function makeChatWin(newFor){
     onSessionsChanged,
     mentions: taskMentions,
     onSend: p => {
+      lastTitle = chatOwnerLabel(p.key) || String(p.ask || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      askNotifyPermission();
       if (p.key === PA_KEY) { paWaiting = { ask: p.ask || '' }; paBeforeSend(); }
       onPromptRunSend(p);
+      // Last, so a throw above cannot leave it set with no run behind it. The
+      // run starts straight after this. The engine tells the host about a
+      // change only when a session list loads, which a resumed session never
+      // triggers mid-run, so the start is noted here.
+      wasRunning = true;
     },
     onChange: () => {
       const running = inst.running();
-      if (wasRunning && !running) playChime(lastEnd);
+      if (wasRunning && !running) {
+        playChime(lastEnd);
+        notifyChime(lastEnd, lastTitle, () => {
+          if (inst.dockState() === 'minimised') inst.expand();
+          if (inst.isOpen()) focusChatWin(inst);
+        });
+      }
       wasRunning = running;
       if (paWaiting && !inst.running()) { const sent = paWaiting; paWaiting = null; paAfterReply(inst, sent); }
       reapChatWins(); onChatChange();

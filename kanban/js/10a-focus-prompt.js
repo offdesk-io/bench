@@ -229,6 +229,7 @@ function fpSend(text){
   if (!c || c.phase !== 'idle' || !words || !claudeOn()) return;
   const ask = fpReference(c) + '\n\n' + words;
   const prompt = c.session ? ask + '\n\n' + PA_STATUS_AGAIN : paPreface(ask);
+  askNotifyPermission();
   if (!c.title) c.title = words.replace(/\s+/g, ' ').slice(0, 60) + (words.length > 60 ? '…' : '');
   clearTimeout(c.timer);
   Object.assign(c, { phase: 'working', line: 'Working on it…', time: fpClock(), fading: false });
@@ -270,7 +271,10 @@ async function fpRun(c, prompt, ask, words){
   } catch (e) {
     err = (e && e.message) || String(e);
   }
-  if (err) { playChime('error'); fpSettleLater(c, 'error', err, []); return; }
+  // A list-level prompt has no chip and no card to open: the notice carries the
+  // words the question started with, and a click only brings the tab forward.
+  const noteTitle = c.chip ? c.chip.title : c.title, open = () => { if (c.key) openTaskByKey(c.key); };
+  if (err) { playChime('error'); notifyChime('error', noteTitle, open); fpSettleLater(c, 'error', err, []); return; }
 
   const before = fpSnapshot();
   try { await paAfterReply(null, { ask, session: c.session }, reply); } catch (e) { /* the status line has it */ }
@@ -279,6 +283,7 @@ async function fpRun(c, prompt, ask, words){
   const held = typeof BoardUI !== 'undefined' && BoardUI.focusedElement();
   if (held && !held.isConnected) BoardUI.endFocus();
   playChime('done');
+  notifyChime('done', noteTitle, open);
   fpSettleLater(c, 'done', paStatusLines(reply).done || 'Done', fpChanges(before));
 }
 
