@@ -2694,6 +2694,9 @@
      distance. Its Description is a subsection like the others. */
   details.sugg.dgroup::details-content{gap:var(--tenon-dimension-150)}
   details.sugg.dgroup > .sugg.subsec{margin-top:0}
+  /* A new task's Bucket, Due and Delegate to, straight under its title. */
+  .dnewfields{display:flex; flex-direction:column; gap:var(--tenon-dimension-150)}
+  textarea.intake{width:100%; box-sizing:border-box; resize:vertical; font:inherit; padding:8px 10px; border-radius:var(--tenon-radius-md); border:1px solid var(--tenon-stroke-default); background:var(--tenon-background-raised); color:inherit}
   /* A file is being dragged over the Files section. */
   details.sugg.dropping{outline:2px dashed var(--tenon-stroke-accent); outline-offset:2px; background:var(--tenon-background-accent)}
   /* Start a project and Use an existing folder, side by side in Files. */
@@ -2808,7 +2811,7 @@
      (urgent, week, #slug, blocked-by — all edited properly elsewhere already)
      drops the pointer cursor and the hover state so it doesn't invite a click
      that does nothing. */
-  .tagchips{display:flex; flex-wrap:wrap; gap:6px}
+  .tagchips, .bucketchips{display:flex; flex-wrap:wrap; gap:6px}
 
   .dgrip{position:absolute; left:-3px; top:0; bottom:0; width:9px; cursor:col-resize; z-index:2}
   .dgrip::after{content:""; position:absolute; left:3px; top:0; bottom:0; width:3px; background:transparent; transition:background .12s}

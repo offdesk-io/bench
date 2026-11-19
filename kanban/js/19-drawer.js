@@ -1245,6 +1245,7 @@ function openDrawer(id, focusTitle){
     return;
   }
   state.openTask = id;
+  if (state.newTaskId !== id) state.newTaskId = null;
   state.openSubParent = null;
   /* Drawn under an open sub-task (see openSubtaskDrawer), the task's own panel
      is only being brought up to date behind it, so the second panel stays. */
@@ -1253,6 +1254,7 @@ function openDrawer(id, focusTitle){
   // A backup preview opens the same panel to look at a task, but nothing in it
   // may change — every field below is disabled and nothing is wired to it.
   const ro = state.locked;
+  const fresh = state.newTaskId === id && !ro;
   // Same list as the board, Done included: a ticked-off task is in the Done
   // column there, so the panel says the same thing rather than hiding it in a
   // tick box that has nothing to do with the other columns.
@@ -1292,7 +1294,7 @@ function openDrawer(id, focusTitle){
      The help line truncates rather than wrapping when the drawer is narrow, and
      the read-only one is the sentence worth reading. */
   mountDrawerHead({
-    title: ro ? 'View task (read-only)' : 'Edit task',
+    title: ro ? 'View task (read-only)' : fresh && t.title === 'New task' ? 'New task' : 'Edit task',
     help: (ro ? 'Read-only — from a backup, nothing here can be changed.' : 'Changes save automatically') +
           (authorLong(t) ? ' · ' + authorLong(t) : ''),
     headline: {
@@ -1360,6 +1362,12 @@ function openDrawer(id, focusTitle){
     key: drawerSeq,
     ro,
     title: t.title,
+    fresh,
+    /* Under the All tab nothing says which bucket a new task belongs in, so the
+       buckets are laid out as chips with the one it was filed in picked. The
+       format has no task without a bucket, which is why one is picked at once. */
+    bucketChips: fresh && allMode() ? state.doc.buckets.map(b => ({ name: b.name, picked: b === loc.bucket })) : null,
+    onBucketChip: name => PICK_SPECS['f-bucket'].onPick(name),
     /* Only when the bucket has declared themes, or the task already carries
        one the bucket no longer does (see themeSelectHTML above) — most
        buckets have none, and a field offering an empty dropdown on every
@@ -1438,7 +1446,10 @@ function openDrawer(id, focusTitle){
   if (!ro) {
   const touch = () => { t.dirty = true; markDirty(); refreshView(); };
 
-  $('#f-title').oninput  = e => { t.title = e.target.value; touch(); };
+  $('#f-title').oninput  = e => {
+    t.title = e.target.value; touch();
+    if (fresh) $('#drawerTitle').textContent = t.title && t.title !== 'New task' ? 'Edit task' : 'New task';
+  };
   $('#f-to').onchange = e => {
     const was = agentOf(t.to);
     if (e.target.value === NOT_SET_UP) {
