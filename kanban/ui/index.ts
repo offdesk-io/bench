@@ -80,7 +80,7 @@ export type { TaskCardProps, TaskCardModel, Chip, CardProgress } from './TaskCar
 export { BoardView } from './BoardView'
 export type { BoardViewProps, BoardColumn, BoardCard } from './BoardView'
 export { ColumnFilter } from './ColumnFilter'
-/* The header's view tabs, on Tenon's SegmentedControl since 26 Sep 2026. */
+/* The top bar, Tenon's AppHeader with the view tabs as links, since 19 Nov 2026. */
 export { ViewTabs } from './ViewTabs'
 export type { ViewTabsProps, ViewTabDef } from './ViewTabs'
 /* The headline, bucket and theme strips, filter chips and the phone's column
