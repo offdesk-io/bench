@@ -400,6 +400,286 @@ with tempfile.TemporaryDirectory() as data:
     check("calendar: and goes out the next working day as overdue",
           [(t, b) for t, _, b in got if b == "pt"], [("pt task", "pt")])
 
+# Snooze. alerter is a fake process here: each spawn records its arguments and
+# blocks in communicate() until its gate is set, as alerter blocks until the
+# alert is answered. Nothing starts the real one.
+from unittest import mock  # noqa: E402
+
+
+class FakeAlerter:
+    def __init__(self, reply="", hold=False, code=0):
+        self.reply, self.calls, self.gate, self.code = reply, [], threading.Event(), code
+        if not hold:
+            self.gate.set()
+
+    def __call__(self, args, **kw):
+        self.calls.append(args)
+        fake = self
+
+        class Proc:
+            returncode = fake.code
+
+            def communicate(self):
+                fake.gate.wait(5)
+                return fake.reply, None
+        return Proc()
+
+
+def settle():
+    for th in threading.enumerate():
+        if th.name == "alert-answer":
+            th.join(5)
+
+
+def pressed(label):
+    return json.dumps({"activationType": "actionClicked", "activationValue": label})
+
+
+saved_home = os.environ.get("NOTIFY_HOME")
+with tempfile.TemporaryDirectory() as data:
+    os.environ["NOTIFY_HOME"] = os.path.join(data, "no-notifier")
+    wdir = os.path.join(data, "work")
+    os.makedirs(wdir)
+    q = os.path.join(wdir, notify_due.QUEUE_FILE)
+
+    def write_todo(*lines):
+        with open(os.path.join(wdir, "todo.md"), "w") as fh:
+            fh.write(doc(*lines))
+
+    def tick_at(now, poster, retries=None):
+        return notify_due.run_tick(data, ["work"], now, working, poster, retries=retries, log=lambda *a: None)
+
+    def snoozer(fake, now, opened=None):
+        return notify_due.make_poster(data, BASE, "/no/terminal-notifier", "/fake/alerter", lambda *a: None,
+                                      spawn=fake, clock=lambda: now,
+                                      opener=opened.append if opened is not None else None)
+
+    # A held line stays where it is and does not count against the three.
+    notify_due._write_queue(q, [{"title": "Later", "body": "l", "not_before": "2026-10-27T11:00:00"},
+                                {"title": "A", "body": "a"}, {"title": "B", "body": "b"}, {"title": "C", "body": "c"}])
+    check("not before: a held line is passed over, and the three behind it go",
+          [m[0] for _, m in notify_due.queue_batch(wdir, "work", at(TUE, "10:59"))], ["A", "B", "C"])
+    check("not before: and goes once its time comes",
+          [m[0] for _, m in notify_due.queue_batch(wdir, "work", at(TUE, "11:00"))], ["Later", "A", "B"])
+    notify_due._write_queue(q, [{"title": "Bad", "body": "b", "not_before": "soon"},
+                                {"title": "Zoned", "body": "z", "not_before": "2099-01-01T00:00:00+00:00"}])
+    check("not before: a time that cannot be read or carries a zone holds nothing",
+          [m[0] for _, m in notify_due.queue_batch(wdir, "work", at(TUE, "10:00"))], ["Bad", "Zoned"])
+    notify_due._write_queue(q, [{"title": "Evening", "body": "e", "not_before": "2026-10-27T20:30:00"}])
+    check("not before: past 20:00 it waits for the next window",
+          (len(notify_due.queue_batch(wdir, "work", at(TUE, "20:00"))),
+           len(notify_due.queue_batch(wdir, "work", at(D(2026, 10, 28), "08:30")))), (0, 1))
+
+    # The alert: three buttons, the board's link opened by hand, the group and sound passed on.
+    fake = FakeAlerter()
+    with mock.patch.dict(os.environ, {"BENCH_NOTIFY_SOUND": "Glass"}):
+        snoozer(fake, at(TUE, "10:00"))("T", "b", "k1", None, "2026-10-27|k1|due", "work")
+    settle()
+    args = fake.calls[0]
+    check("alert: title and message first", args[:5], ["/fake/alerter", "--title", "T", "--message", "b"])
+    check("alert: Snooze 1h, Tomorrow and Dismiss",
+          (args[args.index("--actions") + 1], args[args.index("--close-label") + 1]), ("Snooze 1h,Tomorrow", "Dismiss"))
+    check("alert: grouped, with its sound, read as JSON",
+          (args[args.index("--group") + 1], args[args.index("--sound") + 1], "--json" in args, "-open" in args),
+          ("2026-10-27|k1|due", "Glass", True, False))
+    fake = FakeAlerter()
+    with mock.patch.dict(os.environ, {"BENCH_NOTIFY_SOUND": "0"}):
+        snoozer(fake, at(TUE, "10:00"))("T", "b", None, None, None, "work")
+    settle()
+    check("alert: BENCH_NOTIFY_SOUND=0 mutes it", "--sound" in fake.calls[0], False)
+    opened = []
+    snoozer(FakeAlerter(json.dumps({"activationType": "contentsClicked"})), at(TUE, "10:00"), opened)(
+        "T", "b", "k1", None, None, "work")
+    settle()
+    check("alert: pressing it opens the card on its board", opened, [BASE + "#!board=work!task=k1"])
+    check("alert: the plain answers are read too",
+          [notify_due.answer(x) for x in ("Tomorrow\n", "@CONTENTCLICKED", "@CLOSED", "", None)],
+          ["Tomorrow", "open", None, None, None])
+
+    # A queued line snoozed for an hour goes back on its queue, held, with its link.
+    notify_due._write_queue(q, [{"title": "Plan agent", "body": "3 plans", "task": "k1", "view": "plans"}])
+    check("queue snooze: posted", tick_at(at(TUE, "10:00"), snoozer(FakeAlerter(pressed("Snooze 1h")), at(TUE, "10:00"))), 1)
+    settle()
+    check("queue snooze: back on the queue, held for an hour",
+          [(e["title"], e["body"], e["task"], e["view"], e["not_before"]) for e in json.load(open(q))],
+          [("Plan agent", "3 plans", "k1", "plans", "2026-10-27T11:00:00")])
+    seen = []
+    tick_at(at(TUE, "10:30"), lambda *a: seen.append(a[0]) or (True, ""))
+    tick_at(at(TUE, "11:00"), lambda *a: seen.append(a[0]) or (True, ""))
+    check("queue snooze: posted again once the hour is up, not before", seen, ["Plan agent"])
+    notify_due._write_queue(q, [{"title": "Night", "body": "n"}])
+    tick_at(at(TUE, "19:50"), snoozer(FakeAlerter(pressed("Tomorrow")), at(TUE, "19:50")))
+    settle()
+    check("queue snooze: Tomorrow is 09:00 the next day", [e["not_before"] for e in json.load(open(q))],
+          ["2026-10-28T09:00:00"])
+    for reply in (json.dumps({"activationType": "closed", "activationValue": "Dismiss"}), "@TIMEOUT", "garbage"):
+        notify_due._write_queue(q, [{"title": "Gone", "body": "g"}])
+        tick_at(at(TUE, "10:00"), snoozer(FakeAlerter(reply), at(TUE, "10:00")))
+        settle()
+        check("queue snooze: %s puts nothing back" % reply[:30], json.load(open(q)), [])
+
+    # A due banner snoozed for an hour: its own entry in notify-state.json, out again at the time.
+    write_todo("- [ ] **Call Ana** [due:: 2026-10-27] [time:: 15:00]")
+    tick_at(at(TUE, "15:00"), snoozer(FakeAlerter(pressed("Snooze 1h")), at(TUE, "15:02")))
+    settle()
+    state = json.load(open(os.path.join(wdir, notify_due.STATE_FILE)))
+    check("due snooze: the banner is fired, and snoozed in the state file",
+          (state["fired"], state["snoozed"]),
+          (["2026-10-27|Call Ana|due"], [{"key": "2026-10-27|Call Ana|due", "ident": "Call Ana", "at": "2026-10-27T16:02:00",
+                                         "title": "Call Ana", "body": "Due 15:00 · Work", "task": "Call Ana"}]))
+    check("due snooze: the next banner is the snoozed one",
+          notify_due.next_banner(data, ["work"], at(TUE, "15:30"), working), at(TUE, "16:02"))
+    got = []
+    tick_at(at(TUE, "16:01"), lambda *a: got.append(a) or (True, ""))
+    check("due snooze: nothing before its time", got, [])
+    tick_at(at(TUE, "16:02"), lambda *a: got.append(a) or (True, ""))
+    check("due snooze: out again, grouped with the banner it came from",
+          got, [("Call Ana", "Due 15:00 · Work", "Call Ana", None, "2026-10-27|Call Ana|due", "work")])
+    check("due snooze: then gone from the state", "snoozed" in json.load(open(os.path.join(wdir, notify_due.STATE_FILE))), False)
+    tick_at(at(TUE, "16:10"), lambda *a: got.append(a) or (True, ""))
+    check("due snooze: and not again", len(got), 1)
+
+    # The state file has two writers; neither loses the other's half.
+    notify_due.snooze_due(wdir, "2026-10-27|Call Ana|due", "Call Ana", "b", "Call Ana", at(TUE, "17:00"), TUE)
+    notify_due.write_state(wdir, {"2026-10-27|Call Ana|due", "2026-10-27|Other|due"}, TUE)
+    state = json.load(open(os.path.join(wdir, notify_due.STATE_FILE)))
+    check("state: writing fired keeps the snoozes", ([s["at"] for s in state["snoozed"]], len(state["fired"])),
+          (["2026-10-27T17:00:00"], 2))
+    notify_due.snooze_due(wdir, "2026-10-27|Call Ana|due", "Call Ana", "b", "Call Ana", at(TUE, "18:00"), TUE)
+    check("state: snoozing a banner again replaces its entry",
+          [s["at"] for s in notify_due.read_snoozed(wdir)], ["2026-10-27T18:00:00"])
+
+    # Done by then: the snooze is spent, unposted.
+    write_todo("- [x] **Call Ana** [due:: 2026-10-27] [time:: 15:00] `done:2026-10-27`")
+    got = []
+    tick_at(at(TUE, "18:00"), lambda *a: got.append(a) or (True, ""))
+    check("due snooze: an item done meanwhile is not announced", (got, notify_due.read_snoozed(wdir)), ([], []))
+    notify_due.snooze_due(wdir, "2026-10-27|Call Ana|due", "Call Ana", "b", "Call Ana", at(TUE, "18:00"), TUE)
+    check("due snooze: kept while the list cannot be read",
+          (notify_due.run_tick(data, ["work"], at(TUE, "18:10"), working, lambda *a: (True, ""),
+                               read_text=lambda p: None), len(notify_due.read_snoozed(wdir))), (0, 1))
+
+    # Tomorrow on a due banner lands at 09:00 with the overdue one: only one goes out.
+    os.remove(os.path.join(wdir, notify_due.STATE_FILE))
+    write_todo("- [ ] **Report** [due:: 2026-10-27]")
+    tick_at(at(TUE, "09:00"), snoozer(FakeAlerter(pressed("Tomorrow")), at(TUE, "09:05")))
+    settle()
+    check("due snooze: Tomorrow is 09:00 the next day", [s["at"] for s in notify_due.read_snoozed(wdir)],
+          ["2026-10-28T09:00:00"])
+    got = []
+    tick_at(at(D(2026, 10, 28), "09:00"), lambda *a: got.append(a[1]) or (True, ""))
+    check("due snooze: the overdue banner says it, the snooze is spent",
+          (got, notify_due.read_snoozed(wdir)), (["Overdue since Tue 27 Oct · Work"], []))
+
+    # alerter blocks until answered: the tick and the queue's lock do not wait for it.
+    notify_due._write_queue(q, [{"title": "Waiting", "body": "w"}])
+    fake = FakeAlerter(pressed("Snooze 1h"), hold=True)
+    started = time.time()
+    check("non-blocking: the tick posts", tick_at(at(TUE, "10:00"), snoozer(fake, at(TUE, "10:00"))), 1)
+    check("non-blocking: and returns with the alert still up", time.time() - started < 1, True)
+    free = threading.Event()
+
+    def take_lock():
+        with notify_due.queue_lock(q):
+            free.set()
+    threading.Thread(target=take_lock).start()
+    check("non-blocking: the queue's lock is free while it waits", free.wait(1), True)
+    fake.gate.set()
+    settle()
+    check("non-blocking: the snooze lands when the answer comes",
+          [(e["title"], e["not_before"]) for e in json.load(open(q))], [("Waiting", "2026-10-27T11:00:00")])
+
+    # alerter that will not start: the line stays, to be tried again.
+    def broken(args, **kw):
+        raise OSError("no such file")
+    notify_due._write_queue(q, [{"title": "Keep", "body": "k"}])
+    logs = []
+    notify_due.run_tick(data, ["work"], at(TUE, "12:00"), working,
+                        notify_due.make_poster(data, BASE, None, "/gone/alerter", logs.append, spawn=broken),
+                        retries={}, log=logs.append)
+    check("alerter missing at post time: the line stays", [e["title"] for e in json.load(open(q))], ["Keep"])
+    check("alerter missing at post time: said once", logs, ["notify: Keep failed: could not run alerter: no such file"])
+
+    # No alerter: terminal-notifier as before, with no snooze.
+    notify_due._write_queue(q, [{"title": "Plain", "body": "p", "task": "k1"}])
+    with mock.patch.object(notify_due.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+        tick_at(at(TUE, "12:30"), notify_due.make_poster(data, BASE, "/bin/terminal-notifier", None, lambda *a: None))
+    args = run.call_args[0][0]
+    check("fallback: terminal-notifier, linked to the card",
+          (args[:5], args[args.index("-open") + 1]),
+          (["/bin/terminal-notifier", "-title", "Plain", "-message", "p"], BASE + "#!board=work!task=k1"))
+    check("fallback: no buttons, and the line is gone", ("--actions" in args, json.load(open(q))), (False, []))
+    with mock.patch.object(notify_due.sys, "platform", "darwin"), \
+            mock.patch.object(notify_due, "find_notifier", return_value=None), \
+            mock.patch.object(notify_due, "find_alerter", return_value="/opt/homebrew/bin/alerter"), \
+            mock.patch.dict(os.environ, {"BENCH_NOTIFY": "1"}):
+        check("enabled: alerter alone is enough", notify_due.enabled(), True)
+    with mock.patch.object(notify_due.sys, "platform", "darwin"), \
+            mock.patch.object(notify_due, "find_notifier", return_value=None), \
+            mock.patch.object(notify_due, "find_alerter", return_value=None):
+        check("enabled: neither is off", notify_due.enabled(), False)
+
+    # Tomorrow skips to the board's next working day, by the board's own calendar.
+    def on_calendar(fake, now, days=working):
+        return notify_due.make_poster(data, BASE, "/no/terminal-notifier", "/fake/alerter", lambda *a: None,
+                                      working_for=lambda board: days, spawn=fake, clock=lambda: now)
+    os.remove(os.path.join(wdir, notify_due.STATE_FILE))
+    write_todo("- [ ] **Friday job** [due:: 2026-10-30]")
+    tick_at(at(FRI, "09:00"), on_calendar(FakeAlerter(pressed("Tomorrow")), at(FRI, "17:00")))
+    settle()
+    check("tomorrow: a Friday's due banner skips the weekend and the board's holiday Monday",
+          [s["at"] for s in notify_due.read_snoozed(wdir)], ["2026-11-03T09:00:00"])
+    got = []
+    tick_at(at(SAT, "09:00"), lambda *a: got.append(a[0]) or (True, ""))
+    check("tomorrow: so Saturday stays quiet", got, [])
+    notify_due._write_queue(q, [{"title": "Agent", "body": "a"}])
+    tick_at(at(FRI, "17:00"), on_calendar(FakeAlerter(pressed("Tomorrow")), at(FRI, "17:00")))
+    settle()
+    check("tomorrow: a queued line on a Friday waits for the board's next working day",
+          [e["not_before"] for e in json.load(open(q))], ["2026-11-03T09:00:00"])
+    notify_due._write_queue(q, [])
+    check("tomorrow: with no board calendar, the default one (Fri to Mon)",
+          notify_due.snooze_until("Tomorrow", at(FRI, "17:00"), notify_due._default_working), at(D(2026, 11, 2), "09:00"))
+    check("tomorrow: with no day test at all, the plain next day",
+          notify_due.snooze_until("Tomorrow", at(FRI, "17:00")), at(SAT, "09:00"))
+
+    # An alerter that starts and then fails, with no answer: posted once through terminal-notifier.
+    os.remove(os.path.join(wdir, notify_due.STATE_FILE))
+    write_todo("- [ ] **Call Ana** [due:: 2026-10-27] [time:: 15:00]")
+    logs = []
+    failing = notify_due.make_poster(data, BASE, "/bin/terminal-notifier", "/fake/alerter", logs.append,
+                                     spawn=FakeAlerter("", code=1), clock=lambda: at(TUE, "15:00"))
+    with mock.patch.object(notify_due.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
+        tick_at(at(TUE, "15:00"), failing)
+        settle()
+    args = run.call_args[0][0]
+    check("alerter fails: one terminal-notifier banner, grouped and linked",
+          (run.call_count, args[:5], args[args.index("-group") + 1], args[args.index("-open") + 1]),
+          (1, ["/bin/terminal-notifier", "-title", "Call Ana", "-message", "Due 15:00 · Work"],
+           "2026-10-27|Call Ana|due", BASE + "#!board=work!task=Call%20Ana"))
+    check("alerter fails: said in the log", "notify: alerter exit 1 with no answer" in logs, True)
+    check("alerter fails: the banner counts as sent, so it is not posted again",
+          notify_due.read_state(wdir), {"2026-10-27|Call Ana|due"})
+    logs = []
+    with mock.patch.object(notify_due.subprocess, "run") as run:
+        notify_due.make_poster(data, BASE, None, "/fake/alerter", logs.append, spawn=FakeAlerter("", code=2))(
+            "T", "b", None, None, None, "work")
+        settle()
+    check("alerter fails with no terminal-notifier: logged, nothing run",
+          (run.call_count, "notify: alerter exit 2 with no answer" in logs), (0, True))
+    notify_due._write_queue(q, [{"title": "Odd", "body": "o"}])
+    with mock.patch.object(notify_due.subprocess, "run") as run:
+        tick_at(at(TUE, "10:00"), notify_due.make_poster(data, BASE, "/bin/terminal-notifier", "/fake/alerter",
+                                                          lambda *a: None, spawn=FakeAlerter(pressed("Snooze 1h"), code=1),
+                                                          clock=lambda: at(TUE, "10:00")))
+        settle()
+    check("alerter: an answer with a bad exit is still the answer",
+          (run.call_count, [e["not_before"] for e in json.load(open(q))]), (0, ["2026-10-27T11:00:00"]))
+if saved_home is None:
+    os.environ.pop("NOTIFY_HOME", None)
+else:
+    os.environ["NOTIFY_HOME"] = saved_home
+
 os.environ["BENCH_NOTIFY"] = "0"
 check("BENCH_NOTIFY=0 keeps it off", notify_due.start("/x", list, tuple, "u"), None)
 

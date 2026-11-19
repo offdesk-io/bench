@@ -1,9 +1,9 @@
 """Desktop banners for tasks that fall due, and for lines agents queue.
 
 The board server runs this on a minute tick (kanban/server.py) and posts what it
-returns through terminal-notifier. It replaces the Electron companion's
-notifier, which only spoke for one list at a time and only once a morning
-(companion/ stays on disk, retired).
+returns through alerter, or terminal-notifier where alerter is missing. It
+replaces the Electron companion's notifier, which only spoke for one list at a
+time and only once a morning (companion/ stays on disk, retired).
 
 The rules for a due banner, one per task or sub-task with a due date of its
 own that is not done:
@@ -45,6 +45,19 @@ day test for one board, which the server builds from that board's profile
 own or none goes by its own profile's holidays. Without it every board uses
 `is_working`.
 
+Snooze. Through alerter every banner is an alert with Snooze 1h, Tomorrow
+(09:00 on the board's next working day, by its own calendar) and Dismiss;
+terminal-notifier has no buttons, so without alerter nothing can be snoozed,
+and an alerter that fails before an answer has its banner posted once through
+terminal-notifier instead. A snoozed due banner gets an entry of its own
+under `snoozed` in notify-state.json, and the tick posts it again once its time
+comes, unless the item is done by then or another banner for it goes out in
+the same tick. A snoozed agent's line goes back on its queue with `not_before`,
+which queue_batch() honours, as the notifier's poster does. alerter does not
+return until the alert is answered, so `post` starts it and returns, and a
+thread waits for the answer holding neither the tick nor the queue's lock.
+The poster in the notifier's folder has the same alert code; change both.
+
 Everything that needs a clock or a calendar takes it as an argument, so the
 tests run on a fake one. Only `post` and `start` touch the machine.
 """
@@ -79,6 +92,11 @@ IMMEDIATE_BOARDS = ("content",)
 TICK_SECONDS = 60
 NOTIFIER_DIRS = ("/opt/homebrew/bin", "/usr/local/bin")
 RVM_NOTIFIER_DIR = "/Users/tiagopedras/.rvm/gems/ruby-3.0.0/bin"
+MAX_QUEUED = 20
+SNOOZE_HOUR = "Snooze 1h"
+SNOOZE_TOMORROW = "Tomorrow"
+DISMISS = "Dismiss"
+TOMORROW_AT = dt.time(9, 0)
 
 
 def board_label(name):
@@ -116,6 +134,10 @@ def _next_working_day(day, is_working):
             return day
         day += dt.timedelta(days=1)
     return day
+
+
+def _default_working(day):
+    return todo.is_working_day(day, tuple(todo.REGIONS))
 
 
 def _time_of(hhmm):
@@ -176,7 +198,7 @@ def due_banners(tasks, now, is_working, fired, label):
             key = "%s|%s|%s" % (today.isoformat(), ident, kind)
             if key in fired or now < dt.datetime.combine(today, when):
                 continue
-            out.append({"key": key, "title": title, "body": "%s · %s" % (body, label),
+            out.append({"key": key, "ident": ident, "title": title, "body": "%s · %s" % (body, label),
                         "task": link, "group": key, "at": dt.datetime.combine(today, when)})
     out.sort(key=lambda b: (b["at"], b["key"]))
     return out
@@ -184,13 +206,43 @@ def due_banners(tasks, now, is_working, fired, label):
 
 # ---- what has been sent --------------------------------------------------------
 
-def read_state(board_dir):
+# The tick writes `fired` and an alert's answer writes `snoozed`, from two
+# threads, so every write re-reads the file under this lock and keeps the half
+# it was not given.
+_state_lock = threading.Lock()
+
+
+def _read_state_file(board_dir):
     try:
         with open(os.path.join(board_dir, STATE_FILE), encoding="utf-8") as fh:
             data = json.load(fh)
-        return {k for k in data.get("fired", []) if isinstance(k, str)}
-    except (OSError, ValueError, AttributeError):
-        return set()
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def read_state(board_dir):
+    fired = _read_state_file(board_dir).get("fired", [])
+    return {k for k in fired if isinstance(k, str)} if isinstance(fired, list) else set()
+
+
+def _when(text):
+    """An ISO time as a local datetime, or None for one that cannot be read or
+    carries a zone (which could not be compared with the tick's clock)."""
+    try:
+        when = dt.datetime.fromisoformat(str(text))
+    except (TypeError, ValueError):
+        return None
+    return None if when.tzinfo else when
+
+
+def read_snoozed(board_dir):
+    """The snoozed due banners, each {key, ident, at, title, body, task}: `key`
+    is the banner's fired key and `at` when it goes out again. Any that cannot
+    be read is left out."""
+    snoozed = _read_state_file(board_dir).get("snoozed", [])
+    return [s for s in snoozed if isinstance(s, dict) and isinstance(s.get("key"), str)
+            and isinstance(s.get("title"), str) and _when(s.get("at"))] if isinstance(snoozed, list) else []
 
 
 def prune(fired, today):
@@ -199,15 +251,41 @@ def prune(fired, today):
     return {k for k in fired if k.split("|", 1)[0] >= cut}
 
 
-def write_state(board_dir, fired, today):
+def _save_state(board_dir, today, fired=None, change_snoozed=None):
+    """Write the state file. `fired` None keeps the file's, and
+    `change_snoozed(list)` returns the new snoozed list from the file's."""
     path = os.path.join(board_dir, STATE_FILE)
-    try:
-        tmp = path + ".tmp"
-        with open(tmp, "w", encoding="utf-8", newline="") as fh:
-            json.dump({"fired": sorted(prune(fired, today))}, fh, indent=2)
-        os.replace(tmp, path)
-    except OSError:
-        pass
+    with _state_lock:
+        if fired is None:
+            fired = read_state(board_dir)
+        snoozed = read_snoozed(board_dir)
+        if change_snoozed:
+            snoozed = change_snoozed(snoozed)
+        cut = dt.datetime.combine(today - dt.timedelta(days=KEEP_DAYS), dt.time())
+        data = {"fired": sorted(prune(fired, today))}
+        snoozed = [s for s in snoozed if _when(s["at"]) >= cut]
+        if snoozed:
+            data["snoozed"] = snoozed
+        try:
+            tmp = path + ".tmp"
+            with open(tmp, "w", encoding="utf-8", newline="") as fh:
+                json.dump(data, fh, indent=2)
+            os.replace(tmp, path)
+        except OSError:
+            pass
+
+
+def write_state(board_dir, fired, today):
+    _save_state(board_dir, today, fired=fired)
+
+
+def snooze_due(board_dir, key, title, body, task, until, today):
+    """Hold a due banner for `until`: an entry under `snoozed`, replacing any
+    the banner already had. `key` is its fired key, `date|ident|kind`."""
+    ident = key.split("|", 1)[-1].rsplit("|", 1)[0]
+    entry = {"key": key, "ident": ident, "at": until.isoformat(timespec="seconds"),
+             "title": title, "body": body, "task": task}
+    _save_state(board_dir, today, change_snoozed=lambda xs: [s for s in xs if s["key"] != key] + [entry])
 
 
 # ---- the agents' queue ------------------------------------------------------------
@@ -254,6 +332,7 @@ def _read_queue(path):
 
 
 def _write_queue(path, items):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8", newline="") as fh:
         json.dump(items, fh, indent=2)
@@ -291,8 +370,9 @@ def queue_dirs(data_root, board):
 
 def queue_batch(board_dir, board, now, skip=()):
     """The next lines to post, as (raw entry, (title, body, task, view)), at most
-    QUEUE_BATCH of them, none of them in `skip`. Nothing comes off the file here.
-    A line with no body comes back with None for its message, to be dropped."""
+    QUEUE_BATCH of them, none of them in `skip` and none held by a `not_before`
+    still to come. Nothing comes off the file here. A line with no body comes
+    back with None for its message, to be dropped."""
     if board not in IMMEDIATE_BOARDS and not QUEUE_FROM <= now.time() <= QUEUE_UNTIL:
         return []
     out = []
@@ -300,6 +380,9 @@ def queue_batch(board_dir, board, now, skip=()):
         if len(out) == QUEUE_BATCH:
             break
         if not isinstance(entry, dict) or json.dumps(entry, sort_keys=True) in skip:
+            continue
+        held = _when(entry["not_before"]) if entry.get("not_before") else None
+        if held and held > now and entry.get("body"):
             continue
         body = str(entry.get("body") or "")[:400]
         msg = None
@@ -318,6 +401,23 @@ def queue_remove(board_dir, entries):
         return
     with queue_lock(os.path.join(board_dir, QUEUE_FILE)):
         _remove(board_dir, entries)
+
+
+def requeue(path, title, body, task, view, until):
+    """Put a snoozed line back on the queue at `path`, held until `until`, the
+    way notify.queue() appends one."""
+    entry = {"title": str(title)[:120], "body": str(body)[:400],
+             "queued": dt.datetime.now().isoformat(timespec="seconds"),
+             "not_before": until.isoformat(timespec="seconds")}
+    if task:
+        entry["task"] = str(task)[:200]
+    if view:
+        entry["view"] = str(view)[:40]
+    with queue_lock(path):
+        try:
+            _write_queue(path, (_read_queue(path) + [entry])[-MAX_QUEUED:])
+        except OSError:
+            pass
 
 
 def _remove(board_dir, entries):
@@ -366,12 +466,20 @@ def next_banner(data_root, boards, now, is_working, read_text=None, working_for=
         if text is None:
             continue
         own = (working_for(board) if working_for else None) or is_working
-        for b in due_banners(todo.parse_doc(text), end, own, read_state(board_dir), ""):
-            if b["at"] > now and (soonest is None or b["at"] < soonest):
-                soonest = b["at"]
+        tasks = todo.parse_doc(text)
+        times = [b["at"] for b in due_banners(tasks, end, own, read_state(board_dir), "")]
+        live = _open_idents(tasks)
+        times += [_when(s["at"]) for s in read_snoozed(board_dir) if s.get("ident") in live]
+        for at in times:
+            if now < at <= end and (soonest is None or at < soonest):
+                soonest = at
     if soonest:
         return soonest
     return dt.datetime.combine(_next_working_day(now.date(), is_working), DEFAULT_TIME)
+
+
+def _open_idents(tasks):
+    return {ident for ident, _, _, _ in _items(tasks)}
 
 
 def read_plain(path):
@@ -423,12 +531,31 @@ def run_tick(data_root, boards, now, is_working, post, read_text=read_plain, ret
         fired = read_state(board_dir)
         changed = False
         own = (working_for(board) if working_for else None) or is_working
+        posted = set()
         for b in due_banners(tasks, now, own, fired, board_label(board)):
             if attempt(b["key"], (b["title"], b["body"], b["task"], None, b["group"], board)):
                 fired.add(b["key"])
                 changed = True
+                posted.add(b["ident"])
         if changed:
             write_state(board_dir, fired, now.date())
+        # Snoozed due banners whose time has come go out again, grouped with the
+        # banner they came from. One whose item is done, or that another banner
+        # for the same item has just said (Tomorrow landing on the overdue one
+        # at 09:00), is spent unposted. Left alone on a tick the file is not
+        # trusted, since its items cannot be told from done ones.
+        if text is not None:
+            live, spent = _open_idents(tasks), []
+            for s in sorted(read_snoozed(board_dir), key=lambda s: (_when(s["at"]), s["key"])):
+                if _when(s["at"]) > now:
+                    continue
+                if s.get("ident") not in live or s.get("ident") in posted:
+                    spent.append(s)
+                elif attempt("%s|snooze|%s|%s" % (now.date().isoformat(), s["key"], s["at"]),
+                             (s["title"], s.get("body") or "", s.get("task"), None, s["key"], board)):
+                    spent.append(s)
+            if spent:
+                _save_state(board_dir, now.date(), change_snoozed=lambda xs: [x for x in xs if x not in spent])
         waiting = {k.split("|q|", 1)[1] for k, t in retries.items() if "|q|" in k and now - t < RETRY_AFTER}
         for qdir in queue_dirs(data_root, board):
             path = os.path.join(qdir, QUEUE_FILE)
@@ -471,8 +598,18 @@ def find_notifier():
     return shutil.which("terminal-notifier") or shutil.which("terminal-notifier", path=RVM_NOTIFIER_DIR)
 
 
+def find_alerter():
+    """alerter's path, or None, looked for where terminal-notifier is."""
+    for folder in NOTIFIER_DIRS:
+        found = shutil.which("alerter", path=folder)
+        if found:
+            return found
+    return shutil.which("alerter")
+
+
 def enabled():
-    return sys.platform == "darwin" and os.environ.get("BENCH_NOTIFY") != "0" and bool(find_notifier())
+    return (sys.platform == "darwin" and os.environ.get("BENCH_NOTIFY") != "0"
+            and bool(find_alerter() or find_notifier()))
 
 
 def notify_sound():
@@ -484,8 +621,104 @@ def notify_sound():
     return name or "default"
 
 
-def post(notifier, base_url, title, body, task=None, view=None, group=None, log=print, board=None):
-    args = [notifier, "-title", title, "-message", body, "-open", board_url(base_url, task, view, board)]
+def snooze_until(choice, now, is_working=None):
+    """When a snooze pressed at `now` ends, or None for any other answer.
+    Tomorrow is 09:00 on the next day `is_working` says is a working day, so a
+    Friday's goes to Monday, or the plain next day without one."""
+    if choice == SNOOZE_HOUR:
+        return now + dt.timedelta(hours=1)
+    if choice == SNOOZE_TOMORROW:
+        day = _next_working_day(now.date(), is_working) if is_working else now.date() + dt.timedelta(days=1)
+        return dt.datetime.combine(day, TOMORROW_AT)
+    return None
+
+
+def answer(out):
+    """What alerter printed: the label of the action pressed, "open" for the
+    alert itself, or None for Dismiss, a timeout or nothing readable. Read
+    from --json, and from the plain form in case a version prints that."""
+    out = (out or "").strip()
+    try:
+        got = json.loads(out)
+    except ValueError:
+        got = None
+    if isinstance(got, dict):
+        kind, value = got.get("activationType"), got.get("activationValue")
+        if kind == "contentsClicked":
+            return "open"
+        return str(value) if kind == "actionClicked" and value else None
+    if out == "@CONTENTCLICKED":
+        return "open"
+    return out if out in (SNOOZE_HOUR, SNOOZE_TOMORROW) else None
+
+
+def open_in_browser(url):
+    try:
+        subprocess.run(["open", url], capture_output=True, timeout=15)
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+
+def alert(args, url, on_snooze, log=print, spawn=subprocess.Popen, clock=dt.datetime.now, opener=None,
+          fallback=None, is_working=None):
+    """Put an alert up and return at once, (ok, detail). alerter keeps running
+    until the alert is answered, so a thread waits for it, holding no lock, and
+    carries the answer out: a snooze calls `on_snooze(until)`, pressing the
+    alert opens `url`. An alerter that exits with an error and no answer calls
+    `fallback()` once, so the banner is still seen. `is_working` is the day
+    test Tomorrow skips by. `spawn`, `clock` and `opener` are there for the
+    tests."""
+    try:
+        proc = spawn(args, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                     stderr=subprocess.DEVNULL, text=True)
+    except (OSError, subprocess.SubprocessError) as err:
+        return False, "could not run alerter: %s" % err
+
+    def wait():
+        try:
+            out, _ = proc.communicate()
+            choice = answer(out)
+            if choice is None and proc.returncode:
+                log("notify: alerter exit %d with no answer" % proc.returncode)
+                if fallback:
+                    fallback()
+                return
+            until = snooze_until(choice, clock(), is_working)
+            if until:
+                on_snooze(until)
+            elif choice == "open" and url:
+                (opener or open_in_browser)(url)
+        except Exception as err:   # an answer that goes wrong must not reach the tick
+            log("notify: alert answer failed: %r" % err)
+
+    threading.Thread(target=wait, name="alert-answer", daemon=True).start()
+    return True, "alert up"
+
+
+def post(notifier, base_url, title, body, task=None, view=None, group=None, log=print, board=None,
+         alerter=None, on_snooze=None, spawn=subprocess.Popen, clock=dt.datetime.now, opener=None,
+         is_working=None):
+    """One banner: through `alerter` when given, as an alert whose snooze calls
+    `on_snooze(until)`, else through `notifier`, terminal-notifier. An alert
+    whose alerter fails before an answer is posted once through `notifier`."""
+    url = board_url(base_url, task, view, board)
+    if alerter:
+        args = [alerter, "--title", title, "--message", body,
+                "--actions", SNOOZE_HOUR + "," + SNOOZE_TOMORROW, "--dropdown-label", "Snooze",
+                "--close-label", DISMISS, "--json"]
+        if group:
+            args += ["--group", group]
+        if notify_sound():
+            args += ["--sound", notify_sound()]
+        def fallback():
+            if notifier:
+                post(notifier, base_url, title, body, task, view, group, log, board)
+        ok, detail = alert(args, url, on_snooze or (lambda until: None), log, spawn, clock, opener,
+                           fallback, is_working)
+        if ok:
+            log("notify: %r alert up" % title)
+        return ok, detail
+    args = [notifier, "-title", title, "-message", body, "-open", url]
     if group:
         args += ["-group", group]
     sound = notify_sound()
@@ -506,18 +739,40 @@ def calendars(boards, regions_for):
     return {b: (lambda regions: lambda d: todo.is_working_day(d, regions))(regions_for(b)) for b in boards}
 
 
+def make_poster(data_root, base_url, notifier, alerter=None, log=print, working_for=None, **fakes):
+    """The `post` run_tick calls, (title, body, task, view, group, board). A
+    due banner carries its fired key as `group`, so its snooze is an entry in
+    the board's state; a queued line has none, so its snooze puts it back on the
+    board's queue, held. `working_for(board)` is the board's day test, read
+    when Tomorrow is pressed. `fakes` (spawn, clock, opener) are passed to post()."""
+    def poster(title, body, task, view, group, board):
+        clock = fakes.get("clock") or dt.datetime.now
+
+        def snoozed(until):
+            if group:
+                snooze_due(os.path.join(data_root, board), group, title, body, task, until, clock().date())
+            else:
+                requeue(queue_file(data_root, board), title, body, task, view, until)
+            log("notify: %r snoozed until %s" % (title, until.isoformat(timespec="minutes")))
+
+        def is_working(day):
+            return (working_for(board) if working_for else _default_working)(day)
+
+        return post(notifier, base_url, title, body, task, view, group, log, board,
+                    alerter=alerter, on_snooze=snoozed, is_working=is_working, **fakes)
+    return poster
+
+
 def start(data_root, list_boards, regions_for, base_url, log=print, read_text=read_plain):
     """Start the daemon thread that ticks every minute. Returns it, or None
-    when this machine should stay quiet (not a Mac, no terminal-notifier, or
-    BENCH_NOTIFY=0). `regions_for(board)` is that board's holiday regions.
-    Banners play a sound unless BENCH_NOTIFY_SOUND says otherwise (see
-    notify_sound)."""
+    when this machine should stay quiet (not a Mac, neither alerter nor
+    terminal-notifier, or BENCH_NOTIFY=0). `regions_for(board)` is that board's
+    holiday regions. Banners play a sound unless BENCH_NOTIFY_SOUND says
+    otherwise (see notify_sound)."""
     if not enabled():
         return None
-    notifier = find_notifier()
-
-    def poster(title, body, task, view, group, board):
-        return post(notifier, base_url, title, body, task, view, group, log, board)
+    poster = make_poster(data_root, base_url, find_notifier(), find_alerter(), log,
+                         working_for=lambda board: calendars([board], regions_for)[board])
 
     def loop():
         stop = threading.Event()

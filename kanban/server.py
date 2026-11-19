@@ -1581,8 +1581,8 @@ NOTIFIER = {"thread": None}
 
 def _banners_job():
     """Desktop banners for due tasks: a thread inside this server (core/
-    notify_due.py), so armed means the server is up on a Mac with
-    terminal-notifier. The Electron companion that did this is retired."""
+    notify_due.py), so armed means the server is up on a Mac with alerter
+    or terminal-notifier. The Electron companion that did this is retired."""
     import notify_due
     on = NOTIFIER["thread"] is not None and NOTIFIER["thread"].is_alive()
     if on:
@@ -1591,8 +1591,9 @@ def _banners_job():
         hint = "switched off by BENCH_NOTIFY=0"
     elif sys.platform != "darwin":
         hint = "banners are Mac only"
-    elif not notify_due.find_notifier():
-        hint = "install terminal-notifier (brew install terminal-notifier)"
+    elif not (notify_due.find_alerter() or notify_due.find_notifier()):
+        hint = ("install alerter for banners that can be snoozed (download the signed release from github.com/vjeantet/alerter/releases and copy it to /opt/homebrew/bin), "
+                "or terminal-notifier (brew install terminal-notifier)")
     else:
         hint = "not started on this server"
     last = notify_due.STATUS["last_tick"]
@@ -4415,8 +4416,9 @@ def main():
         print("weekly backup: %s/%s/backups/%s" % (DATA, ds, first_weekly))
     threading.Thread(target=weekly_backup_watcher, daemon=True).start()
     # Desktop banners for due tasks and the agents' queue. Mac only, and only
-    # with terminal-notifier; the Linux server never starts it, and nor does a
-    # throwaway copy under TODOS_DATA_ROOT (the test runner), which holds demo data.
+    # with alerter or terminal-notifier; the Linux server never starts it, and nor
+    # does a throwaway copy under TODOS_DATA_ROOT (the test runner), which holds
+    # demo data.
     import notify_due
     import owner_profile
     if todo is not None and not SCRATCH:

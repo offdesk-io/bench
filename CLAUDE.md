@@ -37,6 +37,8 @@ Agents ask for a banner with `companion/notify.py`, which appends to `data/<boar
 
 Mac only, and only with `terminal-notifier` installed. `BENCH_NOTIFY=0` switches it off, and a throwaway data root (`TODOS_DATA_ROOT`, the test runner's) never starts it. Every banner plays macOS's default sound; `BENCH_NOTIFY_SOUND` names another (e.g. `Glass`) or `0` mutes it. Banners go out only while the board is running. `companion/` (the Electron tray app) is retired and stays on disk for `notify.py` and `digest.py`; do not launch it. Format knowledge and the working calendar live in `core/todo.py` (UK and Portuguese public holidays by default). Run `python3 core/test_todo.py --online` after touching calendar rules, and `python3 core/test_notify_due.py` after touching the banners.
 
+Snooze 1h, Tomorrow and Dismiss buttons need `alerter` (installed at `/opt/homebrew/bin/alerter`, from its signed GitHub release, since Homebrew can't build it on macOS 26), and show only when Terminal's notifications use the Alerts style in System Settings. Without it the banners go through `terminal-notifier` with no buttons. A snooze waits in the queue with a `not_before` time, and a snooze answered after the server has stopped is lost. README.md, Snooze, has the detail.
+
 ## Where the format lives
 
 Twice, and only twice. `core/todo.js` is the board's copy and the authority;
