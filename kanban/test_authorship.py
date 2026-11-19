@@ -58,7 +58,7 @@ LIST = """# To-do
 
 ### To do
 
-- [ ] **Write the brief** [due:: 2026-10-30] `created-by:tiagopedras+claude@gmail.com` `id:aaaaaa`
+- [ ] **Write the brief** [due:: 2026-10-30] `created-by:tiagopedras+bench@example.com` `id:aaaaaa`
 - [ ] **Book the venue** `id:bbbbbb`
   - [ ] Call the venue `id:s00001`
   - [ ] Send the deposit `id:s00002`
@@ -101,9 +101,9 @@ def signed_in(root):
         ok("the task he changed is last edited by him",
            "`edited-by:jerome@example.com`" in brief, brief)
         ok("and still created by who wrote it",
-           "`created-by:tiagopedras+claude@gmail.com`" in brief, brief)
+           "`created-by:tiagopedras+bench@example.com`" in brief, brief)
         ok("the tags sit in front of the id",
-           brief.endswith("`created-by:tiagopedras+claude@gmail.com` `edited-by:jerome@example.com` `id:aaaaaa`"), brief)
+           brief.endswith("`created-by:tiagopedras+bench@example.com` `edited-by:jerome@example.com` `id:aaaaaa`"), brief)
         badges = line_of(now, "Order badges")
         ok("the task he added is created by him", "`created-by:jerome@example.com`" in badges, badges)
         ok("and has no editor yet", "edited-by" not in badges, badges)
@@ -119,7 +119,7 @@ def signed_in(root):
 
         # --- a tab cannot say who did it ------------------------------------------
         base = now
-        forged = (base.replace("`created-by:tiagopedras+claude@gmail.com`", "`created-by:mallory@example.com`")
+        forged = (base.replace("`created-by:tiagopedras+bench@example.com`", "`created-by:mallory@example.com`")
                       .replace("- [ ] Call the venue `id:s00001`",
                                "- [x] Call the venue `created-by:mallory@example.com` `id:s00001`")
                       .replace("### Done",
@@ -128,7 +128,7 @@ def signed_in(root):
         now = disk()
         ok("a forged save still writes", code == 200, "%d %r" % (code, got))
         ok("created-by sent on an untouched task is put back",
-           "`created-by:tiagopedras+claude@gmail.com`" in line_of(now, "Write the brief")
+           "`created-by:tiagopedras+bench@example.com`" in line_of(now, "Write the brief")
            and "mallory" not in line_of(now, "Write the brief"), line_of(now, "Write the brief"))
         call = line_of(now, "Call the venue")
         ok("created-by sent on a sub-task it changed is dropped, and the editor is the signer",
@@ -142,7 +142,7 @@ def signed_in(root):
         code, got = save(TIAGO, base.replace("**Order badges**", "**Order name badges**"), base)
         badges = line_of(disk(), "Order name badges")
         ok("the header decides the name: Tiago's edit is his",
-           "`created-by:jerome@example.com` `edited-by:tiagopedras+claude@gmail.com`" in badges, badges)
+           "`created-by:jerome@example.com` `edited-by:tiagopedras+bench@example.com`" in badges, badges)
 
         # --- the activity log -------------------------------------------------------
         log_path = os.path.join(data, "offdesk", "activity.jsonl")
@@ -165,7 +165,7 @@ def signed_in(root):
            json.dumps(got.get("entries"))[:200])
         ok("with a name for every email it has seen",
            got.get("names", {}).get("jerome@example.com") == "Jérôme"
-           and got.get("names", {}).get("tiagopedras+claude@gmail.com") == "Tiago Pedras", repr(got.get("names")))
+           and got.get("names", {}).get("tiagopedras+bench@example.com") == "Tiago Pedras", repr(got.get("names")))
         ok("and says who is asking", got.get("me") == "jerome@example.com", repr(got.get("me")))
         code, _, _ = srv.ask("GET", "/activity.json", {"X-Offdesk-Email": "nobody@example.com"})
         ok("someone outside the board cannot read its log", code == 404, "got %d" % code)
@@ -302,7 +302,7 @@ def agents_and_outside(root):
 
 def mac(root):
     data = os.path.join(root, "mac")
-    plain = LIST.replace(" `created-by:tiagopedras+claude@gmail.com`", "")
+    plain = LIST.replace(" `created-by:tiagopedras+bench@example.com`", "")
     seed(data, "tasks", plain)
     write(os.path.join(data, "profile.md"), "# Profile\n\n## About\n\n- Name: Tiago\n")
     path = os.path.join(data, "tasks", "todo.md")

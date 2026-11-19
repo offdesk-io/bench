@@ -49,7 +49,7 @@ import board_access  # noqa: E402
 PASS = []
 FAIL = []
 
-TIAGO = {"X-Offdesk-Email": "tiagopedras+claude@gmail.com",
+TIAGO = {"X-Offdesk-Email": "tiagopedras+bench@example.com",
          "X-Offdesk-Name": "Tiago%20Pedras", "X-Offdesk-Teams": "offdesk"}
 JEROME = {"X-Offdesk-Email": "jerome@example.com",
           "X-Offdesk-Name": "J%C3%A9r%C3%B4me", "X-Offdesk-Teams": "offdesk,other"}
@@ -241,9 +241,9 @@ def seed_boards(data):
     """Five boards: shared with the team, Tiago's own, Jerome's own, one from
     before sign-in, and one whose access.json does not parse."""
     seed(data, "offdesk")
-    access(data, "offdesk", "tiagopedras+claude@gmail.com", teams=["offdesk"])
+    access(data, "offdesk", "tiagopedras+bench@example.com", teams=["offdesk"])
     seed(data, "tiago-own", "# To-do\n\n## 1. Tasks\n\n### To do\n\n- [ ] %s\n" % SECRET)
-    access(data, "tiago-own", "tiagopedras+claude@gmail.com")
+    access(data, "tiago-own", "tiagopedras+bench@example.com")
     t = os.path.join(data, "tiago-own")
     for rel in ("views.md", "people.md", "reports/secret.md", "plans/secret.md",
                 "projects/secret/CLAUDE.md", "backups/todo-backup-secret.md",
@@ -440,7 +440,7 @@ def access_checks(root):
         ok("Jerome makes a board shared with his team", code == 200, "got %d" % code)
         ok("Tiago sees it", "j-team" in boards(srv, TIAGO))
         code, _, _ = srv.ask("POST", "/datasets", dict(JEROME, **BOARD),
-                             {"name": "J People", "sharing": {"kind": "shared", "people": ["Tiagopedras+claude@gmail.com"]}})
+                             {"name": "J People", "sharing": {"kind": "shared", "people": ["Tiagopedras+bench@example.com"]}})
         ok("a board shared with a named person", code == 200 and "j-people" in boards(srv, TIAGO), "got %d" % code)
         for name, sharing, want in (("Elsewhere", {"kind": "shared", "teams": ["secret-team"]}, 400),
                                     ("Nobody", {"kind": "shared"}, 400),
@@ -453,7 +453,7 @@ def access_checks(root):
         ok("a refused board makes no folder",
            not any(os.path.exists(os.path.join(data, n)) for n in ("elsewhere", "nobody", "odd")))
         ok("Tiago's board is untouched by the name clash",
-           json.load(open(os.path.join(data, "tiago-own", "access.json")))["owner"] == "tiagopedras+claude@gmail.com")
+           json.load(open(os.path.join(data, "tiago-own", "access.json")))["owner"] == "tiagopedras+bench@example.com")
 
         # --- changing who sees a board -------------------------------------------
         srv.ask("POST", "/dataset/select", dict(JEROME, **BOARD), {"name": "offdesk"})
@@ -482,12 +482,12 @@ def access_checks(root):
                                         capture_output=True, text=True)
         ok("the script wants an owner the first time", run("legacy", "--team", "offdesk").returncode == 2)
         ok("the script refuses a board that is not there", run("nothere", "--owner", "a@b.io").returncode == 2)
-        r = run("legacy", "--owner", "tiagopedras+claude@gmail.com", "--team", "offdesk")
+        r = run("legacy", "--owner", "tiagopedras+bench@example.com", "--team", "offdesk")
         ok("the script sets a board's access", r.returncode == 0, r.stderr)
         ok("and Jerome sees it through his team", "legacy" in boards(srv, JEROME))
         r = run("legacy", "--person", "x@example.com")
         got = json.load(open(os.path.join(data, "legacy", "access.json")))
-        ok("a later run keeps the owner and adds", got["owner"] == "tiagopedras+claude@gmail.com"
+        ok("a later run keeps the owner and adds", got["owner"] == "tiagopedras+bench@example.com"
            and got["teams"] == ["offdesk"] and got["people"] == ["x@example.com"], str(got))
     finally:
         srv.stop()
@@ -545,7 +545,7 @@ def mac_checks(root):
 def profile_checks(root):
     data = os.path.join(root, "profiles")
     seed(data, "offdesk")
-    access(data, "offdesk", "tiagopedras+claude@gmail.com", teams=["offdesk"])
+    access(data, "offdesk", "tiagopedras+bench@example.com", teams=["offdesk"])
     shared = os.path.join(data, "profile.md")
     write(shared, "# PA profile\n\n## About\n\n- Name: Tiago/Jerome\n- Country: GB\n\n"
                   "## Writing\n\n- Spelling: British English\n")
