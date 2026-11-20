@@ -247,7 +247,7 @@ function tenonFieldHTML(o){
   const id = 'tf-' + (++tenonFieldSeq), hintId = id + '-note', errId = id + '-err';
   const kind = o.kind || 'input';
   const hasHint = o.hint !== undefined && o.hint !== null && o.hint !== '';
-  const ro = o.readonly || settingsLocked();
+  const ro = o.readonly || (settingsLocked() && !settingsWelcome);
   const common = ' id="' + id + '"' + (hasHint ? ' aria-describedby="' + hintId + '"' : '') + (o.required ? ' required' : '') +
     (ro ? (kind === 'select' || kind === 'switch' ? ' disabled' : ' readonly') : '') + (o.attrs ? ' ' + o.attrs : '');
   let control;
@@ -573,6 +573,7 @@ async function openSettings(first, needsList){
   const note = first
     ? '<p class="help" style="margin-top:14px">Next, run <code>scripts/install.sh</code> to link the skills and set up the hourly wake.</p>'
     : '';
+  settingsWelcome = !!first;
   showModal(first ? 'Welcome to Bench' : (draft.signedIn ? 'Your profile' : 'Settings'),
     first ? (needsList ? 'Step 1 of 2: about you. You can change these later under Data, Settings.'
                        : 'Two things to set up. You can change them later under Data, Settings.') : '',

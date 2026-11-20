@@ -18,7 +18,7 @@
 *{box-sizing:border-box}
   html,body{height:100%}
   body{
-    margin:0; background:var(--tenon-background-default); color:var(--tenon-text-default);
+    margin:0; color:var(--tenon-text-default);
     font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
     -webkit-font-smoothing:antialiased;
   }
@@ -51,17 +51,18 @@
   body.locked header{top:var(--lockbar-h, 37px)}
 
   /* ---------- header ---------- */
-  header{
-    position:sticky; top:0; z-index:20; background:var(--tenon-background-raised);
-    border-bottom:1px solid var(--tenon-stroke-default); padding:10px 16px;
-    display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center;
-  }
-  h1{font-size: var(--tenon-typography-size-lg); font-weight:650; margin:0 4px 0 0; letter-spacing:-.01em}
+  /* The bar itself (height, fill, border, padding, the tab pill, Sign out) is
+     Tenon's AppHeader, drawn by kanban/ui/ViewTabs.tsx into #viewToggle. What is
+     left is the outer <header>, which only has to hold the bar where it sticks:
+     syncHeaderHeight() measures it, and the page's body background is Tenon's
+     `tenon-app-page`. */
+  header#hdr{position:sticky; top:0; z-index:20}
+  .tenon-app-header__brand h1{margin:0; font-size:inherit; font-weight:inherit}
   /* The "bench." wordmark (offdesk/brand/bench), inline so its fill can follow
      the theme. Brand colours, not Tenon tokens: ink on light, paper on dark.
      The orange dot keeps its own fill. The b's ascender is 85% of the
      viewBox, so .9em puts it at about the cap height the old text had. */
-  h1 .wordmark{display:block; height:.9em; width:auto; overflow:visible}
+  .wordmark{display:block; height:1.15rem; width:auto; overflow:visible}
   .wm-b{fill:#141414}
   @media (prefers-color-scheme: dark){ :root:not([data-theme="light"], [data-theme$="-light"]) .wm-b{fill:#e7e5e0} }
   :root[data-theme="dark"] .wm-b, :root[data-theme="1984"] .wm-b, :root[data-theme$="-dark"] .wm-b{fill:#e7e5e0}
@@ -155,8 +156,7 @@
      bucket tabs in the strip below were two sets of classes drawing the same
      two objects — the difference between them is a colour dot and a count,
      both of which are now optional parts of the one tab rather than a second
-     kind of tab. The dividers are the header's own, switched on there and off
-     in the strip, which is the third thing that used to fork them. */
+     kind of tab. */
   /* The second row, under the bucket strip — see renderThemeTabs() in
      07-render-board.js. Shares .bucketbar's layout but not its stickiness:
      two sticky bars stacking would need their own offset maths against
@@ -176,16 +176,6 @@
   .tab .dot{width:7px; height:7px; border-radius:50%; background:var(--bc); opacity:.5}
   .tab .n{font-size: var(--tenon-typography-size-sm); font-weight:650; color:var(--tenon-text-faint); background:var(--tenon-background-raised); border-radius:var(--tenon-radius-default); padding:0 5px; min-width:19px; text-align:center}
   .tab:hover{color:var(--tenon-text-default)}
-  .tabsep{width:1px; align-self:stretch; background:var(--tenon-stroke-default); margin:0 2px}
-  /* The header's view tabs are Tenon's SegmentedControl (kanban/ui/ViewTabs.tsx),
-     which has no divider of its own: the option after a `sep` in viewDefs()
-     carries `.sepbefore` on its label, and the hairline is drawn from that,
-     at .tabsep's width and colour. */
-  .viewtabs .tenon-segmented__option:has(> .sepbefore){position:relative; margin-left:5px}
-  .viewtabs .tenon-segmented__option:has(> .sepbefore)::before{
-    content:''; position:absolute; left:-4px; top:2px; bottom:2px; width:1px;
-    background:var(--tenon-stroke-default);
-  }
   .tab.on{background:var(--tenon-background-raised); color:var(--tenon-text-default); border-color:var(--tenon-stroke-default); box-shadow:0 1px 2px rgba(16,20,28,.07); font-weight:640}
   .tab.on .dot{opacity:1}
   .tab.on .n{background:var(--tenon-background-neutral); color:var(--tenon-text-subtle)}
@@ -209,10 +199,6 @@
      The status line is a sentence and wraps like one. */
   @media (max-width:640px){
     .tabs{flex-wrap:wrap; max-width:100%}
-    .tabsep{display:none}
-    .viewtabs{flex-wrap:wrap; max-width:100%}
-    .viewtabs .tenon-segmented__option:has(> .sepbefore){margin-left:0}
-    .viewtabs .tenon-segmented__option:has(> .sepbefore)::before{display:none}
     .status{white-space:normal}
   }
 
@@ -1017,7 +1003,7 @@
      is the column strip below, which is four lines tall and says where you
      are. */
   @media (max-width:640px){
-    header, .bucketbar{position:static}
+    header, header#hdr, .bucketbar{position:static}
   }
 
   /* Which column is on screen, and how many there are. Only ever drawn at

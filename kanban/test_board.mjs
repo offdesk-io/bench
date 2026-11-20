@@ -469,30 +469,48 @@ const addBucketCheck = await evalJS(`(() => {
 })()`)
 check('defaultAddBucket() guesses the bucket from the filter', addBucketCheck.length === 0, addBucketCheck.join(' | '))
 
-/* ---- the view tabs, Tenon's SegmentedControl since 26 Sep 2026 ---- */
+/* ---- the top bar, Tenon's AppHeader since 19 Nov 2026 ---- */
 
 await evalJS(`state.view = 'board'; renderView()`)
 await new Promise(r => setTimeout(r, 150))
-check('the view tabs are one radiogroup with the board checked', await evalJS(`(() => {
-  const g = document.querySelector('#viewToggle [role=radiogroup].tenon-segmented')
-  const on = g && g.querySelector('[role=radio][aria-checked=true]')
-  return !!on && on.dataset.value === 'board' && on.tabIndex === 0 &&
-    g.querySelectorAll('[role=radio]').length === 5 &&
-    [...g.querySelectorAll('[role=radio]')].map(r => r.dataset.value).join() === 'overview,reports,board,timeline,matrix' &&
-    g.querySelectorAll('.sepbefore').length === 1
+check('the bar and its tab pill are Tenon\'s, with the board current', await evalJS(`(() => {
+  const bar = document.querySelector('#hdr > #viewToggle > header.tenon-app-header')
+  const links = bar ? [...bar.querySelectorAll('nav a.tenon-app-header__tab, .tenon-app-header__tabs a')] : []
+  const on = links.filter(a => a.getAttribute('aria-current') === 'page')
+  return !!bar && links.map(a => a.dataset.view).join() === 'overview,reports,board,timeline,matrix' &&
+    links[0].textContent === 'Overview' && links.map(a => a.getAttribute('href')).join() === '#overview,#reports,#board,#timeline,#matrix' &&
+    on.length === 1 && on[0].dataset.view === 'board' &&
+    document.body.classList.contains('tenon-app-page') && !document.querySelector('.sepbefore')
 })()`))
-await evalJS(`document.querySelector('#viewToggle [data-value=matrix]').click()`)
-await new Promise(r => setTimeout(r, 150))
+check('the old controls moved into the bar with their ids', await evalJS(`(() => {
+  const bar = document.querySelector('.tenon-app-header')
+  const inActions = id => !!document.querySelector('.tenon-app-header__actions #' + id)
+  return !!bar.querySelector('.tenon-app-header__brand h1 svg.wordmark') &&
+    ['status', 'archiveBtn', 'whoami', 'whoName', 'dataMenu', 'dataMenuBtn', 'undo', 'settingsBtn'].every(inActions) &&
+    !document.querySelector('#hdrStash > *')
+})()`))
+check('no Sign out on the Mac board, and one when signed in', await evalJS(`(() => {
+  const none = !document.querySelector('.tenon-app-header__sign-out')
+  $('#whoami').classList.remove('hidden'); renderView()
+  return none
+})()`) && await (async () => { await new Promise(r => setTimeout(r, 150)); return evalJS(`(() => {
+  const f = document.querySelector('.tenon-app-header__sign-out')
+  const ok = !!f && f.getAttribute('action') === '/auth/logout' && f.textContent.trim() === 'Sign out'
+  $('#whoami').classList.add('hidden'); renderView()
+  return ok
+})()`) })())
+await evalJS(`document.querySelector('#viewToggle [data-view=matrix]').click()`)
+await new Promise(r => setTimeout(r, 250))
 check('picking a tab switches the view and the URL', await evalJS(`
   state.view === 'matrix' && location.hash.startsWith('#matrix') &&
-  document.querySelector('#viewToggle [data-value=matrix]').getAttribute('aria-checked') === 'true'
+  document.querySelector('#viewToggle [data-view=matrix]').getAttribute('aria-current') === 'page'
 `))
-await evalJS(`document.querySelector('#viewToggle [data-value=matrix]').dispatchEvent(
-  new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }))`)
-await new Promise(r => setTimeout(r, 150))
-check('the arrow keys move between views', await evalJS(`state.view === 'timeline'`))
+check('the bar measures at least Tenon\'s 53px floor, with no local height rule', await evalJS(`(() => {
+  const h = document.querySelector('.tenon-app-header').getBoundingClientRect().height
+  return h >= 53
+})()`))
 check('Projects has no tab, but a #projects link still draws its list', await evalJS(`(() => {
-  const none = !document.querySelector('#viewToggle [data-value=projects]');
+  const none = !document.querySelector('#viewToggle [data-view=projects]');
   state.view = 'projects'; renderView();
   const drawn = state.view === 'projects' && !!document.querySelector('#projectsRoot');
   return none && drawn && isKnownView('projects');
