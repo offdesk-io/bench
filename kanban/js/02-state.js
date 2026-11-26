@@ -542,7 +542,7 @@ function boardColumns(){
    /streams.json and a board with no helper behind it is a normal state. */
 async function checkStreamManifest(){
   try {
-    const res = await fetch('/streams.json');
+    const res = await fetch(benchUrl('/streams.json'));
     if (!res.ok) return;
     const found = (await res.json()).streams || [];
     const mine = found.find(s => s.id === 'tasks');

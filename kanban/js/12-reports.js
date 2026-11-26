@@ -157,7 +157,7 @@ function invalidateArchiveEntries(){
 function archiveEntriesSync(onReady){
   if (archiveEntries) return archiveEntries;
   if (!archiveEntriesPromise) {
-    archiveEntriesPromise = fetch('/data/backups/done-archive.md?t=' + Date.now(), { cache:'no-store' })
+    archiveEntriesPromise = fetch(benchUrl('/data/backups/done-archive.md') + '?t=' + Date.now(), { cache:'no-store' })
       .then(res => res.ok ? res.text() : Promise.reject(res.status))
       .then(text => { archiveEntries = parseArchiveEntries(text); })
       .catch(() => { archiveEntries = []; archiveEntriesError = true; })
@@ -659,7 +659,7 @@ async function ensureWrittenReports(){
   if (writtenState.fetched) return;
   writtenState = { list: null, error: null, fetched: true };
   try {
-    const res = await fetch('/reports.json?t=' + Date.now(), { cache:'no-store' });
+    const res = await fetch(benchUrl('/reports.json') + '?t=' + Date.now(), { cache:'no-store' });
     if (!res.ok) {
       writtenState = { list: null, error: { kind: 'stale-helper' }, fetched: true };
       renderCountedReports();
@@ -669,7 +669,7 @@ async function ensureWrittenReports(){
       list: ((await res.json()).reports || []).map(r => ({
         title: r.title, date: r.date, covers: r.covers, topic: r.topic,
         summary: r.summary || '',
-        url: r.url,
+        url: benchUrl(r.url),
       })),
       error: null, fetched: true,
     };

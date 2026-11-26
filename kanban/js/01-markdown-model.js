@@ -4,6 +4,22 @@
    1. Markdown  <->  model
    ========================================================================= */
 
+/* Where the board's server is, when it is not the root of its site:
+   os.offdesk.io serves Bench under /bench and removes the prefix before the
+   server sees a request. The server says so in /owner.js (window.BENCH_BASE,
+   from its BENCH_BASE setting), and a page with no server, or a server at the
+   root, has ''. Every request the board makes, every link it draws to the
+   server and every address it hands a package goes through benchUrl(). The
+   paths in this file, and those the server names in a listing (a report's or
+   a backup's url), are the server's own, and become addresses there.
+   getJSON() and sendJSON() call it themselves, so a path given to them is the
+   server's own too. A full address, or one relative to the page, is left
+   alone. */
+const BOARD_BASE = (typeof window !== 'undefined' && typeof window.BENCH_BASE === 'string') ? window.BENCH_BASE : '';
+function benchUrl(path){
+  return (typeof path === 'string' && path.charAt(0) === '/' && path.charAt(1) !== '/') ? BOARD_BASE + path : path;
+}
+
 /* The list lives in data/, which is the only folder git ignores and the only
    one Obsidian opens as a vault. The name shown in the header stays todo.md:
    the folder is a fact about where the file is kept, not part of what it is. */

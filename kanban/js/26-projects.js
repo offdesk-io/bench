@@ -124,7 +124,7 @@ async function renderProjectsView(){
   projectsError = null;
   drawProjects();
   try {
-    const res = await fetch('/projects.json?t=' + Date.now(), { cache:'no-store' });
+    const res = await fetch(benchUrl('/projects.json') + '?t=' + Date.now(), { cache:'no-store' });
     if (!res.ok) {
       projectsError = { title: 'The board helper needs restarting.',
         detail: 'It is running, but it is an older copy that does not know about projects yet.' };

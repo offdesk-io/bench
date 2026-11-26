@@ -94,7 +94,7 @@ async function renderBackupsView(){
   backupsState = { weekly: null, session: [], archive: null, week: '', keep: null, error: null };
   drawBackups();
   try {
-    const res = await fetch('/backups.json?t=' + Date.now(), { cache:'no-store' });
+    const res = await fetch(benchUrl('/backups.json') + '?t=' + Date.now(), { cache:'no-store' });
     if (res.status === 404) {
       backupsState.error = { kind: 'stale-helper' };
       drawBackups();
@@ -102,13 +102,15 @@ async function renderBackupsView(){
     }
     if (!res.ok) throw new Error('the server answered ' + res.status);
     const data = await res.json();
-    const all = data.backups || [];
+    // Each url is the server's path; the views link to it and load it as an address.
+    const addressed = b => (b && b.url ? Object.assign({}, b, { url: benchUrl(b.url) }) : b);
+    const all = (data.backups || []).map(addressed);
     backupsState = {
       // Weekly ones go by their week label, not their timestamp: a snapshot
       // copied late still belongs to its own week.
       weekly: all.filter(b => b.kind === 'weekly').sort((x, y) => y.name.localeCompare(x.name)),
       session: all.filter(b => b.kind === 'session'),
-      archive: data.archive || null,
+      archive: addressed(data.archive || null),
       week: data.week,
       keep: data.keep,
       error: null,
