@@ -47,6 +47,8 @@ import board_access  # noqa: E402
 
 PASS, FAIL = [], []
 KEY = bytes(range(32))
+# This checkout's server, whatever BENCH_ROOT the shell running the suite names.
+HERE_ROOT = {"BENCH_ROOT": os.path.dirname(HERE)}
 BOARD = {"X-Board": "1", "Content-Type": "application/json"}
 TODO = """# To-do
 
@@ -298,7 +300,7 @@ def main():
     try:
         data = os.path.join(root, "signed-in")
         setup(data)
-        srv = Server(data, "header", {"BENCH_CORE_TOKEN_KEY": KEY.hex()})
+        srv = Server(data, "header", dict(HERE_ROOT, BENCH_CORE_TOKEN_KEY=KEY.hex()))
         ok("signed-in server with the core's key starts", srv.wait())
         try:
             token_checks(srv, data)
@@ -318,7 +320,7 @@ def main():
         seed(mac, "_test", "# To-do\n\n## 1. Tasks\n\n### To do\n\n- [ ] A task\n")
         with open(os.path.join(mac, ".current"), "w") as fh:
             fh.write("_test")
-        srv = Server(mac, None, {"BENCH_CORE_TOKEN_KEY": KEY.hex(), "TODOS_SHOW_HIDDEN": "1"})
+        srv = Server(mac, None, dict(HERE_ROOT, BENCH_CORE_TOKEN_KEY=KEY.hex(), TODOS_SHOW_HIDDEN="1"))
         ok("the Mac board with the core's key starts", srv.wait())
         try:
             code, body, _ = srv.ask("GET", "/offdesk/boards.json", bearer())
@@ -330,7 +332,7 @@ def main():
 
         nokey = os.path.join(root, "nokey")
         setup(nokey)
-        srv = Server(nokey, "header")
+        srv = Server(nokey, "header", HERE_ROOT)
         ok("a server without the key starts", srv.wait())
         try:
             code, _, _ = srv.ask("GET", "/offdesk/boards.json", bearer())
@@ -338,7 +340,7 @@ def main():
         finally:
             srv.stop()
 
-        srv = Server(nokey, "header", {"BENCH_CORE_TOKEN_KEY": "zz" * 32})
+        srv = Server(nokey, "header", dict(HERE_ROOT, BENCH_CORE_TOKEN_KEY="zz" * 32))
         started = srv.wait()
         out = srv.stop()
         ok("a bad key refuses to start, naming it", not started and "BENCH_CORE_TOKEN_KEY" in out, out[-300:])
