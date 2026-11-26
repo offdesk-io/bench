@@ -30,6 +30,8 @@ The same file can name a memory folder, `memory_root`, for when the facts about 
 
 The same file can name Binder, `binder_url`, the web address of the leads and clients manager on this install (`https://binder.example.com`). Unset, which is the default, the board has no Binder: a task's lead is not shown, the drawer has no Lead field and the PA does not set a lead. Set, the lead chip, the Lead field and the PA's lead use that address, with any trailing slash taken off. The server reads it on each page load, so a change needs only a reload of the board. It is set by hand for now, as `"binder_url": "https://binder.example.com"` in `data/settings.json`; the Settings screen does not offer it yet.
 
+The same file can name the Offdesk core this install belongs to, `core_url` (`https://os.example.com`). Set, each `[ref:: <module>:<kind>/<id>]` on a card is a chip that opens the record through the core, `<core_url>/api/refs/open?ref=<ref>`, which knows which module owns it. Unset, the chip is plain text. It is set by hand like `binder_url`.
+
 Each list can also name its own projects folder, under `projects_roots`, a map from list name to folder, for keeping that list's project folders outside Bench. For a list in it, a task's `data/projects/<name>` note is looked for in that folder first and at `data/<list>/projects/<name>/` after, the board starts new projects there, and the board's chats may write there. The Projects view of a list shows its own folder and its `data/` one, never another list's, which is why two lists cannot name the same folder. A list with none keeps `data/<list>/projects/`, and with the key unset nothing changes. It is under Settings, for the list that is open.
 
 Three sibling folders are optional. Each is looked up as `../PACKAGES/<name>` next to this repo, and without it the board still starts:
@@ -247,6 +249,49 @@ Signed in, only what the page loads is served from outside `/data/`: `kanban/ind
 `kanban/board.css`, `kanban/js/`, `kanban/dist/`, the example list, `core/todo.js` and
 `core/avatar.js`. Folders are never listed, and the routes answer with names rather than
 paths on the server.
+
+### The Offdesk core's tools
+
+The Offdesk core's PA and agents read the boards and ask for changes through
+`mcp/` (`bench_mcp`, its own Python 3.10+ package, `mcp/HOWTO.md` for the model):
+`bench.boards`, `bench.tasks` (a column, a bucket, or what is due by a date),
+`bench.task`, `bench.add` and `bench.tick`. It calls this server on loopback, on
+the routes under `/offdesk/` (`kanban/server_core.py`), with the core's signed
+token as `Authorization: Bearer`. Only those routes read the token, with Bench's
+own check (`core/core_token.py`, the same rule and test vectors as Binder's and the
+core's), and they read nothing else: the sign-in headers never stand in for it,
+and everywhere else the header is ignored. Tokens are accepted only while
+`BENCH_CORE_TOKEN_KEY` (64 hex, the same as the core's `CORE_TOKEN_KEY`) is set;
+a value that is not a key stops the server at start-up.
+
+A token names a person (the PA, one of their routines or their own agent, all
+acting as them) or an agent of the team (`agent:<name>`). A person sees the
+boards their `access.json` lets them see, with the teams they last signed in with,
+since the token carries none; an agent of the team sees only boards whose
+`access.json` lists it under `agents`, set with
+`scripts/set-board-access.py <board> --agent <name>` and kept when the owner
+changes the sharing. On the Mac too, a token sees only what `access.json` allows.
+
+Nothing but the board writes `todo.md`, so a write is a request the board applies
+when it next loads. `bench.add` goes into `data/<board>/add-queue.json`
+(`core/add_queue.py`, drained by `drainAddQueue()`), into To do or Backlog only,
+with the new task's id minted up front so it is added once. `bench.tick` goes into
+`tick-queue.json` with `as` naming whoever it acts for, and is accepted, and then
+applied, only for a sub-task whose `[to::]` is exactly that person's email (or
+`agent:<name>`). Both are checked before they are queued, and the activity log
+records who asked: the person, `agent:<name>`, or `<email> via routine:<id>`.
+
+```
+python3.12 -m venv mcp/.venv && mcp/.venv/bin/pip install -e 'mcp[dev]'
+(cd mcp && .venv/bin/pytest -q)        # starts kanban/server.py over a throwaway data root
+```
+
+On the server, the core installs `mcp/` into its own environment (the core's
+`setup-server.sh`). The key goes in `/etc/bench/core.env` as
+`BENCH_CORE_TOKEN_KEY=<hex>`, loaded by a drop-in,
+`/etc/systemd/system/bench.service.d/core.conf` with `[Service]` and
+`EnvironmentFile=/etc/bench/core.env`, then `systemctl daemon-reload` and a restart
+of `bench.service`.
 
 ## The board
 
@@ -1367,6 +1412,14 @@ Binder: with `binder_url` set in `data/settings.json` (below), the card shows it
 chip that opens `<binder_url>/o/<slug>`, the drawer has a Lead field, and the PA may
 set it. With `binder_url` unset, no lead is shown anywhere and the PA does not set
 one, but the tag stays in the file, round-trips and merges as any other tag does.
+
+`[ref:: <module>:<kind>/<id>]` links a task to a record in another module of the
+Offdesk core, `[ref:: binder:org/acme-ltd]`; a task or sub-step may carry any
+number, written after the lead. Everything that reads references (`refsOf()` in
+`core/todo.js`, `refs_of()` in `core/todo.py`) reads a lead as `binder:org/<slug>`
+first, while the line keeps the lead as it was written, so no file is rewritten.
+The card shows each ref as a chip, the module's name and the id, opening the record
+through the core when `core_url` is set and plain text otherwise.
 
 On a shared board, Delegate to also offers the board's own people: its owner,
 the people it is shared with, and everyone who has signed in as a member of a
