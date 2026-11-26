@@ -31,6 +31,8 @@ def main(argv=None):
     ap.add_argument("--owner", help="the owner's email; needed when the board has no access.json")
     ap.add_argument("--team", action="append", default=[], help="a team id that may see it (repeatable)")
     ap.add_argument("--person", action="append", default=[], help="an email that may see it (repeatable)")
+    ap.add_argument("--agent", action="append", default=[],
+                    help="an Offdesk core agent of the team that may read it through the core (repeatable)")
     ap.add_argument("--replace", action="store_true", help="replace the teams and people rather than add to them")
     args = ap.parse_args(argv)
 
@@ -42,7 +44,7 @@ def main(argv=None):
         return 2
 
     was = board_access.read(board_dir)
-    if not (args.owner or args.team or args.person):
+    if not (args.owner or args.team or args.person or args.agent):
         print(json.dumps(was, indent=2) if was else "%s has no access.json: nobody sees it when signed in." % args.board)
         return 0
 
@@ -50,8 +52,9 @@ def main(argv=None):
     if not owner:
         print("%s has no owner yet; give one with --owner." % args.board, file=sys.stderr)
         return 2
-    keep = was if was and not args.replace else {"people": [], "teams": []}
-    record, err = board_access.clean(owner, keep["people"] + args.person, keep["teams"] + args.team)
+    keep = was if was and not args.replace else {"people": [], "teams": [], "agents": []}
+    record, err = board_access.clean(owner, keep["people"] + args.person, keep["teams"] + args.team,
+                                     keep["agents"] + args.agent)
     if err:
         print(err, file=sys.stderr)
         return 2

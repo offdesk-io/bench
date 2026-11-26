@@ -1010,5 +1010,41 @@ class BinderUrlTest(unittest.TestCase):
         self.assertEqual(settings.binder_url(self.root), "https://binder.example.com")
 
 
+
+class CoreUrlTest(unittest.TestCase):
+    """`core_url`: the Offdesk core's address, which a reference chip opens
+    through. Kept and checked the way `binder_url` is."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = self.tmp.name
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_unset_means_no_core(self):
+        self.assertNotIn("core_url", settings.load(self.root))
+        self.assertEqual(settings.core_url(self.root), "")
+
+    def test_read_without_trailing_slash(self):
+        with open(os.path.join(self.root, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"core_url": " https://os.example.com/ "}, fh)
+        self.assertEqual(settings.core_url(self.root), "https://os.example.com")
+
+    def test_validate_wants_a_web_address_or_nothing(self):
+        self.assertIsNone(settings.validate({"core_url": "https://os.example.com"}, self.root))
+        self.assertIsNone(settings.validate({"core_url": None}, self.root))
+        self.assertIsNotNone(settings.validate({"core_url": "os.example.com"}, self.root))
+        self.assertIsNotNone(settings.validate({"core_url": 5}, self.root))
+
+    def test_save_sets_and_clears(self):
+        settings.save(self.root, {"core_url": "https://os.example.com/"})
+        self.assertEqual(settings.core_url(self.root), "https://os.example.com")
+        settings.save(self.root, {"binder_url": "https://binder.example.com"})
+        self.assertEqual(settings.core_url(self.root), "https://os.example.com")
+        settings.save(self.root, {"core_url": ""})
+        self.assertNotIn("core_url", settings.load(self.root))
+
+
 if __name__ == "__main__":
     unittest.main()

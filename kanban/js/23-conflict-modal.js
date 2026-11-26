@@ -112,7 +112,7 @@ function offerReload(diskText, manual){
    (mergeSaves() in core/todo.js). */
 const MERGE_FIELD_NAMES = {
   title:'title', bold:'bold', done:'tick', impact:'impact', effort:'effort', due:'due date',
-  start:'start date', doneOn:'done date', to:'who it is with', theme:'theme', lead:'lead', urgent:'urgent',
+  start:'start date', doneOn:'done date', to:'who it is with', theme:'theme', lead:'lead', refs:'links', urgent:'urgent',
   week:'this week', doing:'doing', slug:'slug', blockedBy:'blocked by', rank:'queue position',
   tlrank:'timeline position', headline:'headline', chat:'chats', repeat:'repeat', stableId:'id',
   cancelled:'cancelled', archived:'archived', extra:'other tags', column:'column', notes:'notes',

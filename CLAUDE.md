@@ -15,6 +15,16 @@ something another session could depend on, and when you finish. Append only.
 with the board and what should be built next. Read it before diagnosing anything
 here, and update it when something lands or something new turns up.
 
+## The Offdesk core
+
+Bench is a module of the Offdesk core. `mcp/` (`bench_mcp`) is the core's tools for it, calling the routes under
+`/offdesk/` in `kanban/server_core.py` with the core's token (`core/core_token.py`, `BENCH_CORE_TOKEN_KEY`).
+They read through `core/todo.py` and never write `todo.md`: adds go into `add-queue.json` (`core/add_queue.py`)
+and ticks into `tick-queue.json`, which the board drains. Keep it that way. `[ref:: <module>:<kind>/<id>]` is
+the generic link to another module's record; a lead is read as `binder:org/<slug>` and never rewritten. README,
+"The Offdesk core's tools", has the rules. Run `(cd mcp && .venv/bin/pytest -q)` after touching any of it, and
+`python3 kanban/test_core_routes.py`.
+
 ## The skills
 
 The `pa-*` skills live in `agents/pa_agent/skills/`. See

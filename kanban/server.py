@@ -68,6 +68,7 @@ import bucket_agents
 import bucket_wake
 import iso_countries
 import board_access
+import server_core  # noqa: E402  (kanban/, beside this file)
 # The list and everything derived from it live in one folder, and that folder is
 # the only thing git ignores. Before this, the private half of the repo was four
 # separate ignore rules — todo.md, backups/, todo-backup-*.md, views.md — and
@@ -99,6 +100,16 @@ try:
     AUTH_ERROR = None
 except ValueError as err:
     AUTH, AUTH_ERROR = "header", str(err)
+# The Offdesk core's key, for the token its tools send to the routes under
+# /offdesk/ (kanban/server_core.py, core/core_token.py). Unset, those routes refuse
+# every token; a value that is not a key refuses to start, in main().
+import core_token  # noqa: E402
+try:
+    CORE_KEY = core_token.key_from(os.environ)
+    CORE_KEY_ERROR = None
+except ValueError as err:
+    CORE_KEY, CORE_KEY_ERROR = b"", str(err)
+CORE_PREFIX = "/offdesk/"
 # The person behind the request this thread is answering, set by
 # Handler.parse_request before any route runs. ThreadingHTTPServer answers
 # each connection on its own thread, so a thread-local is per request.
@@ -600,12 +611,33 @@ def credit_agents(ds, entries, text):
             if (ds != MOVE_DATASET or by != MOVE_AGENT or str(e.get("column") or "").strip() != "Reviewing"
                     or not card or card.done):
                 tid = ""
+        elif e.get("as"):
+            # A tick through the Offdesk core: applied when the sub-task is
+            # assigned to whoever it acts for, and recorded under who asked.
+            tid, to = parent.get(str(e.get("sub") or "").strip().lower(), ("", ""))
+            want = (to or "").strip().lower()
+            if tid and (want == str(e["as"]).strip().lower() or (not want and e.get("owner") is True)):
+                got[tid] = {"who": str(e["as"]).strip().lower(), "name": by, "at": now}
+            continue
         else:
             tid, to = parent.get(str(e.get("sub") or "").strip().lower(), ("", ""))
             if tid and todo.agent_of(to).lower() != by.lower():
                 tid = ""
         if tid:
             got[tid] = {"who": agent_slug(by), "name": by, "at": now}
+
+
+def credit_core(ds, entries):
+    """Notes the cards the Offdesk core's requests change: the task an add
+    made, by its new id, written as created by whoever the request acted for
+    and logged under who asked (`ana@example.com via routine:r1`)."""
+    now = time.time()
+    got = _agent_credits.setdefault(ds, {})
+    for e in entries:
+        by = str(e.get("by") or "").strip()
+        tid = str(e.get("id") or "").strip().lower()
+        if by and tid:
+            got[tid] = {"who": str(e.get("as") or by).strip().lower(), "name": by, "at": now}
 
 
 def take_credits(ds):
@@ -907,6 +939,11 @@ def tick_queue_path(name=None):
     a replacement.
     """
     return os.path.join(dataset_dir(name or current_dataset()), "tick-queue.json")
+
+
+def add_queue_path(name=None):
+    """Where the Offdesk core's tools ask for a new task. See core/add_queue.py."""
+    return os.path.join(dataset_dir(name or current_dataset()), "add-queue.json")
 
 
 def pa_working_path(name=None):
@@ -2773,10 +2810,20 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if not super().parse_request():
             return False
         _request.who = None
+        _request.core = None
         _request.board = (self.headers.get("X-Offdesk-Board") or "").strip() or None
         route = self.path.split("?")[0]
         refusal = None
-        if not AUTH:
+        if route.startswith(CORE_PREFIX):
+            # The Offdesk core's tools, with its token and nothing else: the
+            # sign-in headers are not read here, and the token is read nowhere
+            # but here. See kanban/server_core.py.
+            _request.board = None
+            who, refusal = server_core.identify(self.headers, CORE_KEY)
+            if not refusal and self.command == "POST" and self.headers.get("X-Board") != "1":
+                refusal = (403, {"error": "not from the board"})
+            _request.core = who
+        elif not AUTH:
             if _request.board:
                 refusal = pinned_refusal(self.command, route)
                 if not refusal and current_dataset() is None:
@@ -2951,12 +2998,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().list_directory(path)
 
     def do_HEAD(self):
+        if self.path.split("?")[0].startswith(CORE_PREFIX):
+            # The core's tools read with GET and write with POST; HEAD is none of their routes.
+            self.send_response(405)
+            self.send_header("Allow", "GET, POST")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if self.path.split("?")[0].lstrip("/") == TARGET:
             notice_outside_edit(current_dataset())
         return super().do_HEAD()
 
+    def _core(self, method):
+        """A /offdesk/ request, its identity already checked by parse_request()."""
+        from urllib.parse import parse_qs, urlsplit
+        query = {k: v[-1] for k, v in parse_qs(urlsplit(self.path).query).items()}
+        body = None
+        if method == "POST":
+            try:
+                body = json.loads((self._body() or b"{}").decode("utf-8"))
+            except (UnicodeDecodeError, ValueError):
+                return self._json(400, {"error": "body was not valid JSON"})
+        route = self.path.split("?")[0]
+        return self._json(*server_core.handle(method, route, query, body, _request.core, DATA_ROOT,
+                                              list_datasets(everyone=True)))
+
     def do_GET(self):
         path = self.path.split("?")[0]
+        if path.startswith(CORE_PREFIX):
+            return self._core("GET")
         # Before the list is read, an edit made to it outside the server is
         # logged and, signed in, stamped. See notice_outside_edit().
         if path.lstrip("/") == TARGET:
@@ -3035,15 +3105,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 # save fixes it.
                 return self._json(200, {"version": 1, "viewed": {}})
         if path == "/owner.js":
-            # The owner's first name and this install's Binder address, ahead of
+            # The owner's first name and this install's Binder and core addresses, ahead of
             # the board's scripts so the consts in 02-state.js can read them. A
             # page with no server falls back to "Me" and no Binder.
             import owner_profile
             # Signed in, "me" is whoever is signed in, by first name.
             owner = ((requester()["name"].split() or [""])[0] if AUTH
                      else owner_profile.owner_name(DATA_ROOT, board=current_dataset()))
-            body = ("window.OWNER_NAME = %s;\nwindow.BENCH_BINDER_URL = %s;\n"
-                    % (json.dumps(owner), json.dumps(settings.binder_url(DATA_ROOT)))).encode("utf-8")
+            body = ("window.OWNER_NAME = %s;\nwindow.BENCH_BINDER_URL = %s;\nwindow.BENCH_CORE_URL = %s;\n"
+                    % (json.dumps(owner), json.dumps(settings.binder_url(DATA_ROOT)),
+                       json.dumps(settings.core_url(DATA_ROOT)))).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
@@ -3122,6 +3193,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if path == "/tick-queue.json":
             import tick_queue
             return self._json(200, tick_queue.read(tick_queue_path()))
+        if path == "/add-queue.json":
+            # New tasks the Offdesk core asked for, for the board's drain
+            # (drainAddQueue()). Refused ones stay in the file and are not offered.
+            import add_queue
+            return self._json(200, add_queue.waiting(add_queue_path()))
         if path == "/pa-working.json":
             # Absent is the ordinary case: pa is not editing. The age is the
             # file's, so the board can ignore one a crashed session left behind.
@@ -3461,6 +3537,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         path = self.path.split("?")[0]
+        if path.startswith(CORE_PREFIX):
+            return self._core("POST")
         if path.startswith(AGENTS_PREFIX + "/"):
             return self._agents_post(path[len(AGENTS_PREFIX):])
         if path == "/datasets":
@@ -3527,8 +3605,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             who = requester()
             if not was or was["owner"] != who["email"]:
                 return self._json(403, {"error": "only the list’s owner can change who sees it"})
+            # The core's agents are set on the server (scripts/set-board-access.py),
+            # never from the board, so a change of sharing keeps them.
             access, err = board_access.clean(who["email"], payload.get("people") or [],
-                                             payload.get("teams") or [])
+                                             payload.get("teams") or [], was.get("agents") or [])
             if not err:
                 # A team kept from before may stay even if its owner has since
                 # left it; a new one has to be theirs.
@@ -3832,6 +3912,28 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 except OSError:
                     pass
                 return self._json(200, {"removed": tick_queue.remove(sorted(wanted), tick_queue_path())})
+        if path == "/add-queue.json":
+            # The board says which new tasks it added and which it could not,
+            # with why. Added ones come out; refused ones stay, marked.
+            if self.headers.get("X-Board") != "1":
+                return self._json(403, {"error": "not from the board"})
+            try:
+                payload = json.loads((self._body() or b"{}").decode("utf-8"))
+            except (UnicodeDecodeError, ValueError):
+                return self._json(400, {"error": "body was not valid JSON"})
+            ids = payload.get("done") if isinstance(payload, dict) else None
+            why = payload.get("refused", {}) if isinstance(payload, dict) else None
+            if not isinstance(ids, list) or not isinstance(why, dict):
+                return self._json(400, {"error": "expected {\"done\": [ids], \"refused\": {id: why}}"})
+            import add_queue
+            with _save_lock:
+                ds = current_dataset()
+                wanted = set(str(i) for i in ids)
+                dealt = [e for e in add_queue.read(add_queue_path()) if str(e.get("id")) in wanted]
+                credit_core(ds, dealt)
+                refused = add_queue.refuse(why, add_queue_path())
+                return self._json(200, {"removed": add_queue.remove(sorted(wanted), add_queue_path()),
+                                        "refused": refused})
         if ai_chat and path == "/claude/assign":
             if not ai_chat.guard_ok(self):
                 return self._json(403, {"error": "not from the board"})
@@ -4361,6 +4463,9 @@ def main():
     os.chdir(ROOT)
     if AUTH_ERROR:
         print(AUTH_ERROR)
+        return 2
+    if CORE_KEY_ERROR:
+        print(CORE_KEY_ERROR)
         return 2
     if AUTH and HOST not in ("127.0.0.1", "::1"):
         # The sign-in headers are only true when nginx is the only thing that

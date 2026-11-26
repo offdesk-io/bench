@@ -114,6 +114,7 @@ function readTags(rest){
   const extra = [];                                   // any tag we don't know about, kept verbatim
   let blockedBy = [], rank = null, tlrank = null, slug = '', headline = '', chat = '', repeat = '';
   let stableId = '', cancelled = '', archived = '', createdBy = '', editedBy = '';
+  const refs = [];
   /* Either syntax lands here, so a tag means the same thing whichever form it
      arrived in. `whole` is what goes into `extra`, which keeps an unrecognised
      tag exactly as it was written. */
@@ -165,6 +166,10 @@ function readTags(rest){
        core/todo.py); a list nobody signs in to never carries them. */
     else if (key === 'created-by') createdBy = v.trim().toLowerCase();
     else if (key === 'edited-by') editedBy = v.trim().toLowerCase();
+    /* A link to a record in another module, `[ref:: binder:org/acme-ltd]`,
+       any number on a line, kept in the order written and as written. See
+       refsOf() below for how the older `[lead:: ]` joins them. */
+    else if (key === 'ref') { const r = refTagValue(whole); if (r) refs.push(r); else extra.push(whole); }
     else extra.push(whole);
     return ' ';
   };
@@ -208,6 +213,7 @@ function readTags(rest){
     theme: tags.theme || '',
     /* Here `lead` is the Binder organisation's slug; a tier's `lead` is the text under its heading. */
     lead: tags.lead || '',
+    refs,
     urgent, week, doing, slug, blockedBy, rank, tlrank, headline, chat, repeat, stableId,
     cancelled, archived, createdBy, editedBy, extra
   };
@@ -227,6 +233,43 @@ function parseTask(rawLines){
    work is not counted either: `done:` is what puts it in a window. */
 function countsAsFinished(t){
   return !!(t.done && t.doneOn && !t.cancelled && !t.archived);
+}
+
+/* A reference to a record in another module: `<module>:<kind>/<id>`, as
+   `[ref:: binder:org/acme-ltd]` writes it. The module and the kind are
+   lowercase words; the id is anything without a space or a `]`. Returns
+   { module, kind, id } or null for something that is not one. */
+/* The module and the kind are [a-z][a-z0-9-]*, the id [A-Za-z0-9._~%@+-]+,
+   and only spaces and tabs are trimmed: JavaScript's idea of whitespace is not
+   Python's (U+FEFF is one here and not there), so neither is used. The same
+   rule is in core/todo.py, kanban/server_core.py's add check (through it),
+   mcp/bench_mcp and the Offdesk core's core/refs.py. */
+const REF_RE = /^([a-z][a-z0-9-]*):([a-z][a-z0-9-]*)\/([A-Za-z0-9._~%@+-]+)$/;
+function refTrim(v){ return String(v == null ? '' : v).replace(/^[ \t]+|[ \t]+$/g, ''); }
+function readRef(value){
+  const m = REF_RE.exec(refTrim(value));
+  return m ? { module: m[1], kind: m[2], id: m[3] } : null;
+}
+/* The reference a whole `[ref:: …]` or `ref:…` code span holds, or '' when the
+   tag is not exactly one of those around a valid reference. One that is not
+   stays in `extra` as written: kept as plain text, never dropped or rewritten. */
+const REF_TAG_RE = /^\[ref::([^\]]*)\]$|^`ref:([^`]*)`$/;
+function refTagValue(whole){
+  const m = REF_TAG_RE.exec(whole);
+  if (!m) return '';
+  const v = refTrim(m[1] != null ? m[1] : m[2]);
+  return readRef(v) ? v : '';
+}
+/* Every record a task points at, as references: the older `[lead:: <slug>]`
+   first, read as `binder:org/<slug>`, then each `[ref:: ]` in the order
+   written, without repeats. Only reads: the lead stays a lead on the line, so
+   no file is rewritten for it. */
+function refsOf(t){
+  const out = [];
+  const lead = String((t && t.lead) || '').trim().toLowerCase();
+  if (lead && readRef('binder:org/' + lead)) out.push('binder:org/' + lead);
+  ((t && t.refs) || []).forEach(r => { r = refTrim(r); if (readRef(r) && out.indexOf(r) < 0) out.push(r); });
+  return out;
 }
 
 /* A new stable id, avoiding everything already in use. Six characters of
@@ -291,6 +334,7 @@ function serializeTask(t){
     if (t.to && t.to.trim()) tags.push('[to:: ' + t.to.trim() + ']');
     if (t.theme && t.theme.trim()) tags.push('[theme:: ' + t.theme.trim() + ']');
     if (t.lead && t.lead.trim()) tags.push('[lead:: ' + t.lead.trim() + ']');
+    if (t.refs) t.refs.forEach(r => { if (String(r).trim()) tags.push('[ref:: ' + String(r).trim() + ']'); });
     if (t.blockedBy && t.blockedBy.length) tags.push('`blocked-by:' + t.blockedBy.join(',') + '`');
     if (t.rank != null && !isNaN(t.rank)) tags.push('`rank:' + t.rank + '`');
     if (t.tlrank != null && !isNaN(t.tlrank)) tags.push('`tlrank:' + t.tlrank + '`');
@@ -484,7 +528,7 @@ function splitBody(t){
         impact: r.impact, effort: r.effort, doneOn: r.doneOn, urgent: r.urgent,
         headline: r.headline, chat: r.chat, tlrank: r.tlrank, repeat: r.repeat,
         stableId: r.stableId, doing: r.doing, cancelled: r.cancelled, archived: r.archived,
-        createdBy: r.createdBy, editedBy: r.editedBy, extra: r.extra,
+        createdBy: r.createdBy, editedBy: r.editedBy, extra: r.extra, refs: r.refs,
         due:   readField(text, 'due'),
         time:  r.time,
         start: readField(text, 'start'),
@@ -812,7 +856,7 @@ function priorityScore(t){
    core/fixtures/merge.json holds the cases both are held to. */
 
 const MERGE_FIELDS = ['title', 'bold', 'done', 'impact', 'effort', 'due', 'time', 'start', 'doneOn', 'to',
-  'theme', 'lead', 'urgent', 'week', 'doing', 'slug', 'blockedBy', 'rank', 'tlrank', 'headline', 'chat',
+  'theme', 'lead', 'refs', 'urgent', 'week', 'doing', 'slug', 'blockedBy', 'rank', 'tlrank', 'headline', 'chat',
   'repeat', 'stableId', 'cancelled', 'archived', 'createdBy', 'editedBy', 'extra'];
 
 function mgSame(a, b){ return JSON.stringify(a) === JSON.stringify(b); }

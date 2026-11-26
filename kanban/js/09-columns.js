@@ -363,6 +363,14 @@ function cardModel(t, opts){
      Shown only with Binder set up (BINDER_URL in 02-state.js). */
   if (t.lead && BINDER_URL) chips.push({ pill: 'neutral', text: t.lead, title: 'Lead: ' + t.lead,
     href: BINDER_URL + '/o/' + encodeURIComponent(t.lead.toLowerCase()) });
+  /* Each `[ref:: <module>:<kind>/<id>]`, drawn the way the lead is: an outlined
+     pill with the module's name and the id, a link through the Offdesk core
+     when this install names one (CORE_URL in 02-state.js), plain text if not. */
+  (t.refs || []).forEach(r => {
+    if (!readRef(r)) return;
+    const href = refHref(r);
+    chips.push(Object.assign({ pill: 'neutral', text: refLabel(r), title: 'Linked: ' + r }, href ? { href } : {}));
+  });
   /* A cancellation is a tick plus a tag (CONVENTIONS.md, Cancelling a task), so
      on the board it is an ordinary done card wearing one more chip rather than
      a state of its own — the same shape every other tag already renders as. It

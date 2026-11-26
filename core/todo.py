@@ -103,7 +103,7 @@ class Task:
     promoted to attributes; anything else stays in `extra` exactly as written."""
 
     __slots__ = ("done", "title", "bold", "impact", "effort", "due", "time", "start", "done_on",
-                 "to", "theme", "lead", "urgent", "week", "doing", "slug", "blocked_by", "rank",
+                 "to", "theme", "lead", "refs", "urgent", "week", "doing", "slug", "blocked_by", "rank",
                  "tlrank", "headline", "chat", "repeat", "stable_id",
                  "cancelled", "archived", "created_by", "edited_by", "extra",
                  "body", "raw", "bucket", "column")
@@ -132,6 +132,9 @@ class Task:
         # stamp_authors() below on the shared board, and nowhere else.
         self.created_by = self.edited_by = ""
         self.blocked_by = []
+        # Links to records in other modules, `[ref:: binder:org/acme-ltd]`, in
+        # the order written. refs_of() adds the older `[lead:: ]`.
+        self.refs = []
         self.rank = None
         self.tlrank = None
         self.extra = []
@@ -154,6 +157,47 @@ def counts_as_finished(task):
     what puts it in a window. The port of countsAsFinished() in core/todo.js.
     """
     return bool(task.done and task.done_on and not task.cancelled and not task.archived)
+
+
+# A reference to a record in another module, `<module>:<kind>/<id>`. REF_RE in
+# core/todo.js.
+# The module and the kind are [a-z][a-z0-9-]*, the id [A-Za-z0-9._~%@+-]+, and
+# only spaces and tabs are trimmed, since the two languages disagree on what
+# whitespace is (U+FEFF). \Z, not $, which would let a trailing newline in.
+REF_RE = re.compile(r"^([a-z][a-z0-9-]*):([a-z][a-z0-9-]*)/([A-Za-z0-9._~%@+-]+)\Z")
+REF_TAG_RE = re.compile(r"^\[ref::([^\]]*)\]\Z|^`ref:([^`]*)`\Z")
+
+
+def read_ref(value):
+    """{module, kind, id} for a reference, or None. readRef() in core/todo.js."""
+    m = REF_RE.match(str(value if value is not None else "").strip(" \t"))
+    return {"module": m.group(1), "kind": m.group(2), "id": m.group(3)} if m else None
+
+
+def ref_tag_value(whole):
+    """The reference a whole `[ref:: …]` or `ref:…` code span holds, or "" when
+    it is not exactly one around a valid reference, which then stays in
+    `extra` as written. refTagValue() in core/todo.js."""
+    m = REF_TAG_RE.match(whole)
+    if not m:
+        return ""
+    v = (m.group(1) if m.group(1) is not None else m.group(2)).strip(" \t")
+    return v if read_ref(v) else ""
+
+
+def refs_of(task):
+    """Every record a task points at: the older `[lead:: <slug>]` first, as
+    `binder:org/<slug>`, then each `[ref:: ]` as written, without repeats.
+    refsOf() in core/todo.js. Reads only: the lead stays a lead on the line."""
+    out = []
+    lead = (getattr(task, "lead", "") or "").strip().lower()
+    if lead and read_ref("binder:org/" + lead):
+        out.append("binder:org/" + lead)
+    for r in getattr(task, "refs", None) or []:
+        r = str(r).strip(" \t")
+        if read_ref(r) and r not in out:
+            out.append(r)
+    return out
 
 
 def parse_task(raw_lines):
@@ -207,6 +251,12 @@ def parse_task(raw_lines):
             task.created_by = val.lower()
         elif key == "edited-by":
             task.edited_by = val.lower()
+        elif key == "ref":
+            ref = ref_tag_value(whole)
+            if ref:
+                task.refs.append(ref)
+            else:
+                task.extra.append(whole)
         else:
             task.extra.append(whole)
             return " "
@@ -1104,7 +1154,7 @@ _INDENTED = re.compile(r"^\s+\S")
 _HEADING2 = re.compile(r"^##\s")
 
 MERGE_FIELDS = ("title", "bold", "done", "impact", "effort", "due", "time", "start", "doneOn", "to",
-                "theme", "lead", "urgent", "week", "doing", "slug", "blockedBy", "rank", "tlrank",
+                "theme", "lead", "refs", "urgent", "week", "doing", "slug", "blockedBy", "rank", "tlrank",
                 "headline", "chat", "repeat", "stableId", "cancelled", "archived", "createdBy",
                 "editedBy", "extra")
 _PY_NAME = {"doneOn": "done_on", "blockedBy": "blocked_by", "stableId": "stable_id",
@@ -1288,6 +1338,9 @@ def _mg_line(f, indent):
         tags.append("[theme:: " + f["theme"].strip() + "]")
     if f["lead"] and f["lead"].strip():
         tags.append("[lead:: " + f["lead"].strip() + "]")
+    for r in f["refs"] or []:
+        if str(r).strip():
+            tags.append("[ref:: " + str(r).strip() + "]")
     if f["blockedBy"]:
         tags.append("`blocked-by:" + ",".join(f["blockedBy"]) + "`")
     if f["rank"] is not None:

@@ -153,7 +153,14 @@ const CASES = [
     theirs: [['[impact:: med] `id:bbbbbb`', '[impact:: high] `id:bbbbbb`']] },
   { why: 'different leads set on each side is a conflict on the lead', prefer: ['', 'mine', 'theirs'],
     mine: [['[impact:: med] `id:bbbbbb`', '[impact:: med] [lead:: acme-studio] `id:bbbbbb`']],
-    theirs: [['[impact:: med] `id:bbbbbb`', '[impact:: med] [lead:: beta-co] `id:bbbbbb`']] }
+    theirs: [['[impact:: med] `id:bbbbbb`', '[impact:: med] [lead:: beta-co] `id:bbbbbb`']] },
+  { why: 'a reference added in the save, the impact changed in the file: both land, the lead kept',
+    base: [['[impact:: med] `id:bbbbbb`', '[impact:: med] [lead:: acme-studio] `id:bbbbbb`']],
+    mine: [['[lead:: acme-studio] `id:bbbbbb`', '[lead:: acme-studio] [ref:: calls:call/x-1] `id:bbbbbb`']],
+    theirs: [['[impact:: med] [lead:: acme-studio]', '[impact:: high] [lead:: acme-studio]']] },
+  { why: 'different references set on each side is a conflict on the references', prefer: ['', 'mine', 'theirs'],
+    mine: [['[impact:: med] `id:bbbbbb`', '[impact:: med] [ref:: binder:org/acme-studio] `id:bbbbbb`']],
+    theirs: [['[impact:: med] `id:bbbbbb`', '[impact:: med] [ref:: binder:org/beta-co] `id:bbbbbb`']] }
 ]
 
 const cases = []

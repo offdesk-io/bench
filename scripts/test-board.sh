@@ -117,8 +117,9 @@ seed() {
   printf '_test' > "$DATA_ROOT/.current"
   # The owner the suites are written around (core/owner_profile.py reads it).
   printf -- '- Name: Morgan\n' > "$DATA_ROOT/profile.md"
-  # This install has Binder, so the lead checks run with it on (core/settings.py, binder_url).
-  printf '{"binder_url": "https://binder.example.com"}\n' > "$DATA_ROOT/settings.json"
+  # This install has Binder and an Offdesk core, so the lead and reference checks run with both on
+  # (core/settings.py, binder_url and core_url).
+  printf '{"binder_url": "https://binder.example.com", "core_url": "https://os.example.com"}\n' > "$DATA_ROOT/settings.json"
 }
 seed
 

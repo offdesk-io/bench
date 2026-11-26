@@ -438,6 +438,19 @@ const ALL_BUCKETS = '__all__';
    nowhere, the drawer has no Lead field and the PA may not set a lead. The tag
    itself is kept either way. */
 const BINDER_URL = (typeof window.BENCH_BINDER_URL === 'string' ? window.BENCH_BINDER_URL : '').replace(/\/+$/, '');
+/* The Offdesk core this install belongs to, the `core_url` setting, handed to
+   the page by /owner.js like Binder's. A task's `[ref:: <module>:<kind>/<id>]`
+   is a chip on its card that opens the record through the core
+   (<core_url>/api/refs/open?ref=…), which knows which module owns it. Empty:
+   the chip is plain text. */
+const CORE_URL = (typeof window.BENCH_CORE_URL === 'string' ? window.BENCH_CORE_URL : '').replace(/\/+$/, '');
+function refHref(ref){ return CORE_URL ? CORE_URL + '/api/refs/open?ref=' + encodeURIComponent(ref) : ''; }
+/* A reference as its chip reads: the module's name and the record's id. */
+function refLabel(ref){
+  const r = readRef(ref);
+  if (!r) return String(ref);
+  return r.module.charAt(0).toUpperCase() + r.module.slice(1) + ' ' + r.id;
+}
 /* The slug a typed lead becomes, as Binder names its organisations: lowercase,
    each run of anything but a-z and 0-9 is one hyphen, and hyphens come off the
    ends. So a lead can never carry a `]`, a backtick, `::` or a space onto a

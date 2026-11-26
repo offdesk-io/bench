@@ -38,7 +38,7 @@ const fixture = name =>
    reading it off the context object here would give undefined. So the file is
    evaluated with a trailing expression naming what this suite uses, and the
    value of that expression is what comes back. */
-const WANTED = ['TASK_RE', 'SUB_RE', 'MSG_NOTE', 'parseTask', 'serializeTask', 'agentOf',
+const WANTED = ['TASK_RE', 'SUB_RE', 'MSG_NOTE', 'parseTask', 'serializeTask', 'agentOf', 'refsOf', 'readRef',
                 'parseDoc', 'serializeDoc', 'splitBody', 'quoted', 'readRepeat',
                 'occurrenceFrom', 'occurrenceAfter', 'unscored', 'priorityScore', 'inheritedFields',
                 'mergeSaves'];
@@ -207,6 +207,14 @@ function checkParse() {
       const inherits = board.inheritedFields(parent, s);
       if (!same(inherits, want.inherits)) fail(`inherited fields of a step of ${JSON.stringify(entry.lines[0].slice(0, 50))}\n     got ${JSON.stringify(inherits)}, want ${JSON.stringify(want.inherits)}`);
     });
+  }
+  for (const { line, refs } of table.refs) {
+    const got = board.refsOf(board.parseTask([line]));
+    if (!same(got, refs)) fail(`refsOf(${JSON.stringify(line.slice(0, 55))}): got ${JSON.stringify(got)}, want ${JSON.stringify(refs)}`);
+  }
+  for (const { value, ref } of table.refValues) {
+    const got = board.readRef(value);
+    if (!same(got, ref)) fail(`readRef(${JSON.stringify(value)}): got ${JSON.stringify(got)}, want ${JSON.stringify(ref)}`);
   }
   for (const { to, agent } of table.agents) {
     const got = board.agentOf(to);
