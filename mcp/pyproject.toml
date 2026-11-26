@@ -1,0 +1,29 @@
+[project]
+name = "bench-mcp"
+version = "0.1.0"
+description = "Bench's tools for the Offdesk core, over MCP (stdio)"
+requires-python = ">=3.10"
+license = "MIT"
+# The same versions the Offdesk core runs (and Binder's binder-mcp), since the core's environment is where this
+# is installed.
+dependencies = [
+  "mcp==2.3.0",
+  "httpx==0.28.1",
+]
+
+[project.optional-dependencies]
+# The tests start Bench's own server (kanban/server.py, from the folder above) with the system's python3.
+dev = ["pytest>=8", "anyio>=4"]
+
+[project.scripts]
+bench-mcp = "bench_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["bench_mcp*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

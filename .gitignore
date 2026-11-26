@@ -45,3 +45,9 @@ node_modules/.cache-board-ui-*
 # Private working files
 COORDINATION.md
 IMPROVEMENTS.md
+
+# Bench's tools for the Offdesk core (mcp/): its own environment and build
+mcp/.venv/
+mcp/*.egg-info/
+mcp/build/
+.pytest_cache/
