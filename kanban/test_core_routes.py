@@ -95,9 +95,11 @@ def b64(b):
     return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
 
 
-def token(sub="ana@example.com", agent="pa", exp=None, key=KEY):
-    body = b64(json.dumps({"sub": sub, "agent": agent, "exp": exp or int(time.time()) + 300},
-                          separators=(",", ":")).encode())
+def token(sub="ana@example.com", agent="pa", exp=None, key=KEY, teams=None):
+    claims = {"sub": sub, "agent": agent, "exp": exp or int(time.time()) + 300}
+    if teams is not None:
+        claims["teams"] = teams
+    body = b64(json.dumps(claims, separators=(",", ":")).encode())
     return body + "." + b64(hmac.new(key, body.encode(), hashlib.sha256).digest())
 
 
@@ -149,8 +151,12 @@ def read_checks(srv, data):
        and "To do" in work["buckets"][0]["columns"], work)
     board_access.remember_person(data, "rui@example.com", "Rui", ["offdesk"])
     code, body, _ = srv.ask("GET", "/offdesk/boards.json", bearer("rui@example.com"))
+    ok("the teams Rui last signed in with count for nothing", (as_json(body) or {}).get("boards") == [], body)
+    code, body, _ = srv.ask("GET", "/offdesk/boards.json", bearer("rui@example.com", teams=["offdesk"]))
     names = [b["name"] for b in (as_json(body) or {}).get("boards", [])]
-    ok("Rui sees the team's board through the teams he last signed in with", names == ["open"], body)
+    ok("Rui's PA turn sees the team's board through the teams its token names", names == ["open"], body)
+    code, body, _ = srv.ask("GET", "/offdesk/boards.json", bearer("rui@example.com", "routine:r1", teams=["offdesk"]))
+    ok("Rui's routine does not, teams claim or not", (as_json(body) or {}).get("boards") == [], body)
     code, body, _ = srv.ask("GET", "/offdesk/boards.json", bearer("agent:digest", "digest"))
     names = [b["name"] for b in (as_json(body) or {}).get("boards", [])]
     ok("the digest agent sees only the board listing it", names == ["work"], body)

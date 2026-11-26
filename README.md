@@ -266,8 +266,12 @@ a value that is not a key stops the server at start-up.
 
 A token names a person (the PA, one of their routines or their own agent, all
 acting as them) or an agent of the team (`agent:<name>`). A person sees the
-boards their `access.json` lets them see, with the teams they last signed in with,
-since the token carries none; an agent of the team sees only boards whose
+boards their `access.json` lets them see, through the teams the token names: the
+core adds them, from the sign-in, only to the tokens of a person's own PA turn on
+the web (`agent` `pa`), and Bench reads them only then. A routine or a person's own
+agent carries none, so it sees only boards naming the person in `owner` or
+`people`. The teams someone last signed in to Bench with never count for a token.
+An agent of the team sees only boards whose
 `access.json` lists it under `agents`, set with
 `scripts/set-board-access.py <board> --agent <name>` and kept when the owner
 changes the sharing. On the Mac too, a token sees only what `access.json` allows.

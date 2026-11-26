@@ -22,8 +22,13 @@ Who a token names, as the core sends it:
     sub agent:digest,    agent digest        an agent of the team
 
 A person sees the boards access.json lets them see, as a signed-in visitor
-would, with the teams they last signed in with (the token carries none). An
-agent of the team sees only boards whose access.json lists it under `agents`.
+would, through the teams the token itself names: the core adds an optional
+`teams` claim, the teams of the sign-in, to the tokens of a person's own PA
+turn on the web, and Bench reads it only when `agent` is `pa`. A routine, a
+person's own agent and an agent of the team carry no teams, so they see only
+boards that name them (`owner` or `people`, or `agents`). The teams a person
+last signed in to Bench with are never used for a token. An agent of the team
+sees only boards whose access.json lists it under `agents`.
 What a request asks for is recorded as `by`: the person when the PA acts,
 `agent:<name>` for an agent of the team, and `<email> via <agent>` otherwise
 (`ana@example.com via routine:r1`), the way Binder records it.
@@ -98,8 +103,9 @@ def verify(key, token, now=None):
 
 
 def identity(claims):
-    """{person, agent, via, by} for a token's claims, or None when `sub` is
-    neither a person's email nor `agent:<name>`."""
+    """{person, agent, via, by, teams} for a token's claims, or None when `sub`
+    is neither a person's email nor `agent:<name>`. `teams` is the token's own
+    `teams` claim, cleaned, for the PA alone; [] for everything else."""
     sub = str(claims.get("sub") or "").strip()
     via = claims.get("agent") if isinstance(claims.get("agent"), str) else ""
     via = via.strip()
@@ -107,7 +113,7 @@ def identity(claims):
         name = sub[len(AGENT_PREFIX):]
         if not AGENT_NAME_RE.match(name):
             return None
-        return {"person": "", "agent": name, "via": via, "by": AGENT_PREFIX + name}
+        return {"person": "", "agent": name, "via": via, "by": AGENT_PREFIX + name, "teams": []}
     person = board_access.email(sub)
     if not person:
         return None
@@ -115,7 +121,9 @@ def identity(claims):
         by = person
     else:
         by = "%s via %s" % (person, via if ":" in via else AGENT_PREFIX + via)
-    return {"person": person, "agent": "", "via": via, "by": by}
+    raw = claims.get("teams")
+    teams = board_access.teams([t for t in raw if isinstance(t, str)]) if via == "pa" and isinstance(raw, list) else []
+    return {"person": person, "agent": "", "via": via, "by": by, "teams": teams}
 
 
 def can_see(data_root, access, who):
@@ -124,5 +132,4 @@ def can_see(data_root, access, who):
         return False
     if who.get("agent"):
         return who["agent"] in (access.get("agents") or [])
-    teams = board_access.read_user(data_root, who["person"]).get("teams") or []
-    return board_access.can_see(access, {"email": who["person"], "teams": board_access.teams(teams)})
+    return board_access.can_see(access, {"email": who["person"], "teams": list(who.get("teams") or [])})

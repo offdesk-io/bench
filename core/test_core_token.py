@@ -28,6 +28,9 @@ PERSON = ("eyJzdWIiOiJhbmFAZXhhbXBsZS5jb20iLCJhZ2VudCI6InBhIiwiZXhwIjoxMzAwfQ"
           ".-gGkCXnslvXniIar1FnH85x4hhOFFTzJUFf9iETjr0A")
 AGENT = ("eyJzdWIiOiJhZ2VudDpkaWdlc3QiLCJhZ2VudCI6ImRpZ2VzdCIsImV4cCI6MTMwMH0"
          ".Ay0_EI211cPjiL81Dz4LJlJo1csOrgMeMjWfwG9ZlVw")
+# A PA turn on the web also names the teams of its sign-in, an optional claim; the vector above stays good.
+PERSON_TEAMS = ("eyJzdWIiOiJhbmFAZXhhbXBsZS5jb20iLCJhZ2VudCI6InBhIiwiZXhwIjoxMzAwLCJ0ZWFtcyI6WyJvZmZkZXNrIl19"
+                ".qoOGLP7X9KLqeFNhrCsvfJLTLbOqguQEKS5CFIonzf0")
 
 
 def ok(label, cond, detail=""):
@@ -59,6 +62,8 @@ def check_verify():
        core_token.verify(KEY, PERSON, now=1001) == {"sub": "ana@example.com", "agent": "pa", "exp": 1300})
     ok("the core's agent vector verifies, up to and including its last second",
        core_token.verify(KEY, AGENT, now=1300)["sub"] == "agent:digest")
+    ok("the core's vector naming teams verifies",
+       core_token.verify(KEY, PERSON_TEAMS, now=1001).get("teams") == ["offdesk"])
     ok("the algorithm written here makes the core's vector",
        make({"sub": "ana@example.com", "agent": "pa", "exp": 1300}) == PERSON)
     ok("expired is refused", refused(PERSON, now=1301, why="expired"))
@@ -87,8 +92,16 @@ def check_key():
 
 def check_identity():
     pa = core_token.identity({"sub": "Ana@Example.com", "agent": "pa"})
-    ok("the PA acts as the person, recorded as them",
-       pa == {"person": "ana@example.com", "agent": "", "via": "pa", "by": "ana@example.com"}, pa)
+    ok("the PA acts as the person, recorded as them, with no teams when the token names none",
+       pa == {"person": "ana@example.com", "agent": "", "via": "pa", "by": "ana@example.com", "teams": []}, pa)
+    pt = core_token.identity({"sub": "ana@example.com", "agent": "pa", "teams": ["Offdesk", "bad team", 5]})
+    ok("the PA's teams are the token's, cleaned", pt["teams"] == ["offdesk"], pt)
+    rt = core_token.identity({"sub": "ana@example.com", "agent": "routine:r1", "teams": ["offdesk"]})
+    ok("a routine carries no teams, whatever the token says", rt["teams"] == [], rt)
+    ok("nor does a person's own agent",
+       core_token.identity({"sub": "ana@example.com", "agent": "helper", "teams": ["offdesk"]})["teams"] == [])
+    ok("teams that are not a list are none",
+       core_token.identity({"sub": "ana@example.com", "agent": "pa", "teams": "offdesk"})["teams"] == [])
     r = core_token.identity({"sub": "ana@example.com", "agent": "routine:r1"})
     ok("a routine acts as its person, recorded as <email> via it",
        r["person"] == "ana@example.com" and r["by"] == "ana@example.com via routine:r1", r)
@@ -96,8 +109,8 @@ def check_identity():
     ok("a person's own agent is recorded as <email> via agent:<name>",
        own["by"] == "ana@example.com via agent:helper", own)
     team = core_token.identity({"sub": "agent:digest", "agent": "digest"})
-    ok("an agent of the team is itself, recorded as agent:<name>",
-       team == {"person": "", "agent": "digest", "via": "digest", "by": "agent:digest"}, team)
+    ok("an agent of the team is itself, recorded as agent:<name>, with no teams",
+       team == {"person": "", "agent": "digest", "via": "digest", "by": "agent:digest", "teams": []}, team)
     for sub in ("routine:r1", "agent:", "agent:Not A Name", "nobody", "a@b"):
         ok("sub %r is no identity" % sub, core_token.identity({"sub": sub, "agent": "pa"}) is None)
 
@@ -118,7 +131,11 @@ def check_access():
         ok("a named person sees the board", core_token.can_see(root, access, ana))
         ok("someone else does not", not core_token.can_see(root, access, rui))
         board_access.remember_person(root, "rui@example.com", "Rui", ["offdesk"])
-        ok("a person sees it through the teams they last signed in with", core_token.can_see(root, access, rui))
+        ok("the teams a person last signed in with count for nothing", not core_token.can_see(root, access, rui))
+        rui_pa = core_token.identity({"sub": "rui@example.com", "agent": "pa", "teams": ["offdesk"]})
+        ok("the PA's token naming the board's team sees it", core_token.can_see(root, access, rui_pa))
+        rui_routine = core_token.identity({"sub": "rui@example.com", "agent": "routine:r1", "teams": ["offdesk"]})
+        ok("a routine does not, teams claim or not", not core_token.can_see(root, access, rui_routine))
         digest = core_token.identity({"sub": "agent:digest", "agent": "digest"})
         other = core_token.identity({"sub": "agent:other", "agent": "other"})
         ok("an agent the board lists sees it", core_token.can_see(root, access, digest))
