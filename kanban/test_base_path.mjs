@@ -120,6 +120,28 @@ try {
     await evalJS(`JSON.stringify([benchUrl('/data/todo.md'), benchUrl('https://example.com/x'), benchUrl('js/x.js')])`) ===
     JSON.stringify([BASE + '/data/todo.md', 'https://example.com/x', 'js/x.js']))
 
+  /* A link to one task, at the base itself, as the shell's frame or a redirect opens it: the root's 302
+     to the page keeps the fragment, and the board opens that task's drawer. */
+  // A card of demo.md's, by its title, as a banner's link carries it.
+  const link = { title: 'Chase the 360 responses', key: encodeURIComponent('Chase the 360 responses') }
+  const hash = '#!board=_test!task=' + link.key
+  await send('Page.navigate', { url: 'about:blank' })
+  await wait(300)
+  await send('Page.navigate', { url: `${site}${BASE}/${hash}` })
+  await wait(1000)
+  for (let i = 0; i < 80 && !(await evalJS(`typeof state !== 'undefined' && !!state.doc`).catch(() => false)); i++) await wait(250)
+  await evalJS(`state.locked = true`).catch(() => {})
+  const OPEN = `(state.openTask ? (locate(state.openTask)?.task.title || '') : '')`
+  let shownTitle = ''
+  for (let i = 0; i < 40 && shownTitle !== link.title; i++) {
+    shownTitle = await evalJS(OPEN).catch(() => '')
+    if (shownTitle !== link.title) await wait(100)
+  }
+  const at = await evalJS(`JSON.stringify({ path: location.pathname, hash: location.hash,
+    drawer: document.querySelector('#drawer').classList.contains('open') })`).then(JSON.parse)
+  check('a link to a task at the base lands on the page under the base', at.path === BASE + '/kanban/index.html', at.path)
+  check('the fragment survives the redirect: the board opens that task, in its drawer',
+    shownTitle === link.title && at.drawer, JSON.stringify({ shownTitle, want: link.title, at }))
   // Through the views, a task's drawer and the settings, so most of what the
   // board asks for is asked for at least once.
   for (const view of ['board', 'overview', 'reports', 'backups', 'projects', 'plans', 'agents', 'memory', 'settings', 'board']) {
@@ -145,9 +167,7 @@ try {
   check('no link on the page points outside the base, but the sign-in\'s', links === '[]', links)
   check('the sign-out form still posts to the sign-in\'s own /auth/logout',
     await evalJS(`!!document.querySelector('form[action="/auth/logout"]')`))
-  check('the board\'s own address is still a fragment on the page under the base',
-    await evalJS(`location.pathname === ${JSON.stringify(BASE + '/kanban/index.html')} && /^#!?/.test(location.hash || '#')`),
-    await evalJS(`location.href`))
+  check('and every request on the way was under the base', outside.length === 0, JSON.stringify(outside))
 } finally {
   ws?.close()
   chrome?.kill()
