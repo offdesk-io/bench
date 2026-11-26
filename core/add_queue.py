@@ -4,14 +4,15 @@
 Nothing outside the board writes todo.md: the board holds the whole document in
 the browser and writes all of it back, so a second writer is overwritten within
 seconds. So when the PA or an agent asks Bench for a task, through the core's
-tools (mcp/, bench_mcp, and the /core/add route in kanban/server.py), the
+tools (mcp/, bench_mcp, and the /offdesk/add route in kanban/server.py), the
 request lands here, in `data/<board>/add-queue.json`, and the board adds it
 when it next loads, through its own edit path (`drainAddQueue()` in
 kanban/js/10-reference-sections.js), the way it drains tick-queue.json.
 
 Each entry is one task:
 
-    {"id": "k3x9q2", "by": "ana@example.com via routine:r1", "at": "2026-11-26T09:30:05",
+    {"id": "k3x9q2", "by": "ana@example.com via routine:r1", "as": "ana@example.com",
+     "at": "2026-11-26T09:30:05",
      "title": "Send the deck", "column": "To do", "bucket": "Work",
      "due": "2026-12-01", "refs": ["binder:org/acme-ltd"]}
 
@@ -19,7 +20,8 @@ Each entry is one task:
 list and the queue, so the request is applied once: the board adds a task only
 while no task carries that id, and a drain that runs twice, or whose clean-up
 was lost, finds the task already there and only clears the entry. `by` is who
-asked, as core/core_token.py records it. An entry the board cannot apply (its
+asked, as core/core_token.py records it, and `as` whoever it acts for (the
+person, or `agent:<name>`), whom the new task is written as created by. An entry the board cannot apply (its
 bucket or column has gone since) is kept with `refused` saying why, and is not
 tried again.
 
@@ -76,7 +78,7 @@ def _mint(taken):
             return key
 
 
-def append(task, by, taken=(), path=None, now=None):
+def append(task, by, taken=(), path=None, now=None, acting_for=""):
     """Queues `task` ({title, column, bucket, due?, refs?}), asked for by `by`.
     `taken` is every id already in the list. Returns the entry."""
     with _Locked(path):
@@ -85,6 +87,7 @@ def append(task, by, taken=(), path=None, now=None):
         entry = {
             "id": _mint(used),
             "by": str(by).strip(),
+            "as": str(acting_for or by).strip().lower(),
             "at": (now or dt.datetime.now()).replace(microsecond=0).isoformat(),
             "title": str(task.get("title") or "").strip(),
             "column": str(task.get("column") or "").strip(),

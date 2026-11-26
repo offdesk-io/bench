@@ -3,7 +3,7 @@
 
 The core signs a short-lived token for every tool call, and Bench's tools for
 the core (mcp/, bench_mcp) pass it on as `Authorization: Bearer`. Only the
-routes under /core/ in kanban/server.py read it; everywhere else the header is
+routes under /offdesk/ in kanban/server.py read it; everywhere else the header is
 ignored, so the board's own sign-in is exactly what it was.
 
 The format is the core's: base64url (no padding) of compact JSON

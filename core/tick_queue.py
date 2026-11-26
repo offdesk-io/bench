@@ -24,7 +24,7 @@ retired Plan agent. No type is approved on arrival any more, so the bucket
 agents (agents/bucket-agent/) leave it out and the owner ticks every Review the
 plan.
 
-A tick asked for through the Offdesk core (the /core/tick route in
+A tick asked for through the Offdesk core (the /offdesk/tick route in
 kanban/server.py, for the PA or one of the core's agents) also says whose
 sub-task it is, in `as`:
 
