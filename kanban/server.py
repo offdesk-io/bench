@@ -2828,6 +2828,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         send. A request held to one board by X-Offdesk-Board (pinned_board())
         may only read and write that board's list, signed in or not.
         """
+        self._ctype = None
+        self._listing = False
         if not super().parse_request():
             return False
         _request.who = None
@@ -2941,8 +2943,35 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_header(self, keyword, value):
+        # What the answer is, for end_headers() below to decide whether a file
+        # under /data/ may open in the tab.
+        if keyword.lower() == "content-type":
+            self._ctype = str(value)
+        # Every redirect this server sends names one of its own paths, the
+        # base library's folder redirect (a folder asked for without its slash)
+        # included, so under a base the base goes in front of it here.
+        elif keyword.lower() == "location" and BASE and str(value).startswith("/") and not str(value).startswith("//"):
+            value = BASE + value
+        super().send_header(keyword, value)
+
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
+        # Anything under /data/ is a file someone wrote or uploaded (a project's
+        # files above all), never part of the page. On os.offdesk.io Bench shares
+        # the core's origin, so a page or SVG served from here could script the
+        # core. It is sandboxed and never sniffed, and anything but plain text,
+        # Markdown or an image other than SVG is a download. A folder's own
+        # listing (the Mac only; signed in there is none) still opens.
+        route = self.path.split("?")[0]
+        if route == "/" + DATA or route.startswith("/" + DATA + "/"):
+            self.send_header("Content-Security-Policy", "sandbox")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            ctype = (getattr(self, "_ctype", None) or "").split(";")[0].strip().lower()
+            inline = (ctype in ("text/plain", "text/markdown")
+                      or (ctype.startswith("image/") and ctype != "image/svg+xml"))
+            if not inline and not getattr(self, "_listing", False):
+                self.send_header("Content-Disposition", "attachment")
         # Every read of todo.md carries the hash of what was read, so the tab
         # can hand it back on the next save and do_PUT can check content rather
         # than a second-precision timestamp. GET and HEAD both — the watcher
@@ -3016,6 +3045,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if AUTH:
             self.send_error(404, "File not found")
             return None
+        self._listing = True
         return super().list_directory(path)
 
     def do_HEAD(self):
@@ -3060,7 +3090,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # Under a base, it is the board too: the shell's frame opens the base itself.
         if (AUTH or BASE) and path == "/":
             self.send_response(302)
-            self.send_header("Location", BASE + "/" + PAGE)
+            self.send_header("Location", "/" + PAGE)
             self.send_header("Content-Length", "0")
             self.end_headers()
             return

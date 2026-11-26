@@ -51,6 +51,7 @@ def under_base_checks(root):
     seed(data, "_test")
     with open(os.path.join(data, ".current"), "w") as fh:
         fh.write("_test")
+    os.makedirs(os.path.join(data, "_test", "projects", "p"))
     srv = Server(data, None, env={"BENCH_BASE": "/bench", "TODOS_SHOW_HIDDEN": "1"})
     ok("a server with BENCH_BASE=/bench starts", srv.wait())
     try:
@@ -80,6 +81,12 @@ def under_base_checks(root):
         status, location = redirect(srv, "/")
         ok("the root sends the browser to the page under the base",
            status == 302 and location == "/bench/kanban/index.html", "%s %s" % (status, location))
+
+        status, location = redirect(srv, "/data/projects/p")
+        ok("a folder without its slash is sent to it under the base",
+           status == 301 and location == "/bench/data/projects/p/", "%s %s" % (status, location))
+        status, location = redirect(srv, "/kanban")
+        ok("and so is the page's own folder", status == 301 and location == "/bench/kanban/", "%s %s" % (status, location))
 
         code, todo, _ = srv.ask("GET", "/data/todo.md")
         ok("the board's routes answer at their own paths, as nginx hands them on",
@@ -113,6 +120,7 @@ def unset_checks(root):
     seed(data, "_test")
     with open(os.path.join(data, ".current"), "w") as fh:
         fh.write("_test")
+    os.makedirs(os.path.join(data, "_test", "projects", "p"))
     srv = Server(data, None, env={"TODOS_SHOW_HIDDEN": "1"})
     ok("a server without BENCH_BASE starts", srv.wait())
     try:
@@ -122,6 +130,9 @@ def unset_checks(root):
         ok("unset, /owner.js says the base is empty", 'window.BENCH_BASE = "";' in owner, owner)
         status, _ = redirect(srv, "/")
         ok("unset, the root on the Mac is the folder listing it always was", status == 200, str(status))
+        status, location = redirect(srv, "/data/projects/p")
+        ok("unset, a folder without its slash is sent to it as before",
+           status == 301 and location == "/data/projects/p/", "%s %s" % (status, location))
     finally:
         srv.stop()
 
