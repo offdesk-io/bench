@@ -110,6 +110,27 @@ try:
 except ValueError as err:
     CORE_KEY, CORE_KEY_ERROR = b"", str(err)
 CORE_PREFIX = "/offdesk/"
+# Where the browser reaches this server when it is not the root of its own
+# site: os.offdesk.io serves Bench under /bench, and nginx removes the prefix
+# before the request gets here, so every route keeps its own path. Only what
+# is handed to the browser carries it: the page's absolute addresses, the
+# root's redirect, and window.BENCH_BASE in /owner.js, which the board puts in
+# front of everything it asks for (benchUrl() in kanban/js/01-markdown-model.js).
+# Unset is the board at the root, as it always was; a value that is not one
+# lower-case path segment refuses to start, in main().
+BASE_ERROR = None
+BASE = os.environ.get("BENCH_BASE", "")
+if BASE and not re.fullmatch(r"/[a-z0-9-]+", BASE):
+    BASE_ERROR = "BENCH_BASE must look like /bench (one path segment, lower case), not %r." % BASE
+    BASE = ""
+# An absolute address in the page, other than the sign-in's own /auth/.
+PAGE_ADDRESS = re.compile(r'(\s(?:href|src|action)=")/(?!auth/)')
+
+
+def page_under_base(html):
+    """kanban/index.html with its absolute addresses under BASE."""
+    return PAGE_ADDRESS.sub(lambda m: m.group(1) + BASE + "/", html)
+
 # The person behind the request this thread is answering, set by
 # Handler.parse_request before any route runs. ThreadingHTTPServer answers
 # each connection on its own thread, so a thread-local is per request.
@@ -3036,11 +3057,21 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         # Who is signed in. The Mac board has nobody, and answers the way a
         # server from before sign-in would, so the board shows no name.
         # Signed in, the root is the board rather than a listing of the repo.
-        if AUTH and path == "/":
+        # Under a base, it is the board too: the shell's frame opens the base itself.
+        if (AUTH or BASE) and path == "/":
             self.send_response(302)
-            self.send_header("Location", "/kanban/index.html")
+            self.send_header("Location", BASE + "/" + PAGE)
             self.send_header("Content-Length", "0")
             self.end_headers()
+            return
+        if BASE and (path == "/" + PAGE or (not AUTH and path == "/kanban/")):
+            with open(os.path.join(ROOT, PAGE), encoding="utf-8") as fh:
+                body = page_under_base(fh.read()).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         if path == "/whoami":
             if not AUTH:
@@ -3113,8 +3144,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             owner = ((requester()["name"].split() or [""])[0] if AUTH
                      else owner_profile.owner_name(DATA_ROOT, board=current_dataset()))
             body = ("window.OWNER_NAME = %s;\nwindow.BENCH_BINDER_URL = %s;\nwindow.BENCH_CORE_URL = %s;\n"
+                    "window.BENCH_BASE = %s;\n"
                     % (json.dumps(owner), json.dumps(settings.binder_url(DATA_ROOT)),
-                       json.dumps(settings.core_url(DATA_ROOT)))).encode("utf-8")
+                       json.dumps(settings.core_url(DATA_ROOT)), json.dumps(BASE))).encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "application/javascript; charset=utf-8")
             self.send_header("Content-Length", str(len(body)))
@@ -4466,6 +4498,9 @@ def main():
         return 2
     if CORE_KEY_ERROR:
         print(CORE_KEY_ERROR)
+        return 2
+    if BASE_ERROR:
+        print(BASE_ERROR)
         return 2
     if AUTH and HOST not in ("127.0.0.1", "::1"):
         # The sign-in headers are only true when nginx is the only thing that
