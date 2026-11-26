@@ -24,6 +24,18 @@ retired Plan agent. No type is approved on arrival any more, so the bucket
 agents (agents/bucket-agent/) leave it out and the owner ticks every Review the
 plan.
 
+A tick asked for through the Offdesk core (the /core/tick route in
+kanban/server.py, for the PA or one of the core's agents) also says whose
+sub-task it is, in `as`:
+
+    {"id": "5e6f7a8b", "sub": "aa0002", "by": "ana@example.com via routine:r1",
+     "as": "ana@example.com", "at": "2026-11-26T09:30:05", "note": ""}
+
+`as` is the person the request acts for, or `agent:<name>` for an agent of
+the team, and the board applies it only when the sub-task's `[to::]` is
+exactly that (by email for a person), so the core can tick only what is
+assigned to whoever it acts for. `by` is who asked, for the record.
+
 The other kind of request asks for a handover rather than a tick:
 
     {"id": "7c1d0e4a", "handover": "ab12cd", "to": "Personal family agent", "by": "Personal family agent",
@@ -100,7 +112,7 @@ def _write(path, items):
     os.replace(tmp, path)
 
 
-def append(sub, by, note="", path=None, now=None, plan="", kind=""):
+def append(sub, by, note="", path=None, now=None, plan="", kind="", assignee=""):
     """Asks the board to tick sub-task `sub`, on behalf of `by`. Returns the entry.
 
     `plan` is the path of a plan just written, relative to the plans folder. The
@@ -118,6 +130,8 @@ def append(sub, by, note="", path=None, now=None, plan="", kind=""):
         entry["plan"] = str(plan)
     if kind:
         entry["type"] = str(kind).strip().lower()
+    if assignee:
+        entry["as"] = str(assignee).strip().lower()
     with _Locked(path):
         items = read(path)
         items.append(entry)

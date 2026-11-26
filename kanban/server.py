@@ -3527,8 +3527,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             who = requester()
             if not was or was["owner"] != who["email"]:
                 return self._json(403, {"error": "only the list’s owner can change who sees it"})
+            # The core's agents are set on the server (scripts/set-board-access.py),
+            # never from the board, so a change of sharing keeps them.
             access, err = board_access.clean(who["email"], payload.get("people") or [],
-                                             payload.get("teams") or [])
+                                             payload.get("teams") or [], was.get("agents") or [])
             if not err:
                 # A team kept from before may stay even if its owner has since
                 # left it; a new one has to be theirs.

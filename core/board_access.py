@@ -20,6 +20,11 @@ Each board says who may see it in `data/<board>/access.json`:
 
     {"owner": "a@example.com", "people": ["b@example.com"], "teams": ["offdesk"]}
 
+and, optionally, the Offdesk core's agents of the team that may read it and
+ask for changes through the core's tools (core/core_token.py), by name:
+
+    "agents": ["digest"]
+
 Written by the server when a board is made or its sharing changes, and by
 scripts/set-board-access.py for a board that existed before sign-in did.
 With sign-in on, a board without the file, or with one that does not parse, is
@@ -70,6 +75,8 @@ RESERVED = (USERS, "agents")
 
 EMAIL_RE = re.compile(r"^[^@\s,]+@[^@\s,]+\.[^@\s,]+$")
 TEAM_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
+# The Offdesk core's agent names, the rule core/core_token.py checks too.
+AGENT_RE = re.compile(r"^[a-z][a-z0-9-]{0,63}$")
 
 
 def mode():
@@ -121,12 +128,22 @@ def teams(raw):
     return out
 
 
+def agents(raw):
+    """Agent names out of a list, lowercased, cleaned and deduplicated."""
+    out = []
+    for p in raw if isinstance(raw, (list, tuple)) else []:
+        a = str(p).strip().lower()
+        if AGENT_RE.match(a) and a not in out:
+            out.append(a)
+    return out
+
+
 def path(board_dir):
     return os.path.join(board_dir, FILE)
 
 
 def read(board_dir):
-    """The board's access as {owner, people, teams}, or None when it has none.
+    """The board's access as {owner, people, teams, agents}, or None when it has none.
 
     A file that does not parse, or names no owner, counts as none."""
     try:
@@ -141,10 +158,11 @@ def read(board_dir):
         "owner": email(raw.get("owner")),
         "people": [e for e in (email(p) for p in people) if e],
         "teams": teams(raw.get("teams") if isinstance(raw.get("teams"), list) else []),
+        "agents": agents(raw.get("agents")),
     }
 
 
-def clean(owner, people=(), team_ids=()):
+def clean(owner, people=(), team_ids=(), agent_names=()):
     """An access record from what a form or a command sent, or (None, error)."""
     o = email(owner)
     if not o:
@@ -165,7 +183,16 @@ def clean(owner, people=(), team_ids=()):
             return None, "%s is not a team id" % str(t)[:80]
         if got[0] not in ts:
             ts.append(got[0])
-    return {"owner": o, "people": out, "teams": ts}, None
+    if not isinstance(agent_names, (list, tuple)):
+        return None, "agents need to be a list"
+    ags = []
+    for a in agent_names:
+        got = agents([a])
+        if not got:
+            return None, "%s is not an agent's name" % str(a)[:80]
+        if got[0] not in ags:
+            ags.append(got[0])
+    return {"owner": o, "people": out, "teams": ts, "agents": ags}, None
 
 
 def write(board_dir, record):
@@ -174,8 +201,11 @@ def write(board_dir, record):
     fd, tmp = tempfile.mkstemp(dir=board_dir, prefix=".access-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as fh:
-            json.dump({"owner": record["owner"], "people": list(record["people"]),
-                       "teams": list(record["teams"])}, fh, indent=2)
+            out = {"owner": record["owner"], "people": list(record["people"]),
+                   "teams": list(record["teams"])}
+            if record.get("agents"):
+                out["agents"] = list(record["agents"])
+            json.dump(out, fh, indent=2)
             fh.write("\n")
             fh.flush()
             os.fsync(fh.fileno())
