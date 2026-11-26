@@ -2998,6 +2998,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         return super().list_directory(path)
 
     def do_HEAD(self):
+        if self.path.split("?")[0].startswith(CORE_PREFIX):
+            # The core's tools read with GET and write with POST; HEAD is none of their routes.
+            self.send_response(405)
+            self.send_header("Allow", "GET, POST")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if self.path.split("?")[0].lstrip("/") == TARGET:
             notice_outside_edit(current_dataset())
         return super().do_HEAD()

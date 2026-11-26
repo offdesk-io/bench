@@ -112,7 +112,7 @@ def setup(data):
     seed(data, "private", "# To-do\n\n## 1. Mine\n\n### To do\n\n- [ ] **Secret** `id:eeeeee`\n")
     seed(data, "open", "# To-do\n\n## 1. Open\n\n### To do\n\n- [ ] **Shared** `id:ffffff`\n")
     board_access.write(os.path.join(data, "work"), {"owner": "owner@example.com", "people": ["ana@example.com"],
-                                                    "teams": [], "agents": ["digest"]})
+                                                    "teams": [], "agents": ["digest", "helper"]})
     board_access.write(os.path.join(data, "private"), {"owner": "owner@example.com", "people": [], "teams": []})
     board_access.write(os.path.join(data, "open"), {"owner": "owner@example.com", "people": [],
                                                     "teams": ["offdesk"]})
@@ -138,6 +138,9 @@ def token_checks(srv, data):
     ok("a sub that is neither a person nor agent:<name> is 401", code == 401, "got %d %s" % (code, body))
     code, _, _ = srv.ask("POST", "/offdesk/add", dict(bearer()), {"board": "work", "title": "x"})
     ok("a POST without X-Board is 403", code == 403, "got %d" % code)
+    code, _, headers = srv.ask("HEAD", "/offdesk/boards.json", bearer())
+    ok("HEAD is not one of the routes: 405, saying GET", code == 405 and "GET" in (headers.get("Allow") or ""),
+       "got %d" % code)
 
 
 def read_checks(srv, data):
@@ -160,7 +163,7 @@ def read_checks(srv, data):
     code, body, _ = srv.ask("GET", "/offdesk/boards.json", bearer("agent:digest", "digest"))
     names = [b["name"] for b in (as_json(body) or {}).get("boards", [])]
     ok("the digest agent sees only the board listing it", names == ["work"], body)
-    code, body, _ = srv.ask("GET", "/offdesk/boards.json", bearer("agent:helper", "helper"))
+    code, body, _ = srv.ask("GET", "/offdesk/boards.json", bearer("agent:other", "other"))
     ok("another agent sees none", (as_json(body) or {}).get("boards") == [], body)
 
     code, body, _ = srv.ask("GET", "/offdesk/tasks.json?board=private", bearer())
@@ -277,8 +280,10 @@ def tick_checks(srv, data):
                                 ("already ticked", "s00003", bearer(), 409),
                                 ("not on the board", "zzzzzz", bearer(), 404),
                                 ("not an id", "x", bearer(), 400),
-                                ("an agent's own, by another agent", "s00004",
-                                 bearer("agent:helper", "helper"), 404)):
+                                ("an agent's own, by another agent the board lists", "s00004",
+                                 bearer("agent:helper", "helper"), 403),
+                                ("an agent's own, by an agent the board does not list", "s00004",
+                                 bearer("agent:other", "other"), 404)):
         code, got, _ = srv.ask("POST", "/offdesk/tick", dict(who, **BOARD), {"board": "work", "sub": sub})
         ok("a tick of a sub-task %s is %d" % (why, want), code == want, "got %d %s" % (code, got))
     code, got, _ = srv.ask("POST", "/offdesk/tick", dict(bearer("agent:digest", "digest"), **BOARD),

@@ -300,7 +300,7 @@ POSTS = {"/offdesk/add": lambda ctx, q, b: add(ctx, b), "/offdesk/tick": lambda 
 
 def handle(method, route, query, body, who, data_root, names):
     """(status, payload) for one /offdesk/ request from an identity already checked."""
-    table = GETS if method in ("GET", "HEAD") else POSTS if method == "POST" else {}
+    table = GETS if method == "GET" else POSTS if method == "POST" else {}
     fn = table.get(route)
     if fn is None:
         return 404, {"error": "no route %s" % route}

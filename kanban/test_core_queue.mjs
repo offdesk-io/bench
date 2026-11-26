@@ -15,8 +15,12 @@ import { spawn } from 'node:child_process'
 import { CHROME_BIN } from './test_browser.mjs'
 
 const PORT = Number(process.env.CDP_PORT) || 9495
-const BOARD = process.env.BOARD_PORT || 8765
-if (!process.env.BOARD_PORT) console.error('Note: this runs against the live board on 8765. For a throwaway copy: scripts/test-board.sh test_core_queue.mjs')
+/* Never the live board: without the test runner's port this refuses to run. */
+if (!process.env.BOARD_PORT) {
+  console.error('Run it through the test runner, over a throwaway copy: scripts/test-board.sh test_core_queue.mjs')
+  process.exit(2)
+}
+const BOARD = process.env.BOARD_PORT
 const checks = []
 const check = (name, pass, detail = '') => {
   checks.push(pass)
