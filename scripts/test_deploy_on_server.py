@@ -4,7 +4,9 @@ deploy-forced-command.sh sets to main), deploys only a commit that branch has
 reached, and that the manual route, which never sets it, is unchanged. Also
 that each package packages.lock names at the deployed commit goes to the
 commit it names, a package on the command line keeps its ref, a bad line
-stops the deploy, and a failed deploy rolls the packages back too.
+stops the deploy, and a failed deploy rolls the packages back too. And that
+the build gets BENCH_BASE from Bench's env file, read as text and never
+sourced, and that a base that is not one path segment stops the deploy.
 
 It runs the real script over throwaway git repos, with runuser, getent, flock,
 npm, systemctl and curl stubbed on the PATH, so nothing is built or restarted.
@@ -27,7 +29,8 @@ STUBS = {
     "runuser": 'while [ "$1" != -- ]; do shift; done; shift; exec "$@"',
     "getent": 'echo "bench:x:1000:1000::$STUB_HOME:/bin/bash"',
     "flock": "exit 0",
-    "npm": "exit 0",
+    # Writes down what the build was given, when a test asks.
+    "npm": '[ -n "${STUB_LOG:-}" ] && echo "npm $1 base=${BENCH_BASE-} key=${BENCH_CORE_TOKEN_KEY-}" >> "$STUB_LOG"; exit 0',
     "systemctl": "exit 0",
     "curl": "printf 200",
 }
@@ -93,10 +96,13 @@ class World:
                 fh.write("#!/usr/bin/env bash\n" + body + "\n")
             os.chmod(p, 0o755)
 
-    def deploy(self, sha, only_on=None):
+    def deploy(self, sha, only_on=None, extra=None):
         env = dict(os.environ, PATH=self.stubs + os.pathsep + os.environ["PATH"],
-                   STUB_HOME=self.tmp, BENCH_DEPLOY_LOCK=os.path.join(self.tmp, "lock"))
+                   STUB_HOME=self.tmp, BENCH_DEPLOY_LOCK=os.path.join(self.tmp, "lock"),
+                   BENCH_ENV_FILE=os.path.join(self.tmp, "no-such.env"))
         env.pop("BENCH_DEPLOY_ONLY_ON", None)
+        env.pop("BENCH_BASE", None)
+        env.update(extra or {})
         if only_on:
             env["BENCH_DEPLOY_ONLY_ON"] = only_on
         r = subprocess.run([self.bash, SCRIPT, "1", self.bench,
@@ -138,7 +144,7 @@ def pkg_world(tmp, bash, lock_line=None, health="printf 200"):
 def run_deploy(w, *extra):
     env = dict(os.environ, PATH=w.stubs + os.pathsep + os.environ["PATH"],
                STUB_HOME=w.tmp, BENCH_DEPLOY_LOCK=os.path.join(w.tmp, "lock"),
-               BENCH_DEPLOY_ONLY_ON="main")
+               BENCH_DEPLOY_ONLY_ON="main", BENCH_ENV_FILE=os.path.join(w.tmp, "no-such.env"))
     r = subprocess.run([w.bash, SCRIPT, "1", w.bench, w.pkgs, w.d, *extra],
                        env=env, capture_output=True, text=True)
     return r.returncode, r.stdout + r.stderr, git(w.bench, "rev-parse", "HEAD"), git(w.eng, "rev-parse", "HEAD")
@@ -190,6 +196,33 @@ def test_manual_route_unchanged(bash):
         check("without BENCH_DEPLOY_ONLY_ON any fetched commit deploys", (rc, head), (0, w.c))
 
 
+def test_base_from_the_env_file(bash):
+    with tempfile.TemporaryDirectory() as tmp:
+        w = World(tmp, bash)
+        log = os.path.join(tmp, "npm.log")
+        envf = os.path.join(tmp, "core.env")
+        with open(envf, "w") as fh:
+            fh.write("BENCH_CORE_TOKEN_KEY=" + "a" * 64 + "\nBENCH_BASE=/bench\n")
+        rc, out, head = w.deploy(w.b, extra={"BENCH_ENV_FILE": envf, "STUB_LOG": log})
+        with open(log) as fh:
+            ran = fh.read().splitlines()
+        check("the build gets BENCH_BASE from the env file", (rc, ran[-1]), (0, "npm run base=/bench key="))
+        check("and nothing else from it", all("key=a" not in ln for ln in ran), True)
+
+        os.remove(log)
+        rc, out, head = w.deploy(w.a, extra={"STUB_LOG": log})
+        with open(log) as fh:
+            ran = fh.read().splitlines()
+        check("with no env file the build has no base", (rc, ran[-1]), (0, "npm run base= key="))
+
+        for bad in ("bench", "/bench/", "/a/b", "/Bench", "/x;rm"):
+            with open(envf, "w") as fh:
+                fh.write("BENCH_BASE=%s\n" % bad)
+            rc, out, head = w.deploy(w.b, extra={"BENCH_ENV_FILE": envf})
+            check("BENCH_BASE=%s stops the deploy before anything changes" % bad,
+                  (rc, head, "BENCH_BASE" in out), (1, w.a, True))
+
+
 def main():
     bash = find_bash()
     if not bash:
@@ -201,6 +234,7 @@ def main():
     test_only_on_main(bash)
     test_manual_route_unchanged(bash)
     test_packages_lock(bash)
+    test_base_from_the_env_file(bash)
     print()
     if FAILED:
         for f in FAILED:

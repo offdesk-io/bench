@@ -24,6 +24,20 @@ for p in "$@"; do REPOS+=("${p%%=*}|$PKG_DIR/${p%%=*}|${p#*=}"); done
 say() { printf '%s\n' "$*"; }
 die() { say "ABORT: $*" >&2; exit 1; }
 
+# BENCH_BASE in Bench's env file (for example /bench) is the path the site
+# serves Bench under, as os.offdesk.io does; the server reads it from its own
+# environment, and the build is given it too. Read as text, never sourced: the
+# file also holds the core's key, and only this one line is taken from it.
+# Only a single lower-case path segment is accepted.
+ENV_FILE="${BENCH_ENV_FILE:-/etc/bench/core.env}"
+BASE=""
+if [ -f "$ENV_FILE" ]; then
+  BASE="$(grep -E '^BENCH_BASE=' "$ENV_FILE" | tail -n 1 | cut -d= -f2-)"
+fi
+if [ -n "$BASE" ] && ! [[ "$BASE" =~ ^/[a-z0-9-]+$ ]]; then
+  die "BENCH_BASE in $ENV_FILE must look like /bench (one path segment, lower case), not '$BASE'"
+fi
+
 # One deploy at a time on this server, whoever started it. Held until this
 # script exits; a second deploy waits up to ten minutes, then gives up.
 if [ "$APPLY" = 1 ]; then
@@ -141,8 +155,8 @@ build() {
   # npm ci installs exactly package-lock.json and never rewrites it. The board's front end builds to kanban/dist (gitignored). The packages
   # ship their built files in git, so only bench needs it.
   local bhead="$1"
-  say "== npm ci + build (bench)"
-  as_bench bash -c "cd '$BENCH_REPO' && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent" 2>&1 | sed 's/^/  /'
+  say "== npm ci + build (bench${BASE:+, under $BASE})"
+  as_bench env BENCH_BASE="$BASE" bash -c "cd '$BENCH_REPO' && npm ci --no-audit --no-fund --loglevel=error && npm run build --silent" 2>&1 | sed 's/^/  /'
 }
 
 health() {
