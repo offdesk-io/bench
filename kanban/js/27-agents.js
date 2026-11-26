@@ -109,7 +109,7 @@ function renderAgentsView(){
   drawRefCards();
   refreshBucketPlanners();
   BoardUI.mount(agentsRoot, BoardUI.h(BoardUI.AgentsApp, {
-    base: '/agents-api',
+    base: benchUrl('/agents-api'),
     title: 'Agents',
     // Its own names in localStorage, so which reading and order the owner last had on
     // the dashboard does not decide this one, or the other way round.
