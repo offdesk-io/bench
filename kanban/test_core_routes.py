@@ -271,6 +271,19 @@ def tick_checks(srv, data):
     ok("the digest agent ticks the step assigned to agent:digest",
        code == 202 and q[-1]["as"] == "agent:digest" and q[-1]["by"] == "agent:digest", q[-1:])
     ok("nothing refused was queued", len(q) == 2, q)
+    # A sub-task with no [to::] is the board owner's: the owner may tick it, through the PA only.
+    code, got, _ = srv.ask("POST", "/offdesk/tick", dict(bearer("owner@example.com", "routine:r9"), **BOARD),
+                           {"board": "work", "sub": "s00005"})
+    ok("the owner's routine may not tick a sub-task assigned to nobody", code == 403, "got %d %s" % (code, got))
+    code, got, _ = srv.ask("POST", "/offdesk/tick", dict(bearer("owner@example.com", "helper"), **BOARD),
+                           {"board": "work", "sub": "s00005"})
+    ok("nor the owner's own agent", code == 403, "got %d %s" % (code, got))
+    code, got, _ = srv.ask("POST", "/offdesk/tick", dict(bearer("owner@example.com", "pa"), **BOARD),
+                           {"board": "work", "sub": "s00005"})
+    q = json.load(open(queue))
+    ok("the owner through the PA ticks a sub-task assigned to nobody, marked as the owner's",
+       code == 202 and len(q) == 3 and q[-1]["as"] == "owner@example.com" and q[-1].get("owner") is True, q[-1:])
+    ok("other ticks are not marked as the owner's", all("owner" not in e for e in q[:2]), q)
 
 
 def board_drain_checks(srv, data):

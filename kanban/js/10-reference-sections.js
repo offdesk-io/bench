@@ -1944,8 +1944,11 @@ async function drainTickQueueOnce(){
     if (!f || f.done) { dealt.push(it.id); continue; }
     /* A tick through the Offdesk core says whose it is in `as`: the person by
        email, or `agent:<name>`, and only the sub-task assigned to exactly that
-       is ticked (core/tick_queue.py). Otherwise the agent rule below. */
-    const mine = it.as ? String(f.to || '').trim().toLowerCase() === String(it.as).trim().toLowerCase()
+       is ticked (core/tick_queue.py). One with no `[to::]` is the owner's own,
+       ticked only when the server marked the request as the owner's through
+       the PA (`owner`). Otherwise the agent rule below. */
+    const to = String(f.to || '').trim().toLowerCase();
+    const mine = it.as ? (to ? to === String(it.as).trim().toLowerCase() : it.owner === true)
       : !!who && agentOf(f.to) === who;
     if (!mine ||
         blockedMessage(allItems(), (f.blockedBy || []).concat(t.blockedBy || []))) {

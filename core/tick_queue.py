@@ -34,7 +34,10 @@ sub-task it is, in `as`:
 `as` is the person the request acts for, or `agent:<name>` for an agent of
 the team, and the board applies it only when the sub-task's `[to::]` is
 exactly that (by email for a person), so the core can tick only what is
-assigned to whoever it acts for. `by` is who asked, for the record.
+assigned to whoever it acts for. `by` is who asked, for the record. A sub-task
+with no `[to::]` is the board owner's own: the route queues a tick of one only
+when the owner asks through the PA, and marks it `"owner": true`, which is the
+one case the board applies to a sub-task assigned to nobody.
 
 The other kind of request asks for a handover rather than a tick:
 
@@ -112,7 +115,7 @@ def _write(path, items):
     os.replace(tmp, path)
 
 
-def append(sub, by, note="", path=None, now=None, plan="", kind="", assignee=""):
+def append(sub, by, note="", path=None, now=None, plan="", kind="", assignee="", owner=False):
     """Asks the board to tick sub-task `sub`, on behalf of `by`. Returns the entry.
 
     `plan` is the path of a plan just written, relative to the plans folder. The
@@ -132,6 +135,8 @@ def append(sub, by, note="", path=None, now=None, plan="", kind="", assignee="")
         entry["type"] = str(kind).strip().lower()
     if assignee:
         entry["as"] = str(assignee).strip().lower()
+    if owner:
+        entry["owner"] = True
     with _Locked(path):
         items = read(path)
         items.append(entry)

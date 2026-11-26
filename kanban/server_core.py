@@ -17,7 +17,9 @@ add goes into the board's add-queue.json (core/add_queue.py) and a tick into
 its tick-queue.json (core/tick_queue.py), and the board applies both when it
 next loads, through its own edit path. Both are checked here first, so what is
 queued is what the board can apply: a tick only for a sub-task assigned to
-whoever the token acts for (`[to::]` the person's email, or `agent:<name>`), an
+whoever the token acts for (`[to::]` the person's email, or `agent:<name>`), or
+for one with no `[to::]` (the owner's own) when the board's owner asks through
+the PA (`owner: true` on the entry), an
 add only into To do, Backlog or another column the bucket has that is not
 Doing, Reviewing or Done (CONVENTIONS.md: nothing goes there on the owner's
 behalf).
@@ -204,6 +206,12 @@ def _acting_for(who):
     return who["person"] or core_token.AGENT_PREFIX + who["agent"]
 
 
+def _owner_through_pa(who, folder):
+    """Whether the request is the board's owner's, through the PA (never a routine or an agent)."""
+    access = board_access.read(folder)
+    return bool(access and who["person"] and who["person"] == access["owner"] and who["via"] == "pa")
+
+
 def _taken(text):
     ids = set()
     for t in todo.parse_doc(text):
@@ -269,11 +277,15 @@ def tick(ctx, body):
                 continue
             if s.done:
                 raise Refused(409, "that sub-task is already ticked")
-            if (s.to or "").strip().lower() != me:
+            to = (s.to or "").strip().lower()
+            # No [to::] is the board owner's own, which the owner may tick through the PA, and nothing else may.
+            owners = not to and _owner_through_pa(ctx.who, folder)
+            if to != me and not owners:
                 raise Refused(403, "only the one a sub-task is assigned to may tick it; it is %s"
-                              % ("assigned to %s" % s.to.strip() if s.to.strip() else "not assigned to anyone"))
+                              % ("assigned to %s" % s.to.strip() if to else
+                                 "the board owner's, who may tick it through the PA"))
             entry = tick_queue.append(sub, ctx.who["by"], path=os.path.join(folder, "tick-queue.json"),
-                                      assignee=me)
+                                      assignee=me, owner=owners)
             return 202, {"queued": True, "id": entry["id"], "sub": sub, "task": t.title}
     raise Refused(404, "no sub-task with id %s on that board" % sub)
 

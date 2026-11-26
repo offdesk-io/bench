@@ -278,7 +278,9 @@ when it next loads. `bench.add` goes into `data/<board>/add-queue.json`
 with the new task's id minted up front so it is added once. `bench.tick` goes into
 `tick-queue.json` with `as` naming whoever it acts for, and is accepted, and then
 applied, only for a sub-task whose `[to::]` is exactly that person's email (or
-`agent:<name>`). Both are checked before they are queued, and the activity log
+`agent:<name>`), or for one with no `[to::]` (the owner's own) when the board's
+owner asks through the PA, never a routine or an agent (`"owner": true` on the
+entry). Both are checked before they are queued, and the activity log
 records who asked: the person, `agent:<name>`, or `<email> via routine:<id>`.
 
 ```

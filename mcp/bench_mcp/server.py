@@ -78,8 +78,9 @@ TOOLS = [
         "board": BOARD,
         "sub": {"type": "string", "pattern": r"^[a-z0-9]{6}$",
                 "description": "The sub-task's id, as bench.task shows it."}}, ["board", "sub"]),
-        description="Ask Bench to tick a sub-task assigned to the person you act for (or to you, an agent). It is "
-                    "queued and applied when the board next loads."),
+        description="Ask Bench to tick a sub-task assigned to the person you act for (or to you, an agent), or one "
+                    "assigned to nobody when you are the board owner's PA. It is queued and applied when the board "
+                    "next loads."),
 ]
 
 

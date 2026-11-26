@@ -69,6 +69,8 @@ const FIXTURE = [
   '  - [ ] Draft it [to:: ana@example.com] `id:s00001`',
   '  - [ ] Check it [to:: rui@example.com] `id:s00002`',
   '  - [ ] Ask the digest [to:: agent:digest] `id:s00003`',
+  '  - [ ] The owner\'s own `id:s00004`',
+  '  - [ ] Also the owner\'s `id:s00005`',
   '',
   '### To do', '',
   '- [ ] **Order badges** `id:bb0001`',
@@ -156,12 +158,15 @@ try {
   await drain([], [
     { id: 't1', sub: 's00001', by: 'ana@example.com via routine:r1', as: 'ana@example.com' },
     { id: 't2', sub: 's00002', by: 'ana@example.com', as: 'ana@example.com' },
-    { id: 't3', sub: 's00003', by: 'agent:digest', as: 'agent:digest' }
+    { id: 't3', sub: 's00003', by: 'agent:digest', as: 'agent:digest' },
+    { id: 't4', sub: 's00004', by: 'owner@example.com', as: 'owner@example.com', owner: true },
+    { id: 't5', sub: 's00005', by: 'ana@example.com', as: 'ana@example.com' }
   ])
   const subs = await evalJS(`(() => { const t = ${all}.find(x => x.t.stableId === 'aa0001').t; return splitBody(t).steps.map(s => s.done) })()`)
-  check('a tick acting for the assignee is applied, by email or as agent:<name>', JSON.stringify(subs) === '[true,false,true]', JSON.stringify(subs))
-  check('one for someone else\'s sub-task is refused, and all three cleared',
-    (await posted('/tick-queue.json')) === '{"done":["t1","t2","t3"]}' && /1 request refused/.test(await evalJS(`$('#status').textContent`)),
+  check('a tick acting for the assignee is applied, by email or as agent:<name>, and the owner\'s through the PA on a sub-task with no assignee',
+    JSON.stringify(subs) === '[true,false,true,true,false]', JSON.stringify(subs))
+  check('one for someone else\'s sub-task, or for no one\'s without the owner\'s mark, is refused, and all cleared',
+    (await posted('/tick-queue.json')) === '{"done":["t1","t2","t3","t4","t5"]}' && /2 requests refused/.test(await evalJS(`$('#status').textContent`)),
     (await posted('/tick-queue.json')) + ' / ' + await evalJS(`$('#status').textContent`))
 
   /* ---- the chips ---- */

@@ -15,8 +15,9 @@ work stands, or to add something to the list.
   up or `Backlog` if not. Give `due` only when there is a real deadline. Never put a task in Doing or
   Reviewing: only the owner says something is being worked on or has gone for review.
 - **Ticking a sub-task.** `bench.tick` with the sub-task's id from `bench.task`. Bench ticks only a
-  sub-task assigned to the person you act for (or to you, when you are an agent of the team); anything
-  else is refused, and you should tell the person rather than try another way.
+  sub-task assigned to the person you act for (or to you, when you are an agent of the team), and one
+  assigned to nobody only for the board's owner when you are their PA; anything else is refused, and you
+  should tell the person rather than try another way.
 - **Queued, not instant.** Bench's board is the only thing that writes the list, so an add or a tick is
   queued and appears when the board next loads. Say so ("it will show on the board next time it is
   opened"), and do not add the same task again because it is not there yet.

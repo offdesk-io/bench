@@ -615,7 +615,8 @@ def credit_agents(ds, entries, text):
             # A tick through the Offdesk core: applied when the sub-task is
             # assigned to whoever it acts for, and recorded under who asked.
             tid, to = parent.get(str(e.get("sub") or "").strip().lower(), ("", ""))
-            if tid and (to or "").strip().lower() == str(e["as"]).strip().lower():
+            want = (to or "").strip().lower()
+            if tid and (want == str(e["as"]).strip().lower() or (not want and e.get("owner") is True)):
                 got[tid] = {"who": str(e["as"]).strip().lower(), "name": by, "at": now}
             continue
         else:
