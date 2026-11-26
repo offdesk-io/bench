@@ -20,7 +20,7 @@ import vm from 'node:vm'
 const HERE = path.dirname(url.fileURLToPath(import.meta.url))
 const CORE = path.join(HERE, '..')
 const WANTED = ['parseTask', 'serializeTask', 'parseDoc', 'serializeDoc', 'mintId', 'idsInDoc', 'agentOf',
-  'splitBody', 'inheritedFields']
+  'splitBody', 'inheritedFields', 'refsOf', 'readRef']
 const board = vm.runInNewContext(
   fs.readFileSync(path.join(CORE, 'todo.js'), 'utf8') + '\n;({ ' + WANTED.join(', ') + ' });\n',
   {}, { filename: 'core/todo.js' })
@@ -32,7 +32,7 @@ const old = JSON.parse(fs.readFileSync(path.join(HERE, 'parse.json'), 'utf8'))
    not here: it is uid(), fresh every parse, and means nothing outside one tab. */
 const FIELDS = ['done', 'title', 'bold', 'impact', 'effort', 'due', 'time', 'start', 'doneOn',
   'to', 'theme', 'lead', 'urgent', 'week', 'slug', 'blockedBy', 'rank', 'tlrank', 'headline',
-  'chat', 'repeat', 'stableId', 'cancelled', 'archived', 'extra', 'doing', 'createdBy', 'editedBy']
+  'chat', 'repeat', 'stableId', 'cancelled', 'archived', 'extra', 'doing', 'createdBy', 'editedBy', 'refs']
 
 /* New cases, appended as the grammar grows. The existing lines are untouched
    and the list is de-duplicated below, so re-running this is idempotent. */
@@ -81,7 +81,13 @@ const NEW_LINES = [
   '- [ ] **The other syntax reads too** [edited-by:: ana@example.com]',
   '- [ ] **An unknown tag still rides along after the authors** `created-by:a@b.c` `id:au0003` `mystery:7`',
   /* 23 Oct 2026: a person on a shared board, by email. */
-  '- [ ] **Given to a person by email** [impact:: med] [to:: jerome@example.com] `id:pe0001`'
+  '- [ ] **Given to a person by email** [impact:: med] [to:: jerome@example.com] `id:pe0001`',
+  /* 26 Nov 2026: links to records in other modules, `[ref:: <module>:<kind>/<id>]`,
+     any number, written after the lead. A lead is still a lead. */
+  '- [ ] **One reference** [ref:: binder:org/acme-ltd] `id:rf0001`',
+  '- [ ] **Two references and a lead** [lead:: acme-studio] [ref:: binder:org/beta-co] [ref:: calls:call/2026-11-20-x] `id:rf0002`',
+  '- [ ] **A reference in code form, and one before the impact** [ref:: binder:org/gamma] [impact:: low] `ref:binder:org/delta`',
+  '- [ ] **An empty reference is dropped** [ref:: ] `id:rf0003`'
 ]
 
 /* Sub-tasks, read out of a task's body. Each entry is a task line and the
@@ -117,6 +123,12 @@ const STEP_TASKS = [
       '  - [ ] Implement [to:: Implement agent] `doing` `#ab12cd-implement` `blocked-by:ab12cd-plan-review` `id:aa0003`',
       '  - [ ] Review the work [to:: Morgan] `#ab12cd-work-review` `blocked-by:ab12cd-implement` `id:aa0004`'
     ] },
+  { why: 'a step carries references of its own, and takes none from its task',
+    lines: [
+      '- [ ] **Task with a lead** [lead:: acme-studio] [ref:: binder:org/beta-co]',
+      '  - [ ] Step with a reference [ref:: binder:org/gamma]',
+      '  - [ ] Bare step'
+    ] },
   { why: 'a step carries who wrote it and who last changed it, the way a task does',
     lines: [
       '- [ ] **Shared task** `created-by:jerome@example.com` `id:au0010`',
@@ -126,7 +138,7 @@ const STEP_TASKS = [
 
 const STEP_FIELDS = ['done', 'due', 'time', 'start', 'to', 'slug', 'blockedBy', 'rank', 'week', 'impact', 'effort',
   'urgent', 'doneOn', 'headline', 'chat', 'tlrank', 'repeat', 'stableId', 'doing', 'cancelled', 'archived',
-  'createdBy', 'editedBy', 'extra']
+  'createdBy', 'editedBy', 'extra', 'refs']
 const stepsFor = d => {
   const task = board.parseTask(d.lines)
   return {
@@ -148,6 +160,18 @@ const AGENT_INPUTS = ['Personal family agent', 'personal family AGENT', '  Work 
   /* 23 Oct 2026: a person given a task on a shared board is stored by email,
      and an email is a person, however it is spelt. */
   'jerome@example.com', 'plan-agent@example.com', 'Plan agent@example.com', 'implement.agent@offdesk.io']
+
+/* What refsOf() makes of a task line (the lead first, as binder:org/<slug>,
+   then each ref, no repeats), and what readRef() makes of a value. */
+const REF_LINES = [
+  '- [ ] **Nothing** [impact:: low]',
+  '- [ ] **A lead only** [lead:: acme-studio]',
+  '- [ ] **A lead in capitals** [lead:: Acme-Studio]',
+  '- [ ] **A lead and the same record as a ref** [lead:: acme-studio] [ref:: binder:org/acme-studio]',
+  '- [ ] **Refs in order** [ref:: binder:org/b] [ref:: binder:org/a] [ref:: binder:org/b]'
+]
+const REF_VALUES = ['binder:org/acme-ltd', ' binder:org/acme-ltd ', 'calls:call/2026-11-20-x', 'binder:org/',
+  'binder/org/x', 'Binder:org/x', 'binder:org/a b', ':org/x', 'binder:org', '', 'a:b/c/d']
 
 const caseFor = line => {
   const t = board.parseTask([line])
@@ -185,7 +209,15 @@ const NEW_DOCS = [
        + 'not round-trip: the next save writes them where they now live.',
     text: '## 1. People\n\n### Doing\n\n- [x] Finished in Doing\n- [ ] Still going\n\n### To do\n\n'
         + '- [x] Finished in To do\n\n### Done\n\n- [x] Already there\n- [ ] Unticked in Done\n\n'
-        + '## 2. BAU\n\n### To do\n\n- [ ] Open\n- [x] Ticked, and there is no Done heading\n' }
+        + '## 2. BAU\n\n### To do\n\n- [ ] Open\n- [x] Ticked, and there is no Done heading\n' },
+  { why: 'a lead in either syntax and references beside it come back byte for byte: no file is rewritten '
+       + 'for the references, and a lead stays a lead',
+    roundTrips: true,
+    text: '## 1. Work\n\n### Done\n\n### To do\n\n'
+        + '- [ ] **Send the deck** [impact:: med]  [lead:: Acme-Studio] `id:rr0001`\n'
+        + '- [ ] **Old form** `lead:acme-studio`\n'
+        + '- [ ] **Both** [lead:: beta-co] [ref:: binder:org/beta-co] [ref:: calls:call/x-1]\n'
+        + '  - [ ] A step [ref:: binder:org/gamma]\n' }
 ]
 
 const docText = d => d.file
@@ -227,7 +259,9 @@ const out = {
   docs: [...old.docs,
          ...DOC_FILES.filter(f => !old.docs.some(d => d.file === f.file)),
          ...NEW_DOCS.filter(n => !old.docs.some(d => d.text === n.text))].map(docFor),
-  steps: STEP_TASKS.map(stepsFor)
+  steps: STEP_TASKS.map(stepsFor),
+  refs: REF_LINES.map(line => ({ line, refs: board.refsOf(board.parseTask([line])) })),
+  refValues: REF_VALUES.map(value => ({ value, ref: board.readRef(value) }))
 }
 fs.writeFileSync(path.join(HERE, 'parse.json'), JSON.stringify(out, null, 2) + '\n')
 console.log(`parse.json: ${out.cases.length} cases (${old.cases.length} kept, ${NEW_LINES.length} new), ${out.docs.length} docs, ${FIELDS.length} fields`)

@@ -400,7 +400,7 @@ PY_FIELD = {"doneOn": "done_on", "blockedBy": "blocked_by", "stableId": "stable_
 SKIP_FIELD = set()
 STEP_FIELDS = ["done", "due", "time", "start", "to", "slug", "blockedBy", "rank", "week", "impact", "effort",
                "urgent", "doneOn", "headline", "chat", "tlrank", "repeat", "stableId", "doing",
-               "cancelled", "archived", "createdBy", "editedBy", "extra"]
+               "cancelled", "archived", "createdBy", "editedBy", "extra", "refs"]
 
 
 def check_parse():
@@ -453,6 +453,18 @@ def check_parse():
                 print("FAIL inherited fields of a step of %r\n     got  %r\n     board says %r"
                       % (entry["lines"][0][:50], got, want["inherits"]))
                 failures += 1
+    # References: refs_of() puts the lead first, as binder:org/<slug>, and
+    # read_ref() splits a value, both held to the board's refsOf() and readRef().
+    for case in PARSE["refs"]:
+        got = todo.refs_of(todo.parse_task([case["line"]]))
+        if got != case["refs"]:
+            print("FAIL refs_of(%r): got %r, board says %r" % (case["line"][:60], got, case["refs"]))
+            failures += 1
+    for case in PARSE["refValues"]:
+        got = todo.read_ref(case["value"])
+        if got != case["ref"]:
+            print("FAIL read_ref(%r): got %r, board says %r" % (case["value"], got, case["ref"]))
+            failures += 1
     for case in PARSE["agents"]:
         got = todo.agent_of(case["to"])
         if got != case["agent"]:

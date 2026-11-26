@@ -28,7 +28,8 @@
     "extra",
     "doing",
     "createdBy",
-    "editedBy"
+    "editedBy",
+    "refs"
   ],
   "agents": [
     {
@@ -138,7 +139,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Every tag at once** `#allsorts` [impact:: high] [effort:: M] `start:2026-09-01` [due:: 2026-09-11] `urgent` `week` [to:: Alex] `blocked-by:one,two` `rank:4` `tlrank:2` `headline:the one thing` `chat:7vysow` `repeat:wed`"
     },
@@ -172,7 +174,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [x] **A finished one** [impact:: low] [effort:: S] `done:2026-09-02`"
     },
@@ -206,7 +209,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] A title with no bold on it [impact:: med] [effort:: L]"
     },
@@ -240,7 +244,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Trailing whitespace and runs** [effort:: S]"
     },
@@ -274,7 +279,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **No space after the box** [effort:: S]"
     },
@@ -310,7 +316,8 @@
         ],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **An unknown tag rides along** [impact:: high] [effort:: S] `nonsense:kept`"
     },
@@ -346,7 +353,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Blocked by one thing** `blocked-by:solo`"
     },
@@ -384,7 +392,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Blocked by three, spaced** `blocked-by:a,b,c`"
     },
@@ -418,7 +427,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] ****"
     },
@@ -452,7 +462,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **"
     },
@@ -486,7 +497,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] ***"
     },
@@ -520,7 +532,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **x**"
     },
@@ -554,7 +567,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Rank with junk on it** `rank:3`"
     },
@@ -588,7 +602,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Rank that is pure junk**"
     },
@@ -622,7 +637,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Rank written as a decimal** `rank:3`"
     },
@@ -656,7 +672,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Timeline rank with junk on it** `tlrank:2`"
     },
@@ -690,7 +707,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Slug is lowercased** `#mixedcase`"
     },
@@ -724,7 +742,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Chat key is lowercased** `chat:7vysow`"
     },
@@ -758,7 +777,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Repeat is lowercased** `repeat:wed2/3`"
     },
@@ -792,7 +812,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [x] **A capital X ticks too** [effort:: S]"
     },
@@ -826,7 +847,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Empty inline field** [effort:: S]"
     },
@@ -863,7 +885,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Every tag at once, with an id** `#allsorts` [impact:: high] [effort:: M] `start:2026-09-01` [due:: 2026-09-11] `urgent` `week` [to:: Alex] `blocked-by:one,two` `rank:4` `tlrank:2` `headline:the one thing` `chat:7vysow` `repeat:wed` `id:ab12cd`"
     },
@@ -897,7 +920,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **An id and nothing else** `id:zz9zz9`"
     },
@@ -931,7 +955,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **No id at all, the way every task looked before today** [impact:: low]"
     },
@@ -965,7 +990,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **An id in the other syntax is read too** `id:qq11qq`"
     },
@@ -999,7 +1025,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **An id is lowercased like a slug and a chat key** `id:ab12cd`"
     },
@@ -1035,7 +1062,8 @@
         ],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **An unknown tag still rides along beside an id** `id:ab12cd` `mystery:7`"
     },
@@ -1069,7 +1097,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [x] **A finished task keeps its id** `done:2026-09-10` `id:ff00ff`"
     },
@@ -1103,7 +1132,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [x] **A cancelled task is ticked and says so** `done:2026-09-15` `cancelled:2026-09-15`"
     },
@@ -1137,7 +1167,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [x] **An archived task is the other half of the same rule** `done:2026-09-15` `archived:2026-09-14`"
     },
@@ -1171,7 +1202,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [x] **Both at once, which is odd but has to round-trip** `done:2026-09-15` `cancelled:2026-09-15` `archived:2026-09-15`"
     },
@@ -1205,7 +1237,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [x] **The other syntax reads too** `done:2026-09-15` `cancelled:2026-09-15`"
     },
@@ -1239,7 +1272,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Unticked, so the tag is kept for him to fix rather than dropped** `cancelled:2026-09-15`"
     },
@@ -1273,7 +1307,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Handed to the Plan agent** [impact:: med] [to:: Plan agent] `id:pl4n00`"
     },
@@ -1307,7 +1342,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Handed to the Implement agent** [to:: Implement agent] `rank:2`"
     },
@@ -1341,7 +1377,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **A backup from before the assignee field** [impact:: high] `rank:3`"
     },
@@ -1375,7 +1412,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **The old syntax of the retired tag goes too** [to:: Jordan]"
     },
@@ -1409,7 +1447,8 @@
         "extra": [],
         "doing": true,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Plan** `#ab12cd-plan` `doing` [to:: Plan agent] `id:pl0001`"
     },
@@ -1445,7 +1484,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Review the plan** `#ab12cd-plan-review` [to:: Morgan] `blocked-by:ab12cd-plan` `id:pl0002`"
     },
@@ -1479,7 +1519,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [x] **Implement** `#ab12cd-implement` `done:2026-09-21` [to:: Implement agent] `id:pl0003`"
     },
@@ -1513,7 +1554,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Filed under a theme** [impact:: high] [theme:: audits]"
     },
@@ -1547,7 +1589,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **The other syntax reads too** [theme:: ways-of-working]"
     },
@@ -1581,7 +1624,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **No theme at all, the way every task looked before today** [impact:: low]"
     },
@@ -1615,7 +1659,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "jerome@example.com",
-        "editedBy": "ana@example.com"
+        "editedBy": "ana@example.com",
+        "refs": []
       },
       "roundTrip": "- [ ] **Written and changed by two people** [due:: 2026-11-01] `created-by:jerome@example.com` `edited-by:ana@example.com` `id:au0001`"
     },
@@ -1649,7 +1694,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "jerome@example.com",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Only ever touched by its writer** `created-by:jerome@example.com` `id:au0002`"
     },
@@ -1683,7 +1729,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": "ana@example.com"
+        "editedBy": "ana@example.com",
+        "refs": []
       },
       "roundTrip": "- [ ] **The other syntax reads too** `edited-by:ana@example.com`"
     },
@@ -1719,7 +1766,8 @@
         ],
         "doing": false,
         "createdBy": "a@b.c",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **An unknown tag still rides along after the authors** `created-by:a@b.c` `id:au0003` `mystery:7`"
     },
@@ -1753,7 +1801,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Given to a person by email** [impact:: med] [to:: jerome@example.com] `id:pe0001`"
     },
@@ -1787,7 +1836,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **A due time beside the date** [due:: 2026-11-02] [time:: 15:00] `id:tm0001`"
     },
@@ -1821,7 +1871,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **A time with no date is read, and dropped on the next save** `id:tm0002`"
     },
@@ -1855,7 +1906,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **Filed under a lead** [lead:: acme-studio]"
     },
@@ -1889,7 +1941,8 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **A lead in code form** [lead:: acme-studio]"
     },
@@ -1923,9 +1976,158 @@
         "extra": [],
         "doing": false,
         "createdBy": "",
-        "editedBy": ""
+        "editedBy": "",
+        "refs": []
       },
       "roundTrip": "- [ ] **No lead here** [theme:: Tokens]"
+    },
+    {
+      "line": "- [ ] **One reference** [ref:: binder:org/acme-ltd] `id:rf0001`",
+      "expect": {
+        "done": false,
+        "title": "One reference",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0001",
+        "cancelled": "",
+        "archived": "",
+        "extra": [],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": [
+          "binder:org/acme-ltd"
+        ]
+      },
+      "roundTrip": "- [ ] **One reference** [ref:: binder:org/acme-ltd] `id:rf0001`"
+    },
+    {
+      "line": "- [ ] **Two references and a lead** [lead:: acme-studio] [ref:: binder:org/beta-co] [ref:: calls:call/2026-11-20-x] `id:rf0002`",
+      "expect": {
+        "done": false,
+        "title": "Two references and a lead",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "acme-studio",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0002",
+        "cancelled": "",
+        "archived": "",
+        "extra": [],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": [
+          "binder:org/beta-co",
+          "calls:call/2026-11-20-x"
+        ]
+      },
+      "roundTrip": "- [ ] **Two references and a lead** [lead:: acme-studio] [ref:: binder:org/beta-co] [ref:: calls:call/2026-11-20-x] `id:rf0002`"
+    },
+    {
+      "line": "- [ ] **A reference in code form, and one before the impact** [ref:: binder:org/gamma] [impact:: low] `ref:binder:org/delta`",
+      "expect": {
+        "done": false,
+        "title": "A reference in code form, and one before the impact",
+        "bold": true,
+        "impact": "low",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "",
+        "cancelled": "",
+        "archived": "",
+        "extra": [],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": [
+          "binder:org/gamma",
+          "binder:org/delta"
+        ]
+      },
+      "roundTrip": "- [ ] **A reference in code form, and one before the impact** [impact:: low] [ref:: binder:org/gamma] [ref:: binder:org/delta]"
+    },
+    {
+      "line": "- [ ] **An empty reference is dropped** [ref:: ] `id:rf0003`",
+      "expect": {
+        "done": false,
+        "title": "An empty reference is dropped",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0003",
+        "cancelled": "",
+        "archived": "",
+        "extra": [],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": []
+      },
+      "roundTrip": "- [ ] **An empty reference is dropped** `id:rf0003`"
     }
   ],
   "docs": [
@@ -2329,6 +2531,33 @@
           "body": []
         }
       ]
+    },
+    {
+      "why": "a lead in either syntax and references beside it come back byte for byte: no file is rewritten for the references, and a lead stays a lead",
+      "roundTrips": true,
+      "text": "## 1. Work\n\n### Done\n\n### To do\n\n- [ ] **Send the deck** [impact:: med]  [lead:: Acme-Studio] `id:rr0001`\n- [ ] **Old form** `lead:acme-studio`\n- [ ] **Both** [lead:: beta-co] [ref:: binder:org/beta-co] [ref:: calls:call/x-1]\n  - [ ] A step [ref:: binder:org/gamma]\n",
+      "tasks": [
+        {
+          "title": "Send the deck",
+          "bucket": "Work",
+          "column": "To do",
+          "body": []
+        },
+        {
+          "title": "Old form",
+          "bucket": "Work",
+          "column": "To do",
+          "body": []
+        },
+        {
+          "title": "Both",
+          "bucket": "Work",
+          "column": "To do",
+          "body": [
+            "  - [ ] A step [ref:: binder:org/gamma]"
+          ]
+        }
+      ]
     }
   ],
   "steps": [
@@ -2365,6 +2594,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "2026-11-02",
             "impact": "",
@@ -2398,6 +2628,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "2026-11-02",
             "impact": "",
@@ -2442,6 +2673,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "2026-09-30",
             "impact": "high",
@@ -2482,6 +2714,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "2026-09-25",
             "impact": "low",
@@ -2517,6 +2750,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "2026-09-30",
             "impact": "high",
@@ -2565,6 +2799,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "2026-10-01",
             "impact": "med",
@@ -2603,6 +2838,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "2026-09-25",
             "impact": "med",
@@ -2640,6 +2876,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "2026-10-01",
             "impact": "low",
@@ -2689,6 +2926,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "",
             "impact": "high",
@@ -2726,6 +2964,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "",
             "impact": "high",
@@ -2763,6 +3002,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "",
             "impact": "high",
@@ -2800,6 +3040,7 @@
           "createdBy": "",
           "editedBy": "",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "",
             "impact": "high",
@@ -2808,6 +3049,86 @@
             "inherited": [
               "impact"
             ]
+          }
+        }
+      ]
+    },
+    {
+      "why": "a step carries references of its own, and takes none from its task",
+      "lines": [
+        "- [ ] **Task with a lead** [lead:: acme-studio] [ref:: binder:org/beta-co]",
+        "  - [ ] Step with a reference [ref:: binder:org/gamma]",
+        "  - [ ] Bare step"
+      ],
+      "steps": [
+        {
+          "done": false,
+          "due": "",
+          "time": "",
+          "start": "",
+          "to": "",
+          "slug": "",
+          "blockedBy": [],
+          "rank": null,
+          "week": false,
+          "impact": "",
+          "effort": "",
+          "urgent": false,
+          "doneOn": "",
+          "headline": "",
+          "chat": "",
+          "tlrank": null,
+          "repeat": "",
+          "stableId": "",
+          "doing": false,
+          "cancelled": "",
+          "archived": "",
+          "createdBy": "",
+          "editedBy": "",
+          "extra": [],
+          "refs": [
+            "binder:org/gamma"
+          ],
+          "inherits": {
+            "due": "",
+            "impact": "",
+            "urgent": false,
+            "week": false,
+            "inherited": []
+          }
+        },
+        {
+          "done": false,
+          "due": "",
+          "time": "",
+          "start": "",
+          "to": "",
+          "slug": "",
+          "blockedBy": [],
+          "rank": null,
+          "week": false,
+          "impact": "",
+          "effort": "",
+          "urgent": false,
+          "doneOn": "",
+          "headline": "",
+          "chat": "",
+          "tlrank": null,
+          "repeat": "",
+          "stableId": "",
+          "doing": false,
+          "cancelled": "",
+          "archived": "",
+          "createdBy": "",
+          "editedBy": "",
+          "extra": [],
+          "refs": [],
+          "inherits": {
+            "due": "",
+            "impact": "",
+            "urgent": false,
+            "week": false,
+            "inherited": []
           }
         }
       ]
@@ -2844,6 +3165,7 @@
           "createdBy": "jerome@example.com",
           "editedBy": "ana@example.com",
           "extra": [],
+          "refs": [],
           "inherits": {
             "due": "",
             "impact": "",
@@ -2853,6 +3175,99 @@
           }
         }
       ]
+    }
+  ],
+  "refs": [
+    {
+      "line": "- [ ] **Nothing** [impact:: low]",
+      "refs": []
+    },
+    {
+      "line": "- [ ] **A lead only** [lead:: acme-studio]",
+      "refs": [
+        "binder:org/acme-studio"
+      ]
+    },
+    {
+      "line": "- [ ] **A lead in capitals** [lead:: Acme-Studio]",
+      "refs": [
+        "binder:org/acme-studio"
+      ]
+    },
+    {
+      "line": "- [ ] **A lead and the same record as a ref** [lead:: acme-studio] [ref:: binder:org/acme-studio]",
+      "refs": [
+        "binder:org/acme-studio"
+      ]
+    },
+    {
+      "line": "- [ ] **Refs in order** [ref:: binder:org/b] [ref:: binder:org/a] [ref:: binder:org/b]",
+      "refs": [
+        "binder:org/b",
+        "binder:org/a"
+      ]
+    }
+  ],
+  "refValues": [
+    {
+      "value": "binder:org/acme-ltd",
+      "ref": {
+        "module": "binder",
+        "kind": "org",
+        "id": "acme-ltd"
+      }
+    },
+    {
+      "value": " binder:org/acme-ltd ",
+      "ref": {
+        "module": "binder",
+        "kind": "org",
+        "id": "acme-ltd"
+      }
+    },
+    {
+      "value": "calls:call/2026-11-20-x",
+      "ref": {
+        "module": "calls",
+        "kind": "call",
+        "id": "2026-11-20-x"
+      }
+    },
+    {
+      "value": "binder:org/",
+      "ref": null
+    },
+    {
+      "value": "binder/org/x",
+      "ref": null
+    },
+    {
+      "value": "Binder:org/x",
+      "ref": null
+    },
+    {
+      "value": "binder:org/a b",
+      "ref": null
+    },
+    {
+      "value": ":org/x",
+      "ref": null
+    },
+    {
+      "value": "binder:org",
+      "ref": null
+    },
+    {
+      "value": "",
+      "ref": null
+    },
+    {
+      "value": "a:b/c/d",
+      "ref": {
+        "module": "a",
+        "kind": "b",
+        "id": "c/d"
+      }
     }
   ]
 }
