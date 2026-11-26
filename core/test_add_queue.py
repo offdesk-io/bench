@@ -64,6 +64,28 @@ def main():
             json.dump([{"id": "abcdef"}, 5, "x"], fh)
         ok("only objects are entries", add_queue.read(path) == [{"id": "abcdef"}])
 
+        # At most MAX_WAITING entries wait to be added; refused ones do not count, and go after 30 days.
+        os.remove(path)
+        ok("a hundred may wait", add_queue.MAX_WAITING == 100)
+        for i in range(100):
+            add_queue.append({"title": "T%d" % i, "column": "To do", "bucket": "Work"}, "ana@example.com", path=path)
+        try:
+            add_queue.append({"title": "one more", "column": "To do", "bucket": "Work"}, "ana@example.com", path=path)
+            ok("the hundred and first is refused", False)
+        except add_queue.QueueFull:
+            ok("the hundred and first is refused", len(add_queue.read(path)) == 100)
+        first = add_queue.read(path)[0]["id"]
+        add_queue.refuse({first: "gone"}, path, now=dt.datetime(2026, 11, 1, 9, 0))
+        ok("a refused entry says when", add_queue.read(path)[0].get("refused_at") == "2026-11-01T09:00:00")
+        e = add_queue.append({"title": "room again", "column": "To do", "bucket": "Work"}, "ana@example.com",
+                             path=path, now=dt.datetime(2026, 11, 20, 9, 0))
+        ok("a refused entry frees its place", e["title"] == "room again" and len(add_queue.read(path)) == 101)
+        add_queue.remove([e["id"]], path)
+        add_queue.append({"title": "later", "column": "To do", "bucket": "Work"}, "ana@example.com",
+                         path=path, now=dt.datetime(2026, 12, 1, 9, 1))
+        ok("refused entries are pruned thirty days after they were refused",
+           first not in [x["id"] for x in add_queue.read(path)], len(add_queue.read(path)))
+
         os.remove(path)
         threads = [threading.Thread(target=add_queue.append, args=({"title": "T%d" % i, "column": "To do",
                                                                      "bucket": "Work"}, "ana@example.com"),

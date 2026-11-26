@@ -247,6 +247,12 @@ def add_checks(srv, data):
         code, got, _ = srv.ask("POST", "/offdesk/add", dict(bearer(), **BOARD), payload)
         ok("refused: %s (%d)" % (why, code_want), code == code_want, "got %d %s" % (code, got))
     ok("nothing refused was queued", len(json.load(open(queue))) == 2)
+    filler = [dict(e, id="f%05d" % i) for i, e in enumerate([json.load(open(queue))[0]] * 98)]
+    json.dump(json.load(open(queue)) + filler, open(queue, "w"))
+    code, got, _ = srv.ask("POST", "/offdesk/add", dict(bearer(), **BOARD), {"board": "work", "title": "One more",
+                                                                              "bucket": "Work"})
+    ok("past a hundred waiting on a board, an add is 429", code == 429 and "100" in got, "got %d %s" % (code, got))
+    json.dump(json.load(open(queue))[:2], open(queue, "w"))
     seed(data, "solo", "# To-do\n\n## 1. Only\n\n### To do\n\n- [ ] **One** `id:gggggg`\n")
     board_access.write(os.path.join(data, "solo"), {"owner": "ana@example.com", "people": [], "teams": []})
     code, got, _ = srv.ask("POST", "/offdesk/add", dict(bearer(), **BOARD), {"board": "solo", "title": "Two"})

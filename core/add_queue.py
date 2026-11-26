@@ -22,8 +22,9 @@ while no task carries that id, and a drain that runs twice, or whose clean-up
 was lost, finds the task already there and only clears the entry. `by` is who
 asked, as core/core_token.py records it, and `as` whoever it acts for (the
 person, or `agent:<name>`), whom the new task is written as created by. An entry the board cannot apply (its
-bucket or column has gone since) is kept with `refused` saying why, and is not
-tried again.
+bucket or column has gone since) is kept with `refused` saying why and
+`refused_at`, is not tried again, and is pruned 30 days later. At most 100
+entries wait on a board at once.
 
 The file is appended to and changed under the same lock tick_queue.py uses,
 and the board takes out only the ids it dealt with, so a request that lands
@@ -39,6 +40,14 @@ import string
 from platform_calls import Locked as _Locked
 
 FILE = "add-queue.json"
+# At most this many entries wait on one board; past it append() refuses (QueueFull, a 429 at the route). Refused
+# entries do not count, and are pruned REFUSED_DAYS after they were refused.
+MAX_WAITING = 100
+REFUSED_DAYS = 30
+
+
+class QueueFull(Exception):
+    pass
 _ALPHABET = string.ascii_lowercase + string.digits
 
 
@@ -78,17 +87,27 @@ def _mint(taken):
             return key
 
 
+def _pruned(items, now):
+    """Without the refused entries older than REFUSED_DAYS."""
+    cut = (now - dt.timedelta(days=REFUSED_DAYS)).replace(microsecond=0).isoformat()
+    return [e for e in items if not (e.get("refused") and str(e.get("refused_at") or e.get("at") or "") < cut)]
+
+
 def append(task, by, taken=(), path=None, now=None, acting_for=""):
     """Queues `task` ({title, column, bucket, due?, refs?}), asked for by `by`.
-    `taken` is every id already in the list. Returns the entry."""
+    `taken` is every id already in the list. Returns the entry, or raises
+    QueueFull with MAX_WAITING entries already waiting."""
+    now = now or dt.datetime.now()
     with _Locked(path):
-        items = read(path)
+        items = _pruned(read(path), now)
+        if sum(1 for e in items if not e.get("refused")) >= MAX_WAITING:
+            raise QueueFull("%d tasks already wait for this board to load" % MAX_WAITING)
         used = set(taken) | {str(e.get("id")) for e in items}
         entry = {
             "id": _mint(used),
             "by": str(by).strip(),
             "as": str(acting_for or by).strip().lower(),
-            "at": (now or dt.datetime.now()).replace(microsecond=0).isoformat(),
+            "at": now.replace(microsecond=0).isoformat(),
             "title": str(task.get("title") or "").strip(),
             "column": str(task.get("column") or "").strip(),
             "bucket": str(task.get("bucket") or "").strip(),
@@ -111,17 +130,20 @@ def remove(ids, path):
     return len(items) - len(keep)
 
 
-def refuse(reasons, path):
-    """Marks the entries named in `reasons` ({id: why}) as refused, keeping them."""
+def refuse(reasons, path, now=None):
+    """Marks the entries named in `reasons` ({id: why}) as refused, and when, keeping them for REFUSED_DAYS."""
     want = {str(k): str(v)[:200] for k, v in (reasons or {}).items()}
+    now = now or dt.datetime.now()
     changed = 0
     with _Locked(path):
-        items = read(path)
+        was = read(path)
+        items = _pruned(was, now)
         for e in items:
             why = want.get(str(e.get("id")))
             if why and not e.get("refused"):
                 e["refused"] = why
+                e["refused_at"] = now.replace(microsecond=0).isoformat()
                 changed += 1
-        if changed:
+        if changed or len(items) != len(was):
             _write(path, items)
     return changed

@@ -256,9 +256,12 @@ def add(ctx, body):
     for r in refs:
         if not isinstance(r, str) or not todo.read_ref(r):
             raise Refused(400, "%s is not a reference, <module>:<kind>/<id>" % str(r)[:60])
-    entry = add_queue.append({"title": title, "bucket": bucket, "column": column, "due": due,
-                              "refs": [r.strip(" \t") for r in refs]}, ctx.who["by"], taken=_taken(text),
-                             path=add_queue.path_for(folder), acting_for=_acting_for(ctx.who))
+    try:
+        entry = add_queue.append({"title": title, "bucket": bucket, "column": column, "due": due,
+                                  "refs": [r.strip(" \t") for r in refs]}, ctx.who["by"], taken=_taken(text),
+                                  path=add_queue.path_for(folder), acting_for=_acting_for(ctx.who))
+    except add_queue.QueueFull as e:
+        raise Refused(429, "%s; ask again once the board has been opened" % e)
     return 202, {"queued": True, "id": entry["id"], "board": body.get("board"), "bucket": bucket,
                  "column": column}
 
