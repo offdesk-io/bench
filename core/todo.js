@@ -169,7 +169,7 @@ function readTags(rest){
     /* A link to a record in another module, `[ref:: binder:org/acme-ltd]`,
        any number on a line, kept in the order written and as written. See
        refsOf() below for how the older `[lead:: ]` joins them. */
-    else if (key === 'ref') { if (v.trim()) refs.push(v.trim()); }
+    else if (key === 'ref') { const r = refTagValue(whole); if (r) refs.push(r); else extra.push(whole); }
     else extra.push(whole);
     return ' ';
   };
@@ -239,10 +239,26 @@ function countsAsFinished(t){
    `[ref:: binder:org/acme-ltd]` writes it. The module and the kind are
    lowercase words; the id is anything without a space or a `]`. Returns
    { module, kind, id } or null for something that is not one. */
-const REF_RE = /^([a-z][a-z0-9_-]*):([a-z][a-z0-9_-]*)\/([^\s\]]+)$/;
+/* The module and the kind are [a-z][a-z0-9-]*, the id [A-Za-z0-9._~%@+-]+,
+   and only spaces and tabs are trimmed: JavaScript's idea of whitespace is not
+   Python's (U+FEFF is one here and not there), so neither is used. The same
+   rule is in core/todo.py, kanban/server_core.py's add check (through it),
+   mcp/bench_mcp and the Offdesk core's core/refs.py. */
+const REF_RE = /^([a-z][a-z0-9-]*):([a-z][a-z0-9-]*)\/([A-Za-z0-9._~%@+-]+)$/;
+function refTrim(v){ return String(v == null ? '' : v).replace(/^[ \t]+|[ \t]+$/g, ''); }
 function readRef(value){
-  const m = REF_RE.exec(String(value == null ? '' : value).trim());
+  const m = REF_RE.exec(refTrim(value));
   return m ? { module: m[1], kind: m[2], id: m[3] } : null;
+}
+/* The reference a whole `[ref:: …]` or `ref:…` code span holds, or '' when the
+   tag is not exactly one of those around a valid reference. One that is not
+   stays in `extra` as written: kept as plain text, never dropped or rewritten. */
+const REF_TAG_RE = /^\[ref::([^\]]*)\]$|^`ref:([^`]*)`$/;
+function refTagValue(whole){
+  const m = REF_TAG_RE.exec(whole);
+  if (!m) return '';
+  const v = refTrim(m[1] != null ? m[1] : m[2]);
+  return readRef(v) ? v : '';
 }
 /* Every record a task points at, as references: the older `[lead:: <slug>]`
    first, read as `binder:org/<slug>`, then each `[ref:: ]` in the order
@@ -251,8 +267,8 @@ function readRef(value){
 function refsOf(t){
   const out = [];
   const lead = String((t && t.lead) || '').trim().toLowerCase();
-  if (lead) out.push('binder:org/' + lead);
-  ((t && t.refs) || []).forEach(r => { r = String(r).trim(); if (r && out.indexOf(r) < 0) out.push(r); });
+  if (lead && readRef('binder:org/' + lead)) out.push('binder:org/' + lead);
+  ((t && t.refs) || []).forEach(r => { r = refTrim(r); if (readRef(r) && out.indexOf(r) < 0) out.push(r); });
   return out;
 }
 

@@ -139,8 +139,10 @@ async def test_add_refusals_are_plain(server, board):
     assert r.is_error and "column is not valid (one of To do, Backlog)" in text(r)
     r = await call(server, "add", {"board": "work", "title": "x"})
     assert r.is_error and "say which bucket" in text(r)
-    r = await call(server, "add", {"board": "work", "title": "x", "bucket": "Work", "refs": ["acme"]})
-    assert r.is_error and "refs is not valid" in text(r)
+    for bad in ("acme", "my_mod:org/x", "binder:org/x[to::y", "binder:org/x\n", "binder:org/\ufeffx",
+                "binder:org/<script>"):
+        r = await call(server, "add", {"board": "work", "title": "x", "bucket": "Work", "refs": [bad]})
+        assert r.is_error and "refs is not valid" in text(r), bad
     assert queue(board, "add-queue.json") == []
 
 

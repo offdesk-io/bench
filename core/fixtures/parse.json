@@ -2095,10 +2095,10 @@
       "roundTrip": "- [ ] **A reference in code form, and one before the impact** [impact:: low] [ref:: binder:org/gamma] [ref:: binder:org/delta]"
     },
     {
-      "line": "- [ ] **An empty reference is dropped** [ref:: ] `id:rf0003`",
+      "line": "- [ ] **An empty reference is kept as written** [ref:: ] `id:rf0003`",
       "expect": {
         "done": false,
-        "title": "An empty reference is dropped",
+        "title": "An empty reference is kept as written",
         "bold": true,
         "impact": "",
         "effort": "",
@@ -2121,13 +2121,311 @@
         "stableId": "rf0003",
         "cancelled": "",
         "archived": "",
-        "extra": [],
+        "extra": [
+          "[ref:: ]"
+        ],
         "doing": false,
         "createdBy": "",
         "editedBy": "",
         "refs": []
       },
-      "roundTrip": "- [ ] **An empty reference is dropped** `id:rf0003`"
+      "roundTrip": "- [ ] **An empty reference is kept as written** `id:rf0003` [ref:: ]"
+    },
+    {
+      "line": "- [ ] **A ref swallowing an assignee** [ref:: binder:org/acme [to:: ana@example.com] `id:rf0004`",
+      "expect": {
+        "done": false,
+        "title": "A ref swallowing an assignee",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0004",
+        "cancelled": "",
+        "archived": "",
+        "extra": [
+          "[ref:: binder:org/acme [to:: ana@example.com]"
+        ],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": []
+      },
+      "roundTrip": "- [ ] **A ref swallowing an assignee** `id:rf0004` [ref:: binder:org/acme [to:: ana@example.com]"
+    },
+    {
+      "line": "- [ ] **A ref swallowing an author** [ref:: binder:org/acme[created-by:: a@example.com] `id:rf0005`",
+      "expect": {
+        "done": false,
+        "title": "A ref swallowing an author",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0005",
+        "cancelled": "",
+        "archived": "",
+        "extra": [
+          "[ref:: binder:org/acme[created-by:: a@example.com]"
+        ],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": []
+      },
+      "roundTrip": "- [ ] **A ref swallowing an author** `id:rf0005` [ref:: binder:org/acme[created-by:: a@example.com]"
+    },
+    {
+      "line": "- [ ] **A ref with a backtick in it** [ref:: binder:org/ac`me] `id:rf0006`",
+      "expect": {
+        "done": false,
+        "title": "A ref with a backtick in it",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0006",
+        "cancelled": "",
+        "archived": "",
+        "extra": [
+          "[ref:: binder:org/ac`me]"
+        ],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": []
+      },
+      "roundTrip": "- [ ] **A ref with a backtick in it** `id:rf0006` [ref:: binder:org/ac`me]"
+    },
+    {
+      "line": "- [ ] **A ref with a byte-order mark before it** [ref::﻿binder:org/acme] `id:rf0007`",
+      "expect": {
+        "done": false,
+        "title": "A ref with a byte-order mark before it",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0007",
+        "cancelled": "",
+        "archived": "",
+        "extra": [
+          "[ref::﻿binder:org/acme]"
+        ],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": []
+      },
+      "roundTrip": "- [ ] **A ref with a byte-order mark before it** `id:rf0007` [ref::﻿binder:org/acme]"
+    },
+    {
+      "line": "- [ ] **A ref with a byte-order mark after it** [ref:: binder:org/acme﻿] `id:rf0008`",
+      "expect": {
+        "done": false,
+        "title": "A ref with a byte-order mark after it",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0008",
+        "cancelled": "",
+        "archived": "",
+        "extra": [
+          "[ref:: binder:org/acme﻿]"
+        ],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": []
+      },
+      "roundTrip": "- [ ] **A ref with a byte-order mark after it** `id:rf0008` [ref:: binder:org/acme﻿]"
+    },
+    {
+      "line": "- [ ] **A ref with an underscore in its module** [ref:: my_mod:org/acme] `id:rf0009`",
+      "expect": {
+        "done": false,
+        "title": "A ref with an underscore in its module",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0009",
+        "cancelled": "",
+        "archived": "",
+        "extra": [
+          "[ref:: my_mod:org/acme]"
+        ],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": []
+      },
+      "roundTrip": "- [ ] **A ref with an underscore in its module** `id:rf0009` [ref:: my_mod:org/acme]"
+    },
+    {
+      "line": "- [ ] **A ref in capitals** [Ref:: binder:org/acme] `id:rf0010`",
+      "expect": {
+        "done": false,
+        "title": "A ref in capitals",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0010",
+        "cancelled": "",
+        "archived": "",
+        "extra": [
+          "[Ref:: binder:org/acme]"
+        ],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": []
+      },
+      "roundTrip": "- [ ] **A ref in capitals** `id:rf0010` [Ref:: binder:org/acme]"
+    },
+    {
+      "line": "- [ ] **The id may hold these** [ref:: calls:call/2026-11-20_a.b~c%20@d+e] `id:rf0011`",
+      "expect": {
+        "done": false,
+        "title": "The id may hold these",
+        "bold": true,
+        "impact": "",
+        "effort": "",
+        "due": "",
+        "time": "",
+        "start": "",
+        "doneOn": "",
+        "to": "",
+        "theme": "",
+        "lead": "",
+        "urgent": false,
+        "week": false,
+        "slug": "",
+        "blockedBy": [],
+        "rank": null,
+        "tlrank": null,
+        "headline": "",
+        "chat": "",
+        "repeat": "",
+        "stableId": "rf0011",
+        "cancelled": "",
+        "archived": "",
+        "extra": [],
+        "doing": false,
+        "createdBy": "",
+        "editedBy": "",
+        "refs": [
+          "calls:call/2026-11-20_a.b~c%20@d+e"
+        ]
+      },
+      "roundTrip": "- [ ] **The id may hold these** [ref:: calls:call/2026-11-20_a.b~c%20@d+e] `id:rf0011`"
     }
   ],
   "docs": [
@@ -3183,6 +3481,16 @@
       "refs": []
     },
     {
+      "line": "- [ ] **A lead that is no slug is no reference** [lead:: Acme Studio]",
+      "refs": []
+    },
+    {
+      "line": "- [ ] **A bad ref is no reference** [ref:: binder:org/a b] [ref:: binder:org/ok]",
+      "refs": [
+        "binder:org/ok"
+      ]
+    },
+    {
       "line": "- [ ] **A lead only** [lead:: acme-studio]",
       "refs": [
         "binder:org/acme-studio"
@@ -3263,10 +3571,46 @@
     },
     {
       "value": "a:b/c/d",
+      "ref": null
+    },
+    {
+      "value": "my_mod:org/x",
+      "ref": null
+    },
+    {
+      "value": "binder:my_kind/x",
+      "ref": null
+    },
+    {
+      "value": "binder:org/x[to::y",
+      "ref": null
+    },
+    {
+      "value": "binder:org/x`",
+      "ref": null
+    },
+    {
+      "value": "﻿binder:org/x",
+      "ref": null
+    },
+    {
+      "value": "binder:org/x﻿",
+      "ref": null
+    },
+    {
+      "value": "binder:org/x\n",
+      "ref": null
+    },
+    {
+      "value": "binder:org/<script>",
+      "ref": null
+    },
+    {
+      "value": "calls:call/a.b~c%20@d+e_f",
       "ref": {
-        "module": "a",
-        "kind": "b",
-        "id": "c/d"
+        "module": "calls",
+        "kind": "call",
+        "id": "a.b~c%20@d+e_f"
       }
     }
   ]

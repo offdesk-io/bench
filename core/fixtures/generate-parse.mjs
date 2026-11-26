@@ -87,7 +87,21 @@ const NEW_LINES = [
   '- [ ] **One reference** [ref:: binder:org/acme-ltd] `id:rf0001`',
   '- [ ] **Two references and a lead** [lead:: acme-studio] [ref:: binder:org/beta-co] [ref:: calls:call/2026-11-20-x] `id:rf0002`',
   '- [ ] **A reference in code form, and one before the impact** [ref:: binder:org/gamma] [impact:: low] `ref:binder:org/delta`',
-  '- [ ] **An empty reference is dropped** [ref:: ] `id:rf0003`'
+  '- [ ] **An empty reference is kept as written** [ref:: ] `id:rf0003`',
+  /* 26 Nov 2026: a reference is <module>:<kind>/<id>, the module and kind
+     [a-z][a-z0-9-]*, the id [A-Za-z0-9._~%@+-]+, and the tag is read as one only
+     when it is exactly `[ref:: <ref>]` or `ref:<ref>` in a code span, with
+     nothing but spaces or tabs around the value. Anything else is kept in
+     `extra` as written, so it is never dropped or rewritten, and both
+     languages read it the same way, whatever their idea of whitespace. */
+  '- [ ] **A ref swallowing an assignee** [ref:: binder:org/acme [to:: ana@example.com] `id:rf0004`',
+  '- [ ] **A ref swallowing an author** [ref:: binder:org/acme[created-by:: a@example.com] `id:rf0005`',
+  '- [ ] **A ref with a backtick in it** [ref:: binder:org/ac`me] `id:rf0006`',
+  '- [ ] **A ref with a byte-order mark before it** [ref::\uFEFFbinder:org/acme] `id:rf0007`',
+  '- [ ] **A ref with a byte-order mark after it** [ref:: binder:org/acme\uFEFF] `id:rf0008`',
+  '- [ ] **A ref with an underscore in its module** [ref:: my_mod:org/acme] `id:rf0009`',
+  '- [ ] **A ref in capitals** [Ref:: binder:org/acme] `id:rf0010`',
+  '- [ ] **The id may hold these** [ref:: calls:call/2026-11-20_a.b~c%20@d+e] `id:rf0011`'
 ]
 
 /* Sub-tasks, read out of a task's body. Each entry is a task line and the
@@ -165,13 +179,17 @@ const AGENT_INPUTS = ['Personal family agent', 'personal family AGENT', '  Work 
    then each ref, no repeats), and what readRef() makes of a value. */
 const REF_LINES = [
   '- [ ] **Nothing** [impact:: low]',
+  '- [ ] **A lead that is no slug is no reference** [lead:: Acme Studio]',
+  '- [ ] **A bad ref is no reference** [ref:: binder:org/a b] [ref:: binder:org/ok]',
   '- [ ] **A lead only** [lead:: acme-studio]',
   '- [ ] **A lead in capitals** [lead:: Acme-Studio]',
   '- [ ] **A lead and the same record as a ref** [lead:: acme-studio] [ref:: binder:org/acme-studio]',
   '- [ ] **Refs in order** [ref:: binder:org/b] [ref:: binder:org/a] [ref:: binder:org/b]'
 ]
 const REF_VALUES = ['binder:org/acme-ltd', ' binder:org/acme-ltd ', 'calls:call/2026-11-20-x', 'binder:org/',
-  'binder/org/x', 'Binder:org/x', 'binder:org/a b', ':org/x', 'binder:org', '', 'a:b/c/d']
+  'binder/org/x', 'Binder:org/x', 'binder:org/a b', ':org/x', 'binder:org', '', 'a:b/c/d',
+  'my_mod:org/x', 'binder:my_kind/x', 'binder:org/x[to::y', 'binder:org/x`', '\uFEFFbinder:org/x', 'binder:org/x\uFEFF',
+  'binder:org/x\n', 'binder:org/<script>', 'calls:call/a.b~c%20@d+e_f']
 
 const caseFor = line => {
   const t = board.parseTask([line])

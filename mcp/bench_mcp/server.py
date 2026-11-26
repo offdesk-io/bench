@@ -30,7 +30,9 @@ READ = types.ToolAnnotations(read_only_hint=True)
 WRITE = types.ToolAnnotations(read_only_hint=False, destructive_hint=False)
 DATE = {"type": "string", "pattern": r"^\d{4}-\d{2}-\d{2}$", "description": "A date, YYYY-MM-DD."}
 BOARD = {"type": "string", "minLength": 1, "description": "The board's name, as bench.boards lists it."}
-REF = {"type": "string", "pattern": r"^[a-z][a-z0-9_-]*:[a-z][a-z0-9_-]*/[^\s\]]+$",
+# The rule core/todo.py and core/todo.js read a reference by (module and kind [a-z][a-z0-9-]*, id
+# [A-Za-z0-9._~%@+-]+), and the Offdesk core's core/refs.py.
+REF = {"type": "string", "pattern": r"^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*/[A-Za-z0-9._~%@+-]+$",
        "description": "A record in another module, <module>:<kind>/<id>, e.g. binder:org/acme-ltd."}
 
 
@@ -229,7 +231,7 @@ def _fits(value: Any, schema: Dict[str, Any]) -> bool:
     if isinstance(value, str):
         if "enum" in schema and value not in schema["enum"]:
             return False
-        if "pattern" in schema and not re.match(schema["pattern"], value):
+        if "pattern" in schema and not re.fullmatch(schema["pattern"], value):   # a trailing newline never fits
             return False
         if len(value.strip()) < schema.get("minLength", 0) or len(value) > schema.get("maxLength", 10 ** 6):
             return False

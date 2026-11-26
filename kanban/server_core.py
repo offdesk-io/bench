@@ -257,7 +257,7 @@ def add(ctx, body):
         if not isinstance(r, str) or not todo.read_ref(r):
             raise Refused(400, "%s is not a reference, <module>:<kind>/<id>" % str(r)[:60])
     entry = add_queue.append({"title": title, "bucket": bucket, "column": column, "due": due,
-                              "refs": [r.strip() for r in refs]}, ctx.who["by"], taken=_taken(text),
+                              "refs": [r.strip(" \t") for r in refs]}, ctx.who["by"], taken=_taken(text),
                              path=add_queue.path_for(folder), acting_for=_acting_for(ctx.who))
     return 202, {"queued": True, "id": entry["id"], "board": body.get("board"), "bucket": bucket,
                  "column": column}

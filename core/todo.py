@@ -161,13 +161,28 @@ def counts_as_finished(task):
 
 # A reference to a record in another module, `<module>:<kind>/<id>`. REF_RE in
 # core/todo.js.
-REF_RE = re.compile(r"^([a-z][a-z0-9_-]*):([a-z][a-z0-9_-]*)/([^\s\]]+)$")
+# The module and the kind are [a-z][a-z0-9-]*, the id [A-Za-z0-9._~%@+-]+, and
+# only spaces and tabs are trimmed, since the two languages disagree on what
+# whitespace is (U+FEFF). \Z, not $, which would let a trailing newline in.
+REF_RE = re.compile(r"^([a-z][a-z0-9-]*):([a-z][a-z0-9-]*)/([A-Za-z0-9._~%@+-]+)\Z")
+REF_TAG_RE = re.compile(r"^\[ref::([^\]]*)\]\Z|^`ref:([^`]*)`\Z")
 
 
 def read_ref(value):
     """{module, kind, id} for a reference, or None. readRef() in core/todo.js."""
-    m = REF_RE.match(str(value or "").strip())
+    m = REF_RE.match(str(value if value is not None else "").strip(" \t"))
     return {"module": m.group(1), "kind": m.group(2), "id": m.group(3)} if m else None
+
+
+def ref_tag_value(whole):
+    """The reference a whole `[ref:: …]` or `ref:…` code span holds, or "" when
+    it is not exactly one around a valid reference, which then stays in
+    `extra` as written. refTagValue() in core/todo.js."""
+    m = REF_TAG_RE.match(whole)
+    if not m:
+        return ""
+    v = (m.group(1) if m.group(1) is not None else m.group(2)).strip(" \t")
+    return v if read_ref(v) else ""
 
 
 def refs_of(task):
@@ -176,11 +191,11 @@ def refs_of(task):
     refsOf() in core/todo.js. Reads only: the lead stays a lead on the line."""
     out = []
     lead = (getattr(task, "lead", "") or "").strip().lower()
-    if lead:
+    if lead and read_ref("binder:org/" + lead):
         out.append("binder:org/" + lead)
     for r in getattr(task, "refs", None) or []:
-        r = str(r).strip()
-        if r and r not in out:
+        r = str(r).strip(" \t")
+        if read_ref(r) and r not in out:
             out.append(r)
     return out
 
@@ -237,8 +252,11 @@ def parse_task(raw_lines):
         elif key == "edited-by":
             task.edited_by = val.lower()
         elif key == "ref":
-            if val:
-                task.refs.append(val)
+            ref = ref_tag_value(whole)
+            if ref:
+                task.refs.append(ref)
+            else:
+                task.extra.append(whole)
         else:
             task.extra.append(whole)
             return " "
