@@ -1829,6 +1829,70 @@ function drainMove(it){
   return linked ? 'linked' : 'cleared';
 }
 
+/* New tasks the Offdesk core asked for (the PA or one of its agents, through
+   bench_mcp), left in data/<dataset>/add-queue.json by core/add_queue.py and
+   applied here through the board's own edit path, since nothing else writes
+   todo.md. Each entry's id is the new task's `id:`, so it is added once: a
+   task already carrying that id means it was added before and only the entry
+   is cleared. One the board cannot add (its bucket has gone, a column only the
+   owner fills) is sent back as refused with why, and stays in the file
+   unapplied. Who asked goes in the log through the server (credit_core()). */
+let addDraining = false;
+async function drainAddQueue(){
+  if (addDraining) return;
+  addDraining = true;
+  try { await drainAddQueueOnce(); } finally { addDraining = false; }
+}
+function addFromQueue(it, taken){
+  const id = String(it.id || '').trim().toLowerCase();
+  if (!/^[a-z0-9]{6}$/.test(id)) return 'not an id the board can write';
+  if (taken.has(id)) return 'added';
+  const title = String(it.title || '').replace(/\s+/g, ' ').trim();
+  if (!title || /`|::/.test(title)) return 'not a title the board can write';
+  const want = String(it.bucket || '').trim().toLowerCase();
+  const bucket = state.doc.buckets.find(b => b.name.toLowerCase() === want);
+  if (!bucket) return 'no bucket called ' + String(it.bucket || '').slice(0, 60);
+  const col = String(it.column || TODO_TIER).trim();
+  const tier = bucket.tiers.find(x => x.name.toLowerCase() === col.toLowerCase());
+  const name = tier ? tier.name : [TODO_TIER, BACKLOG_TIER].find(x => x.toLowerCase() === col.toLowerCase());
+  if (!name) return 'no column called ' + col.slice(0, 60) + ' in ' + bucket.name;
+  if (name === DOING_TIER || name === WAIT_COL || name === DONE_COL) return 'only the owner puts a task in ' + name;
+  const t = parseTask(['- [ ] **' + title + '**']);
+  t.due = /^\d{4}-\d{2}-\d{2}$/.test(String(it.due || '')) ? String(it.due) : '';
+  t.refs = (Array.isArray(it.refs) ? it.refs : []).map(r => String(r).trim()).filter(r => readRef(r));
+  t.stableId = id;
+  t.dirty = true;
+  ensureTier(bucket, name).tasks.push(t);
+  taken.add(id);
+  return 'new';
+}
+async function drainAddQueueOnce(){
+  if (state.locked || !state.doc) return;
+  let items;
+  try {
+    items = await getJSON('/add-queue.json');
+  } catch (err) { return; }
+  if (!Array.isArray(items) || !items.length) return;
+  const taken = idsInDoc(state.doc);
+  const done = [], refused = {};
+  let added = 0;
+  for (const it of items) {
+    if (!it || !it.id) continue;
+    const r = addFromQueue(it, taken);
+    if (r === 'new') { added++; done.push(it.id); }
+    else if (r === 'added') done.push(it.id);
+    else refused[it.id] = r;
+  }
+  if (!done.length && !Object.keys(refused).length) return;
+  if (added) { markDirty(); refreshView(); }
+  await postJSON('/add-queue.json', { done, refused }).catch(() => {});
+  if (added) {
+    const was = /save to apply|refused/.test($('#status').textContent) ? $('#status').textContent + '; ' : '';
+    $('#status').textContent = was + added + ' task' + (added === 1 ? '' : 's') +
+      ' added through Offdesk — save to apply';
+  }
+}
+
 /* Drained on load, when the tab comes back into focus, and once when a run this
    tab started finishes (20-loading-saving.js), so a plan written by a run the
    board did not start still gets its `Plan:` line without a reload. One drain at
@@ -1839,6 +1903,7 @@ async function drainTickQueue(){
   if (tickDraining) return;
   tickDraining = true;
   try { await drainTickQueueOnce(); } finally { tickDraining = false; }
+  drainAddQueue();
 }
 
 async function drainTickQueueOnce(){
@@ -1877,7 +1942,12 @@ async function drainTickQueueOnce(){
     const f = readSub(t, step.line);
     const who = agentOf(it.by);
     if (!f || f.done) { dealt.push(it.id); continue; }
-    if (!who || agentOf(f.to) !== who ||
+    /* A tick through the Offdesk core says whose it is in `as`: the person by
+       email, or `agent:<name>`, and only the sub-task assigned to exactly that
+       is ticked (core/tick_queue.py). Otherwise the agent rule below. */
+    const mine = it.as ? String(f.to || '').trim().toLowerCase() === String(it.as).trim().toLowerCase()
+      : !!who && agentOf(f.to) === who;
+    if (!mine ||
         blockedMessage(allItems(), (f.blockedBy || []).concat(t.blockedBy || []))) {
       dealt.push(it.id); refused++; continue;
     }

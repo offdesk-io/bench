@@ -44,6 +44,12 @@ nothing raises.
   slash is taken off. Served to the page by `/owner.js`, before the board's
   scripts run (kanban/server.py). Unset, the key is absent from what load()
   returns and nothing changes.
+- `core_url`: optional, the web address of the Offdesk core this install
+  belongs to (`https://os.example.com`). Set, each `[ref:: <module>:<kind>/<id>]`
+  on a card is a chip that opens `<core_url>/api/refs/open?ref=<ref>`, which the
+  core sends on to the record in whichever module owns it. Unset, the chip is
+  plain text. Kept and checked the way `binder_url` is, and served to the page
+  by `/owner.js` too.
 - `projects_roots`: optional, a map from a list's name to its projects folder,
   an existing folder that may sit outside the repo, one per list and never
   shared by two. For a list in it, a task's project is looked for at
@@ -155,6 +161,11 @@ def binder_url(root=None):
     return load(root).get("binder_url", "")
 
 
+def core_url(root=None):
+    """The Offdesk core's address, or '' when this install names none."""
+    return load(root).get("core_url", "")
+
+
 # The keys a list's entry in `boards` may hold beyond `memory_root`, each a
 # true-or-false that defaults to true.
 BOARD_FLAGS = ("banners", "agents")
@@ -207,9 +218,10 @@ def load(root=None):
     memory = _memory_value(raw.get("memory_root"))
     if memory:
         out["memory_root"] = memory
-    binder = _binder_clean(raw.get("binder_url"))
-    if re.match(r"https?://\S+$", binder):
-        out["binder_url"] = binder
+    for key in ("binder_url", "core_url"):
+        url = _binder_clean(raw.get(key))
+        if re.match(r"https?://\S+$", url):
+            out[key] = url
     roots = raw.get("projects_roots")
     if isinstance(roots, dict):
         roots = {k: _memory_value(v) for k, v in roots.items() if _memory_value(v)}
@@ -532,9 +544,10 @@ def validate(data, root=None):
     err = _folder_error("memory_root", data.get("memory_root"))
     if err:
         return err
-    err = _binder_error(data.get("binder_url"))
-    if err:
-        return err
+    for key in ("binder_url", "core_url"):
+        err = _binder_error(data.get(key))
+        if err:
+            return err.replace("binder_url", key)
     err = _boards_error(data.get("boards"), root or data_root())
     if err:
         return err
@@ -720,12 +733,13 @@ def save(root, data):
         else:
             merged.pop("memory_root", None)
     # Sent empty or null clears it, as with the memory folder.
-    if "binder_url" in data:
-        binder = _binder_clean(data["binder_url"])
-        if re.match(r"https?://\S+$", binder):
-            merged["binder_url"] = binder
-        else:
-            merged.pop("binder_url", None)
+    for key in ("binder_url", "core_url"):
+        if key in data:
+            url = _binder_clean(data[key])
+            if re.match(r"https?://\S+$", url):
+                merged[key] = url
+            else:
+                merged.pop(key, None)
     # Per list: a list sent empty or null loses its folder, one not sent keeps it.
     if isinstance(data.get("projects_roots"), dict):
         roots = merged.get("projects_roots")
