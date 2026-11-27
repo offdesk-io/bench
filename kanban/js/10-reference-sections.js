@@ -789,7 +789,7 @@ let chimeCtx = null, chimeAllowed = null;
 function chimeOn(){
   if (chimeAllowed === null) {
     chimeAllowed = true;
-    fetch('/settings.json').then(r => r.json()).then(s => { chimeAllowed = !s || s.chime !== false; }).catch(() => {});
+    fetch(benchUrl('/settings.json')).then(r => r.json()).then(s => { chimeAllowed = !s || s.chime !== false; }).catch(() => {});
   }
   return chimeAllowed;
 }
@@ -890,6 +890,14 @@ function taskMentions(query){
   return hits.slice(0, MENTION_CAP).map(h => taskMention(h.t, h.bucket, h.st));
 }
 
+/* The chat engine's own requests (status, sessions, forget), under the board's
+   base like everything else the board asks for. Its default paths are
+   ai_chat_engine's, the routes server.py answers. */
+const CHAT_ENDPOINTS = {
+  status: benchUrl('/claude.json'), sessions: benchUrl('/claude/sessions.json'),
+  transcript: benchUrl('/claude/transcript.json'), forget: benchUrl('/claude/forget'), run: benchUrl('/claude'),
+};
+
 function makeChatWin(newFor){
   let inst;
   // How the last run ended, and whether the window was running at its last
@@ -903,6 +911,7 @@ function makeChatWin(newFor){
   // this send rather than to an earlier turn — see paReadReply().
   let paWaiting = null;
   inst = AIChat.create({
+    endpoints: CHAT_ENDPOINTS,
     windowed: true,
     thinkingOrbs: true,
     ownerLabel: chatOwnerLabel,
@@ -985,6 +994,7 @@ function chatOwnerLabel(taskId){
 }
 
 const hub = (typeof AIChat !== 'undefined') ? AIChat.create({
+  endpoints: CHAT_ENDPOINTS,
   windowed: true,
   thinkingOrbs: true,
   ownerLabel: chatOwnerLabel,
@@ -1123,7 +1133,7 @@ function paStripStatus(text){
 async function* claudeRunLines(payload, signal){
   let res;
   try {
-    res = await fetch('/claude', {
+    res = await fetch(benchUrl('/claude'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Board': '1' },
       body: JSON.stringify(payload),

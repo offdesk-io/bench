@@ -217,7 +217,7 @@ async function paWorkingTick(){
   if (paWatchOff || listFolder || document.hidden || state.locked || !state.doc) return;
   let got;
   try {
-    const res = await fetch('/pa-working.json?t=' + Date.now(), { cache:'no-store' });
+    const res = await fetch(benchUrl('/pa-working.json') + '?t=' + Date.now(), { cache:'no-store' });
     if (res.status === 404) { paWatchOff = true; return; }
     if (!res.ok) return;
     got = await res.json();

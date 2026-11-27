@@ -55,7 +55,7 @@ scripts/deploy-server.sh main                                     # dry run
 scripts/deploy-server.sh main --packages agents-engine=main --apply
 ```
 
-Without `--apply` it only reads: it prints each repo's current commit on the server and the commit the ref points to on GitHub. With `--apply` it records the current commits, fetches, checks out the refs, runs `npm ci` (which installs exactly `package-lock.json` and rewrites nothing) and `npm run build` for the board's front end, restarts `bench.service` and waits up to 20 seconds for the board to answer on `127.0.0.1:8765` (200, or 302 and 401 once sign-in is on, since an unsigned request gets 401). If it does not, the recorded commits go back and the service restarts again. A ref is a branch, tag or commit, and a short commit id only resolves once fetched. Refs may only use letters, digits and `. _ / -`, and the script refuses anything else before it connects. Afterwards each checkout on the server sits on a detached HEAD at the commit the script prints, not on a branch, which is expected. It stops if a checkout on the server has uncommitted changes to tracked files. `DEPLOY_HOST` changes the server.
+Without `--apply` it only reads: it prints each repo's current commit on the server and the commit the ref points to on GitHub. With `--apply` it records the current commits, fetches, checks out the refs, runs `npm ci` (which installs exactly `package-lock.json` and rewrites nothing) and `npm run build` for the board's front end (given `BENCH_BASE` from `/etc/bench/core.env`, read as text and never sourced, so nothing else in that file reaches the build; a base that is not one lower-case path segment stops the deploy before anything changes; `BENCH_ENV_FILE` names another file), restarts `bench.service` and waits up to 20 seconds for the board to answer on `127.0.0.1:8765` (200, or 302 and 401 once sign-in is on, since an unsigned request gets 401). If it does not, the recorded commits go back and the service restarts again. A ref is a branch, tag or commit, and a short commit id only resolves once fetched. Refs may only use letters, digits and `. _ / -`, and the script refuses anything else before it connects. Afterwards each checkout on the server sits on a detached HEAD at the commit the script prints, not on a branch, which is expected. It stops if a checkout on the server has uncommitted changes to tracked files. `DEPLOY_HOST` changes the server.
 
 ## What it is for
 
@@ -249,6 +249,32 @@ Signed in, only what the page loads is served from outside `/data/`: `kanban/ind
 `kanban/board.css`, `kanban/js/`, `kanban/dist/`, the example list, `core/todo.js` and
 `core/avatar.js`. Folders are never listed, and the routes answer with names rather than
 paths on the server.
+
+#### Under a path of a bigger site
+
+On os.offdesk.io Bench is served under `/bench`, inside the Offdesk shell at
+`/apps/bench`, behind the same sign-in as the rest of the site. nginx answers
+`/bench/...`, removes the prefix and hands the rest to Bench, so every route keeps
+its own path. `BENCH_BASE=/bench` in the server's environment tells Bench where it
+is, and it puts the base back on what it hands the browser: every absolute address
+in the page (but the sign-in's own `/auth/logout`), the root's redirect to the page,
+and `window.BENCH_BASE` in `/owner.js`. The board puts it in front of every request
+it makes, every link it draws to the server and every address it hands the chat
+window or the Agents view, through `benchUrl()` (`kanban/js/01-markdown-model.js`).
+`getJSON()` and `sendJSON()` call it themselves, so a path given to them is the
+server's own; anything else that asks the server for something calls it, and a
+path the server names in a listing (a report's or a backup's `url`) becomes an
+address with it where the board receives it. Links to a task stay fragments
+(`#!board=<name>!task=<key>`) on the page under the base.
+
+Unset, Bench is at the root as it always was, and the page is served as the file
+on disk. A value that is not one lower-case path segment (`/bench`, not `bench`,
+`/bench/` or `/a/b`) stops the server at start-up. On the server it goes in
+`/etc/bench/core.env`, the file the `core.conf` drop-in already loads (see The
+Offdesk core's tools), and the deploy reads the same line for the build (see
+Deploying to the agency server). `kanban/test_base_path.py` and
+`kanban/test_base_path.mjs` check both halves, the second through a small proxy
+that strips the prefix the way nginx does.
 
 ### The Offdesk core's tools
 

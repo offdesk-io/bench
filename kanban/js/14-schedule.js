@@ -105,7 +105,7 @@ async function renderUsage(){
    feeds the other one. */
 async function renderSched(){
   try {
-    const res = await fetch('/schedule.json?t=' + Date.now(), { cache:'no-store' });
+    const res = await fetch(benchUrl('/schedule.json') + '?t=' + Date.now(), { cache:'no-store' });
     if (!res.ok) {
       schedState = { kind: 'stale' };
     } else {

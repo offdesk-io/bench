@@ -9,7 +9,7 @@
    for once per page load. Empty until it lands, or for good where there is no
    server (the demo build), and then the dropdown offers the agents alone. */
 let peopleNames = [];
-fetch('/people.json', { cache: 'no-store' })
+fetch(benchUrl('/people.json'), { cache: 'no-store' })
   .then(r => r.ok ? r.json() : { people: [] })
   .then(d => { peopleNames = (d && d.people || []).map(p => p.name).filter(Boolean); })
   .catch(() => {});
@@ -805,7 +805,7 @@ function bindFileAdd(t, ro){
     } catch (e) { say('Could not start the project: ' + (e.message || e)); return; }
     const failed = [];
     const send = async f => {
-      const res = await fetch('/project/upload?name=' + encodeURIComponent(proj) +
+      const res = await fetch(benchUrl('/project/upload') + '?name=' + encodeURIComponent(proj) +
                               '&file=' + encodeURIComponent(f.name),
                               { method: 'POST', headers: { 'X-Board': '1' }, body: f });
       const info = await res.json().catch(() => ({}));
@@ -889,7 +889,7 @@ async function loadTaskHistory(t){
   const taskId = t.id;
   let got;
   try {
-    const res = await fetch('/history.json?task=' + encodeURIComponent(t.stableId) + '&t=' + Date.now(),
+    const res = await fetch(benchUrl('/history.json') + '?task=' + encodeURIComponent(t.stableId) + '&t=' + Date.now(),
                             { cache:'no-store' });
     if (!res.ok) return;
     got = await res.json();
@@ -907,7 +907,7 @@ async function loadTaskHistory(t){
 async function loadTaskProject(name, taskId){
   let meta;
   try {
-    const res = await fetch('/project.json?name=' + encodeURIComponent(name) + '&t=' + Date.now(),
+    const res = await fetch(benchUrl('/project.json') + '?name=' + encodeURIComponent(name) + '&t=' + Date.now(),
                             { cache:'no-store' });
     if (!res.ok) return;
     meta = await res.json();
@@ -1714,7 +1714,7 @@ async function openPlanReader(rel, title){
   showModal(title || 'The plan', '', '<p class="empty">Loading…</p>', [{ label: 'Close' }], { wide: true, cls: 'planmodal' });
   let html;
   try {
-    const res = await fetch('/data/plans/' + rel + '?t=' + Date.now(), { cache: 'no-store' });
+    const res = await fetch(benchUrl('/data/plans/' + rel) + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) throw new Error(res.status);
     const text = (await res.text()).replace(/^---[\s\S]*?\n---\s*\n/, '');
     html = mdBlocks(text);
@@ -1730,7 +1730,7 @@ async function openPlanReader(rel, title){
    the one to read. Empty when there is none or the server cannot say. */
 async function planForTask(stableId){
   try {
-    const res = await fetch('/plans.json?t=' + Date.now(), { cache: 'no-store' });
+    const res = await fetch(benchUrl('/plans.json') + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return '';
     const hit = ((await res.json()).plans || []).find(p => p.about === 'task:' + stableId);
     return hit && /^[\w.-]+\.md$/.test(hit.name || '') ? hit.name : '';
@@ -2083,7 +2083,7 @@ function openProjectDrawer(name){
    whichever list is open, and the browser's own directory listing is what
    answers for a folder. */
 function projectUrl(name){
-  return '/data/projects/' + encodeURIComponent(name) + '/';
+  return benchUrl('/data/projects/' + encodeURIComponent(name) + '/');
 }
 
 function fileSize(n){
@@ -2186,7 +2186,7 @@ function bindProjectFiles(box, name){
     kids.dataset.loaded = '1';
     kids.innerHTML = '<span class="help">Reading the folder…</span>';
     try {
-      const res = await fetch('/project.json?name=' + encodeURIComponent(name) +
+      const res = await fetch(benchUrl('/project.json') + '?name=' + encodeURIComponent(name) +
                               '&sub=' + encodeURIComponent(sub) + '&t=' + Date.now(), { cache:'no-store' });
       if (!res.ok) throw new Error(res.status === 404 ? 'That folder is not on disk.' : 'Could not read that folder.');
       const got = await res.json();
@@ -2251,7 +2251,7 @@ async function loadProjectFiles(name){
   };
   let meta;
   try {
-    const res = await fetch('/project.json?name=' + encodeURIComponent(name) + '&t=' + Date.now(),
+    const res = await fetch(benchUrl('/project.json') + '?name=' + encodeURIComponent(name) + '&t=' + Date.now(),
                             { cache:'no-store' });
     if (res.status === 404) return paint('<span class="help">That folder is not on disk.</span>');
     if (!res.ok) {

@@ -315,10 +315,10 @@ function settingsPageSections(draft){
 async function loadSettingsDraft(first){
   const signedIn = !!state.who;
   const [prof, set, places] = await Promise.all([
-    fetch('/profile-basics.json').then(r => r.json()),
+    fetch(benchUrl('/profile-basics.json')).then(r => r.json()),
     /* Signed in, the server's settings are not the visitor's to change. */
-    signedIn ? Promise.resolve({}) : fetch('/settings.json').then(r => r.json()),
-    fetch('/holiday-countries.json').then(r => r.json()),
+    signedIn ? Promise.resolve({}) : fetch(benchUrl('/settings.json')).then(r => r.json()),
+    fetch(benchUrl('/holiday-countries.json')).then(r => r.json()),
   ]);
   const models = Object.assign({ default: null, plan: null, implement: null, chat: null, brief: null }, set.models);
   /* Plans used to have a model of their own for the bucket planners; nothing reads it now. */
@@ -474,7 +474,7 @@ function trackSettingsForm(draft, first){
     draft.region = '';
     draft.regions = [];
     if (code) {
-      try { draft.regions = await fetch('/holiday-regions.json?country=' + encodeURIComponent(code)).then(r => r.json()); }
+      try { draft.regions = await fetch(benchUrl('/holiday-regions.json') + '?country=' + encodeURIComponent(code)).then(r => r.json()); }
       catch (err) { draft.regions = []; }
       if (!Array.isArray(draft.regions)) draft.regions = [];
     }
@@ -533,7 +533,7 @@ function boardChanges(draft){
    the page, so what the board writes in `[to::]` and compares against follows it. */
 async function refreshOwnerName(){
   try {
-    const text = await fetch('/owner.js', { cache: 'no-store' }).then(r => r.text());
+    const text = await fetch(benchUrl('/owner.js'), { cache: 'no-store' }).then(r => r.text());
     const m = /OWNER_NAME\s*=\s*("(?:[^"\\]|\\.)*")/.exec(text);
     if (m) OWNER_NAME = JSON.parse(m[1]) || 'Me';
   } catch (err) { /* keeps the name it has */ }
@@ -704,8 +704,8 @@ function openFirstList(){
 async function maybeOnboard(){
   try {
     const [prof, ds] = await Promise.all([
-      fetch('/profile-basics.json').then(r => r.ok ? r.json() : null),
-      fetch('/datasets.json').then(r => r.ok ? r.json() : null),
+      fetch(benchUrl('/profile-basics.json')).then(r => r.ok ? r.json() : null),
+      fetch(benchUrl('/datasets.json')).then(r => r.ok ? r.json() : null),
     ]);
     const needsList = !!ds && !(ds.datasets || []).length;
     if (prof && prof.needs_setup) openSettings(true, needsList);
@@ -1009,7 +1009,7 @@ async function drawAgentOptions(page){
   if (!page || page.dataset.opts || state.who) return;
   page.dataset.opts = 'loading';
   let set;
-  try { set = await fetch('/settings.json').then(r => r.json()); }
+  try { set = await fetch(benchUrl('/settings.json')).then(r => r.json()); }
   catch (err) {
     delete page.dataset.opts;
     const box = page.querySelector('#agentModels');

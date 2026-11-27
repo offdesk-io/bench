@@ -54,7 +54,16 @@ const agentsUi = fs.existsSync(path.join(AGENTS_UI, 'index.ts'))
   ? AGENTS_UI
   : path.resolve(__dirname, 'kanban/ui/AgentsStub.tsx')
 
+/* BENCH_BASE=/bench, as on os.offdesk.io, where the site serves Bench under
+ * that path: the build is given it the way the server is (scripts/
+ * deploy-on-server.sh reads it from Bench's env file). Unset is the root. The
+ * board's own requests take the base from the server at run time (benchUrl()
+ * in kanban/js/01-markdown-model.js); this is for any address the bundle itself
+ * would write, and a lib build inlines its assets today, so it writes none. */
+const BENCH_BASE = process.env.BENCH_BASE || ''
+
 export default defineConfig({
+  base: BENCH_BASE ? BENCH_BASE + '/' : '/',
   plugins: [react(), tenonCss()],
   resolve: {
     alias: { '@tiagopedras/agents-engine/react': agentsUi },

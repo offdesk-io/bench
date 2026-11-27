@@ -227,6 +227,8 @@ if (process.env.SHOT) {
 }
 
 /* ---- a change goes through the agent ---- */
+// The view was drawn again just above, and its rows arrive with its next read of the state.
+for (let i = 0; i < 40 && !(await evalJS(`!!document.querySelector('#agentsRoot .trow .hours button.hr[data-hour="5"]')`)); i++) await wait(50)
 await evalJS(`document.querySelector('#agentsRoot .trow .hours button.hr[data-hour="5"]').click()`)
 await wait(500)
 const posted = await evalJS(`window.__blocked.join('\\n')`)

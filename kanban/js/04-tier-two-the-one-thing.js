@@ -383,12 +383,12 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>'
    in the same {error} shape as its success reply. */
 async function getJSON(url){
   const sep = url.indexOf('?') === -1 ? '?' : '&';
-  const res = await fetch(url + sep + 't=' + Date.now(), { cache: 'no-store' });
+  const res = await fetch(benchUrl(url) + sep + 't=' + Date.now(), { cache: 'no-store' });
   if (!res.ok) throw new Error('the server answered ' + res.status);
   return res.json();
 }
 async function sendJSON(method, url, data){
-  const res = await fetch(url, {
+  const res = await fetch(benchUrl(url), {
     method,
     headers: { 'Content-Type': 'application/json', 'X-Board': '1' },
     body: JSON.stringify(data)

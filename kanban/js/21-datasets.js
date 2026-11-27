@@ -489,7 +489,7 @@ $('#datasetList').onclick = e => {
    loadFile can fall through to its real error. */
 async function loadDemo(){
   try {
-    const res = await fetch(DEMO_URL + '?t=' + Date.now(), { cache:'no-store' });
+    const res = await fetch(benchUrl(DEMO_URL) + '?t=' + Date.now(), { cache:'no-store' });
     if (!res.ok) return false;
     const text = await res.text();
     if (!parseDoc(text).buckets.length) return false;
@@ -597,8 +597,8 @@ async function folderRead(){
 async function fetchList(method){
   if (!listFolder) {
     return method === 'HEAD'
-      ? fetch(FILE_URL, { method:'HEAD', cache:'no-store' })
-      : fetch(FILE_URL + '?t=' + Date.now(), { cache:'no-store' });
+      ? fetch(benchUrl(FILE_URL), { method:'HEAD', cache:'no-store' })
+      : fetch(benchUrl(FILE_URL) + '?t=' + Date.now(), { cache:'no-store' });
   }
   try {
     const v = await folderRead();
@@ -819,7 +819,7 @@ async function saveFile(auto, forceBackup){
     const headers = { 'Content-Type':'application/json' };
     if (state.diskStamp) headers['If-Unmodified-Since'] = state.diskStamp;
     if (state.diskHash) headers['If-Match'] = state.diskHash;
-    const res = await fetch(FILE_URL + (forceBackup ? '?backup=force' : ''), {
+    const res = await fetch(benchUrl(FILE_URL) + (forceBackup ? '?backup=force' : ''), {
       method: 'PUT', headers,
       /* The list this was read from, so it cannot land on another one. */
       body: JSON.stringify(state.docBoard ? { text, base, board: state.docBoard } : { text, base })

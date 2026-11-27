@@ -27,7 +27,7 @@ const RUN_STALE_MS = 3 * 60 * 60 * 1000;
 async function loadAgentRuns(){
   let got;
   try {
-    const res = await fetch('/agent-runs.json?t=' + Date.now(), { cache: 'no-store' });
+    const res = await fetch(benchUrl('/agent-runs.json') + '?t=' + Date.now(), { cache: 'no-store' });
     if (!res.ok) return;
     got = await res.json();
   } catch (err) { return; }
